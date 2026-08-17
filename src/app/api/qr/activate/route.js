@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/mongodb';
-import { ObjectId } from 'mongodb';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,13 +13,20 @@ export async function POST(request) {
       shop_name,
       owner_name,
       owner_phone,
+      owner_whatsapp,
+      vehicle_number,
+      vehicle_type,
       state,
       city,
+      town,
       area,
       address,
       landmark,
+      pincode,
+      placement_position,
       notes,
       activated_by,
+      gps_location,
     } = body;
 
     if (!short_code || !location_type) {
@@ -32,7 +38,6 @@ export async function POST(request) {
 
     const db = await getDb();
     
-    // Find QR code
     const qrCode = await db.collection('qr_codes').findOne({ short_code });
     
     if (!qrCode) {
@@ -42,7 +47,6 @@ export async function POST(request) {
       }, { status: 404 });
     }
 
-    // Check if already activated
     const existing = await db.collection('qr_activations').findOne({ qr_id: qrCode._id });
     
     const activationData = {
@@ -52,13 +56,20 @@ export async function POST(request) {
       shop_name: shop_name || null,
       owner_name: owner_name || null,
       owner_phone: owner_phone || null,
+      owner_whatsapp: owner_whatsapp || null,
+      vehicle_number: vehicle_number || null,
+      vehicle_type: vehicle_type || null,
       location: {
         state: state || null,
         city: city || null,
+        town: town || null,
         area: area || null,
         address: address || null,
         landmark: landmark || null,
+        pincode: pincode || null,
       },
+      placement_position: placement_position || null,
+      gps_location: gps_location || null,
       notes: notes || null,
       activated_by: activated_by || 'admin',
       activated_at: new Date(),
@@ -66,17 +77,14 @@ export async function POST(request) {
     };
 
     if (existing) {
-      // Update existing activation
       await db.collection('qr_activations').updateOne(
         { qr_id: qrCode._id },
         { $set: activationData }
       );
     } else {
-      // Create new activation
       await db.collection('qr_activations').insertOne(activationData);
     }
 
-    // Update QR status to ACTIVE
     await db.collection('qr_codes').updateOne(
       { _id: qrCode._id },
       { 
@@ -101,7 +109,6 @@ export async function POST(request) {
   }
 }
 
-// Get activation by QR code
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -147,7 +154,6 @@ export async function GET(request) {
   }
 }
 
-// Deactivate QR
 export async function DELETE(request) {
   try {
     const { searchParams } = new URL(request.url);
