@@ -69,8 +69,7 @@ function LandingContent() {
 
   const [sessionId, setSessionId] = useState('');
   const [scrolled, setScrolled] = useState(false);
-  const [locationText, setLocationText] = useState('');
-  const [shopName, setShopName] = useState('');
+  const [locationText, setLocationText] = useState('आपके शहर');
   const trackedPageView = useRef(false);
 
   useEffect(() => {
@@ -88,7 +87,6 @@ function LandingContent() {
         .then(r => r.json())
         .then(data => {
           if (data.success && data.location) setLocationText(data.location);
-          if (data.success && data.shopName) setShopName(data.shopName);
         })
         .catch(() => {});
     }
@@ -156,11 +154,7 @@ function LandingContent() {
       <StickyHeader scrolled={scrolled} onDownload={downloadCustomer} />
 
       <main className="bg-black text-white antialiased overflow-x-hidden">
-        <HeroSection
-          onDownload={downloadCustomer}
-          locationText={locationText}
-          shopName={shopName}
-        />
+        <HeroSection onDownload={downloadCustomer} locationText={locationText} />
         <FeatureOne />
         <FeatureTwo />
         <FeatureThree />
@@ -168,7 +162,7 @@ function LandingContent() {
         <HowItWorks />
         <TestimonialsSection />
         <BarberSection onDownload={downloadBusiness} />
-        <FinalCTASection onDownload={downloadCustomer} locationText={locationText} shopName={shopName} />
+        <FinalCTASection onDownload={downloadCustomer} locationText={locationText} />
         <FooterSection />
       </main>
 
@@ -192,15 +186,15 @@ function StickyHeader({ scrolled, onDownload }) {
             className="w-9 h-9 object-contain"
             onError={(e) => { e.target.style.display = 'none'; }}
           />
-          <span className="text-[17px] font-black tracking-tight">
+          <span className="qr-hindi text-[17px] font-black tracking-tight">
             क्यूटर<span className="text-[#FFD700]">.</span>
           </span>
         </div>
 
         <nav className="hidden md:flex items-center gap-8 text-[13px] text-white/70 font-semibold">
-          <a href="#features" className="hover:text-[#FFD700] transition-colors">फीचर्स</a>
-          <a href="#barbers" className="hover:text-[#FFD700] transition-colors">बार्बर</a>
-          <a href="#download" className="hover:text-[#FFD700] transition-colors">डाउनलोड</a>
+          <a href="#features" className="qr-hindi hover:text-[#FFD700] transition-colors">फीचर्स</a>
+          <a href="#barbers" className="qr-hindi hover:text-[#FFD700] transition-colors">बार्बर</a>
+          <a href="#download" className="qr-hindi hover:text-[#FFD700] transition-colors">डाउनलोड</a>
         </nav>
 
         <button
@@ -214,12 +208,67 @@ function StickyHeader({ scrolled, onDownload }) {
   );
 }
 
-function HeroSection({ onDownload, locationText, shopName }) {
-  const [ref, inView] = useInView();
+/* ---------- Reusable Play Store Themed Download Button ---------- */
+function PlayStoreButton({ onClick, size = 'lg', fullWidth = true }) {
+  const sizeClasses =
+    size === 'lg'
+      ? 'text-[16px] sm:text-[20px] md:text-[24px] px-6 sm:px-10 md:px-14 py-5 md:py-6'
+      : 'text-[15px] md:text-[18px] px-6 py-4 md:px-8 md:py-5';
 
-  // Display label: shop name takes priority, then location, then generic
-  const displayShop = shopName || '';
-  const displayCity = locationText || 'आपके शहर';
+  return (
+    <button
+      onClick={onClick}
+      className={`qr-playstore-btn group relative inline-flex items-center gap-3 text-white font-black rounded-full transition-all duration-300 overflow-hidden ${sizeClasses} ${fullWidth ? 'w-full max-w-md' : ''}`}
+    >
+      <span className="qr-btn-shine" />
+      {/* Colored corner accents (Play Store style) */}
+      <span className="qr-ps-corner qr-ps-corner-tl" />
+      <span className="qr-ps-corner qr-ps-corner-br" />
+      <div className="relative z-10 flex items-center gap-3 justify-center w-full">
+        {/* Official multi-color Play Store icon */}
+        <svg viewBox="0 0 512 512" className="w-8 h-8 md:w-11 md:h-11 flex-shrink-0 drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)]">
+          <defs>
+            <linearGradient id="ps-blue" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#00C1FF" />
+              <stop offset="100%" stopColor="#0074E0" />
+            </linearGradient>
+            <linearGradient id="ps-red" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#FF3A44" />
+              <stop offset="100%" stopColor="#C1272D" />
+            </linearGradient>
+            <linearGradient id="ps-yellow" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#FFD400" />
+              <stop offset="100%" stopColor="#FF9A00" />
+            </linearGradient>
+            <linearGradient id="ps-green" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#00E676" />
+              <stop offset="100%" stopColor="#00A344" />
+            </linearGradient>
+          </defs>
+          {/* Green (left/top triangle) */}
+          <path fill="url(#ps-green)" d="M99 8c-6 3-11 9-13 17v462c2 8 7 14 13 17l188-239L99 8z" />
+          {/* Blue (right lower) */}
+          <path fill="url(#ps-blue)" d="M99 504c2 4 6 7 10 9l183-176-77-81L99 504z" />
+          {/* Yellow (right) */}
+          <path fill="url(#ps-yellow)" d="M354 256l83-48c11-6 11-22 0-28l-83-48-77 76 77 48z" />
+          {/* Red (right upper) */}
+          <path fill="url(#ps-red)" d="M354 256l-72-72L99 8c-4 2-8 5-10 9l188 239 77 0z" />
+        </svg>
+        <div className="flex flex-col items-start text-left">
+          <span className="text-[9px] md:text-[11px] font-black text-white/90 tracking-[0.2em] leading-none">
+            GET IT ON
+          </span>
+          <span className="text-[20px] sm:text-[24px] md:text-[30px] font-black leading-tight mt-1 text-white">
+            Google Play
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function HeroSection({ onDownload, locationText }) {
+  const [ref, inView] = useInView();
 
   return (
     <section ref={ref} className="relative min-h-screen flex items-center justify-center px-4 pt-32 pb-20 overflow-hidden">
@@ -232,60 +281,58 @@ function HeroSection({ onDownload, locationText, shopName }) {
 
         {/* LOGO with Static Semi-circular Arc Text */}
         <div className="flex justify-center mb-8">
-          <div className="relative w-72 h-72 md:w-96 md:h-96 qr-logo-float">
+          <div className="relative w-56 h-56 md:w-72 md:h-72 qr-logo-float">
 
-            {/* Semi-circular Text SVG - TOP ARC ONLY, NO ROTATION */}
             <svg
               viewBox="0 0 400 400"
               className="absolute inset-0 w-full h-full"
               style={{ filter: 'drop-shadow(0 0 8px rgba(255, 215, 0, 0.5))' }}
             >
               <defs>
-                {/* Top semi-circle arc path */}
                 <path
                   id="topArcPath"
                   d="M 60,200 A 140,140 0 0,1 340,200"
                 />
-                {/* Bottom semi-circle arc path for second line */}
+                {/* Bottom arc — text reads left → right along lower curve */}
                 <path
                   id="bottomArcPath"
-                  d="M 80,220 A 120,120 0 0,0 320,220"
+                  d="M 60,200 A 140,140 0 0,0 340,200"
                 />
               </defs>
 
-              {/* Top arc text - shop name or tagline */}
+              {/* TOP ARC — क्यूटर in gold */}
               <text
                 fill="#FFD700"
                 style={{
-                  fontSize: '17px',
+                  fontSize: '22px',
                   fontWeight: '900',
-                  letterSpacing: '1.5px',
+                  letterSpacing: '2px',
                   fontFamily: "'Noto Sans Devanagari', sans-serif",
                 }}
               >
                 <textPath href="#topArcPath" startOffset="50%" textAnchor="middle">
-                  {displayShop ? `✂️ ${displayShop}` : '✂️ क्यूटर · QUTTR ✂️'}
+                  ✂️ क्यूटर ✂️
                 </textPath>
               </text>
 
-              {/* Bottom arc text - tagline */}
+              {/* BOTTOM ARC — 📍 Now in [TOWN] with TOWN in white */}
               <text
-                fill="rgba(255,255,255,0.55)"
                 style={{
-                  fontSize: '13px',
-                  fontWeight: '700',
-                  letterSpacing: '1px',
-                  fontFamily: "'Noto Sans Devanagari', sans-serif",
+                  fontSize: '15px',
+                  fontWeight: '800',
+                  letterSpacing: '1.5px',
+                  fontFamily: "'Inter', 'Noto Sans Devanagari', sans-serif",
                 }}
               >
                 <textPath href="#bottomArcPath" startOffset="50%" textAnchor="middle">
-                  बुकिंग सेकंडों में
+                  <tspan fill="#FFD700">📍 Now in </tspan>
+                  <tspan fill="#FFFFFF" style={{ fontWeight: 900 }}>{locationText}</tspan>
                 </textPath>
               </text>
             </svg>
 
             {/* Center Logo */}
-            <div className="absolute inset-16 md:inset-20 flex items-center justify-center">
+            <div className="absolute inset-14 md:inset-16 flex items-center justify-center">
               <div className="relative w-full h-full">
                 <div className="absolute inset-0 bg-[#E63946]/60 blur-3xl rounded-full qr-logo-pulse" />
                 <div className="relative w-full h-full flex items-center justify-center rounded-full bg-gradient-to-br from-[#E63946] to-[#B01824] border-4 border-[#FFD700]/60 shadow-[0_0_60px_rgba(230,57,70,0.8)]">
@@ -299,7 +346,7 @@ function HeroSection({ onDownload, locationText, shopName }) {
                     }}
                   />
                   <div className="hidden w-full h-full items-center justify-center">
-                    <svg viewBox="0 0 24 24" className="w-16 h-16 md:w-20 md:h-20 text-[#FFD700]" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg viewBox="0 0 24 24" className="w-12 h-12 md:w-16 md:h-16 text-[#FFD700]" fill="none" stroke="currentColor" strokeWidth="2">
                       <circle cx="6" cy="6" r="3"/>
                       <circle cx="6" cy="18" r="3"/>
                       <line x1="20" y1="4" x2="8.12" y2="15.88" strokeLinecap="round"/>
@@ -313,22 +360,12 @@ function HeroSection({ onDownload, locationText, shopName }) {
           </div>
         </div>
 
-        {/* Location / Shop Badge */}
+        {/* Location Badge */}
         <div className="inline-flex items-center gap-2 mb-6 max-w-[95%]">
           <span className="qr-hindi text-[14px] md:text-[16px] font-black tracking-wider px-5 py-3 rounded-full border-2 border-[#FFD700]/50 bg-gradient-to-r from-[#FFD700]/[0.15] via-[#E63946]/[0.1] to-[#FFD700]/[0.15] backdrop-blur-md shadow-[0_0_20px_rgba(255,215,0,0.2)]">
-            {displayShop ? (
-              <>
-                ✂️ <span className="text-white/90">स्कैन किया</span>{' '}
-                <span className="text-[#FFD700] font-black uppercase">{displayShop}</span>{' '}
-                <span className="text-white/90">से</span>
-              </>
-            ) : (
-              <>
-                📍 <span className="text-white/90">अब</span>{' '}
-                <span className="text-[#FFD700] font-black uppercase">{displayCity}</span>{' '}
-                <span className="text-white/90">में भी उपलब्ध!</span>
-              </>
-            )}
+            📍 <span className="text-white/90">अब आपके शहर</span>{' '}
+            <span className="text-[#FFD700] font-black uppercase">{locationText}</span>{' '}
+            <span className="text-white/90">में भी!</span>
           </span>
         </div>
 
@@ -358,28 +395,8 @@ function HeroSection({ onDownload, locationText, shopName }) {
         </p>
 
         <div className="flex flex-col items-center gap-6 mb-8 px-4">
-          <button
-            onClick={onDownload}
-            className="qr-mega-btn group relative inline-flex items-center gap-3 text-white text-[16px] sm:text-[20px] md:text-[24px] font-black px-6 sm:px-10 md:px-14 py-5 md:py-6 rounded-full transition-all duration-300 overflow-hidden w-full max-w-md"
-          >
-            <span className="qr-btn-shine" />
-            <div className="relative z-10 flex items-center gap-3 justify-center w-full">
-              <svg viewBox="0 0 512 512" className="w-8 h-8 md:w-11 md:h-11 flex-shrink-0 drop-shadow-[0_0_10px_rgba(255,215,0,0.9)]">
-                <path fill="#FFD700" d="M99 8c-6 3-11 9-13 17v462c2 8 7 14 13 17l255-248L99 8z" />
-                <path fill="#FFDE4A" d="M354 256l-72-72L99 8c-4 2-8 5-10 9l188 239 77-0z" />
-                <path fill="#FFD700" d="M99 504c2 4 6 7 10 9l183-176-77-81L99 504z" />
-                <path fill="#FFDE4A" d="M354 256l83-48c11-6 11-22 0-28l-83-48-77 76 77 48z" />
-              </svg>
-              <div className="flex flex-col items-start text-left">
-                <span className="text-[9px] md:text-[11px] font-black text-[#FFD700] tracking-[0.2em] leading-none">
-                  GET IT ON
-                </span>
-                <span className="text-[20px] sm:text-[24px] md:text-[30px] font-black leading-tight mt-1">
-                  Google Play
-                </span>
-              </div>
-            </div>
-          </button>
+          {/* PLAY STORE THEMED BUTTON */}
+          <PlayStoreButton onClick={onDownload} size="lg" />
 
           <div className="flex flex-col items-center gap-1">
             <p className="qr-hindi text-[16px] md:text-[20px] font-black text-[#FFD700] qr-bounce-down">
@@ -596,9 +613,9 @@ function HowItWorks() {
 function TestimonialsSection() {
   const [ref, inView] = useInView();
   const testimonials = [
-    { quote: 'अब घंटों इंतज़ार नहीं करना पड़ता। Quttr ने काम आसान कर दिया।', name: 'राहुल शर्मा', city: 'दिल्ली' },
+    { quote: 'अब घंटों इंतज़ार नहीं करना पड़ता। क्यूटर ने काम आसान कर दिया।', name: 'राहुल शर्मा', city: 'दिल्ली' },
     { quote: 'क्यू ट्रैकिंग बहुत बढ़िया है। मैं सही समय पर पहुंचता हूं।', name: 'अमित कुमार', city: 'मुंबई' },
-    { quote: 'मेरा पसंदीदा बार्बर हमेशा Quttr पर मिलता है।', name: 'विकास सिंह', city: 'बैंगलोर' },
+    { quote: 'मेरा पसंदीदा बार्बर हमेशा क्यूटर पर मिलता है।', name: 'विकास सिंह', city: 'बैंगलोर' },
   ];
   return (
     <section ref={ref} className="px-4 py-24 md:py-32 border-t border-white/[0.06] bg-gradient-to-b from-[#0A0000] to-black">
@@ -708,9 +725,8 @@ function BarberSection({ onDownload }) {
   );
 }
 
-function FinalCTASection({ onDownload, locationText, shopName }) {
+function FinalCTASection({ onDownload, locationText }) {
   const [ref, inView] = useInView();
-  const displayLabel = shopName || locationText || 'आपके शहर';
   return (
     <section ref={ref} id="download" className="relative px-4 py-32 md:py-48 border-t border-white/[0.06] overflow-hidden">
       <div className="absolute inset-0 pointer-events-none">
@@ -718,11 +734,9 @@ function FinalCTASection({ onDownload, locationText, shopName }) {
       </div>
       <div className={`relative max-w-4xl mx-auto text-center transition-all duration-1000 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
         <div className="qr-hindi inline-block text-[14px] md:text-[16px] font-bold text-[#FFD700] mb-6 px-5 py-2.5 rounded-full border border-[#FFD700]/40 bg-[#FFD700]/[0.08]">
-          {shopName ? (
-            <><span className="text-white/80">✂️</span> <span className="uppercase font-black">{shopName}</span> <span className="text-white/80">पर उपलब्ध</span></>
-          ) : (
-            <>📍 <span className="uppercase font-black">{displayLabel}</span> में उपलब्ध</>
-          )}
+          📍 <span className="text-white/90">अब आपके शहर</span>{' '}
+          <span className="uppercase font-black text-[#FFD700]">{locationText}</span>{' '}
+          <span className="text-white/90">में भी!</span>
         </div>
         <h2 className="qr-hindi text-[60px] md:text-[140px] font-black leading-[1.15] tracking-tight mb-4">
           <span className="qr-gold-red-gradient">तैयार?</span>
@@ -733,18 +747,10 @@ function FinalCTASection({ onDownload, locationText, shopName }) {
         <p className="qr-hindi text-[16px] md:text-[20px] text-white/50 mb-12 max-w-2xl mx-auto leading-relaxed">
           इंतज़ार को कहें अलविदा।
         </p>
-        <button onClick={onDownload} className="qr-mega-btn group relative inline-flex items-center gap-3 text-white text-[18px] md:text-[26px] font-black px-8 md:px-16 py-6 md:py-7 rounded-full transition-all duration-300 overflow-hidden w-full max-w-md">
-          <span className="qr-btn-shine" />
-          <div className="relative z-10 flex items-center gap-3 justify-center w-full">
-            <svg viewBox="0 0 512 512" className="w-9 h-9 md:w-12 md:h-12 flex-shrink-0">
-              <path fill="#FFD700" d="M99 8c-6 3-11 9-13 17v462c2 8 7 14 13 17l255-248L99 8z" />
-            </svg>
-            <div className="flex flex-col items-start text-left">
-              <span className="text-[10px] md:text-[12px] font-black text-[#FFD700] tracking-[0.2em] leading-none">GET IT ON</span>
-              <span className="text-[22px] md:text-[32px] font-black leading-tight mt-1">Google Play</span>
-            </div>
-          </div>
-        </button>
+
+        {/* PLAY STORE THEMED BUTTON */}
+        <PlayStoreButton onClick={onDownload} size="lg" />
+
         <p className="qr-hindi mt-8 text-[16px] md:text-[18px] font-black text-[#FFD700] qr-bounce-down">👇 अभी डाउनलोड करें · Free</p>
       </div>
     </section>
@@ -767,7 +773,7 @@ function FooterSection() {
           <a href="https://instagram.com/quttrofficial" target="_blank" rel="noopener noreferrer" className="text-white/60 hover:text-[#FFD700] transition-colors">Instagram</a>
         </div>
         <div className="pt-8 border-t border-white/[0.06] flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-[12px] text-white/40 font-semibold">© 2025 Quttr. All rights reserved.</p>
+          <p className="text-[12px] text-white/40 font-semibold">© 2025 क्यूटर. सर्वाधिकार सुरक्षित.</p>
           <p className="qr-hindi text-[12px] text-white/40 font-semibold">प्यार से भारत में बनाया गया 🇮🇳</p>
         </div>
       </div>
@@ -808,7 +814,60 @@ function GlobalStyles() {
         50% { background-position: 100% 50%; }
       }
 
-      /* No rotation — static semi-circular arc text only */
+      /* ============ PLAY STORE THEMED DOWNLOAD BUTTON ============ */
+      .qr-playstore-btn {
+        background: linear-gradient(135deg, #1A73E8 0%, #0D47A1 45%, #1565C0 100%);
+        box-shadow:
+          0 0 0 1px rgba(255,255,255,0.12),
+          inset 0 1px 0 rgba(255,255,255,0.2),
+          0 12px 32px -6px rgba(26,115,232,0.55),
+          0 20px 60px -10px rgba(0,0,0,0.7);
+        animation: qr-playstore-pulse 3s ease-in-out infinite;
+      }
+      .qr-playstore-btn:hover {
+        transform: scale(1.03) translateY(-2px);
+        box-shadow:
+          0 0 0 2px rgba(255,255,255,0.2),
+          inset 0 1px 0 rgba(255,255,255,0.25),
+          0 18px 42px -6px rgba(26,115,232,0.75),
+          0 25px 70px -10px rgba(0,0,0,0.85);
+      }
+      .qr-playstore-btn:active { transform: scale(0.98); }
+      @keyframes qr-playstore-pulse {
+        0%, 100% {
+          box-shadow:
+            0 0 0 1px rgba(255,255,255,0.12),
+            inset 0 1px 0 rgba(255,255,255,0.2),
+            0 12px 32px -6px rgba(26,115,232,0.55),
+            0 20px 60px -10px rgba(0,0,0,0.7);
+        }
+        50% {
+          box-shadow:
+            0 0 0 2px rgba(52,168,83,0.4),
+            inset 0 1px 0 rgba(255,255,255,0.25),
+            0 15px 40px -6px rgba(26,115,232,0.75),
+            0 0 60px rgba(52,168,83,0.35);
+        }
+      }
+      /* Play Store colored corner accents (Google Blue/Red/Yellow/Green vibe) */
+      .qr-ps-corner {
+        position: absolute;
+        width: 90px; height: 90px;
+        border-radius: 9999px;
+        filter: blur(28px);
+        opacity: 0.55;
+        pointer-events: none;
+      }
+      .qr-ps-corner-tl {
+        top: -30px; left: -20px;
+        background: radial-gradient(circle, #34A853 0%, transparent 70%);
+      }
+      .qr-ps-corner-br {
+        bottom: -30px; right: -20px;
+        background: radial-gradient(circle, #FBBC05 0%, transparent 70%);
+      }
+
+      /* Legacy red button kept for other spots if needed */
       .qr-mega-btn {
         background: linear-gradient(135deg, #E63946 0%, #B01824 100%);
         box-shadow: 0 0 0 1px rgba(255,215,0,0.3), 0 15px 50px -8px rgba(230,57,70,0.7), 0 0 80px rgba(255,215,0,0.25);
