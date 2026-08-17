@@ -3,15 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
-  QrCode, 
-  Plus, 
-  Search, 
-  Filter, 
-  Download,
-  TrendingUp,
-  Activity,
-  AlertCircle,
-  CheckCircle
+  QrCode, Plus, Search, TrendingUp, CheckCircle, AlertCircle, Loader2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -49,11 +41,10 @@ export default function QRCodesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-heading">QR Codes</h1>
-          <p className="text-caption mt-1">Manage all QR codes and view analytics</p>
+          <p className="text-caption mt-1">Manage all QR codes and generate new batches</p>
         </div>
         <Link href="/dashboard/qr-codes/generate" className="btn-brand">
           <Plus className="w-4 h-4" />
@@ -61,7 +52,6 @@ export default function QRCodesPage() {
         </Link>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="stat-card">
           <div className="flex items-center justify-between">
@@ -113,7 +103,6 @@ export default function QRCodesPage() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="card p-4">
         <div className="flex flex-col md:flex-row gap-3">
           <div className="flex-1 relative">
@@ -127,7 +116,7 @@ export default function QRCodesPage() {
             />
           </div>
           
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {['ALL', 'ACTIVE', 'INACTIVE', 'PAUSED'].map(s => (
               <button
                 key={s}
@@ -141,20 +130,20 @@ export default function QRCodesPage() {
         </div>
       </div>
 
-      {/* QR Codes List */}
       <div className="card overflow-hidden">
         {loading ? (
           <div className="p-12 text-center">
-            <div className="w-8 h-8 border-2 border-accent-500 border-t-transparent rounded-full animate-spin mx-auto" />
+            <Loader2 className="w-8 h-8 text-accent-500 animate-spin mx-auto" />
             <p className="text-caption mt-4">Loading...</p>
           </div>
         ) : filteredCodes.length === 0 ? (
           <div className="p-12 text-center">
-            <QrCode className="w-12 h-12 text-white/20 mx-auto mb-4" />
-            <p className="text-body">No QR codes found</p>
-            <Link href="/dashboard/qr-codes/generate" className="btn-brand mt-4 inline-flex">
+            <QrCode className="w-16 h-16 text-white/20 mx-auto mb-4" />
+            <p className="text-body mb-2">No QR codes yet</p>
+            <p className="text-caption mb-6">Generate your first batch to get started</p>
+            <Link href="/dashboard/qr-codes/generate" className="btn-brand inline-flex">
               <Plus className="w-4 h-4" />
-              Generate Your First Batch
+              Generate First Batch
             </Link>
           </div>
         ) : (
@@ -167,7 +156,6 @@ export default function QRCodesPage() {
                   <th className="text-left px-6 py-3 text-2xs font-semibold text-white/50 uppercase tracking-wider">Location</th>
                   <th className="text-left px-6 py-3 text-2xs font-semibold text-white/50 uppercase tracking-wider">Scans</th>
                   <th className="text-left px-6 py-3 text-2xs font-semibold text-white/50 uppercase tracking-wider">Batch</th>
-                  <th className="text-left px-6 py-3 text-2xs font-semibold text-white/50 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.04]">
@@ -188,7 +176,7 @@ export default function QRCodesPage() {
                             {code.activation.shop_name || code.activation.location?.city || 'N/A'}
                           </div>
                           <div className="text-xs text-white/50">
-                            {code.activation.location?.city}, {code.activation.location?.state}
+                            {code.activation.location?.city}
                           </div>
                         </div>
                       ) : (
@@ -200,14 +188,6 @@ export default function QRCodesPage() {
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-xs text-white/50">{code.batch_name}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <Link 
-                        href={`/dashboard/qr-codes/${code.short_code}`}
-                        className="text-sm text-accent-500 hover:text-accent-400"
-                      >
-                        View
-                      </Link>
                     </td>
                   </tr>
                 ))}
