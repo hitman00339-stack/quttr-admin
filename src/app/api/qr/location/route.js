@@ -16,8 +16,18 @@ export async function GET(request) {
       });
     }
 
+    const qrCodes = await getCollection('qr_codes');
+    const qrCode = await qrCodes.findOne({ short_code: qrId });
+
+    if (!qrCode) {
+      return NextResponse.json({
+        success: true,
+        location: 'आपके शहर'
+      });
+    }
+
     const activations = await getCollection('qr_activations');
-    const activation = await activations.findOne({ qr_id: qrId });
+    const activation = await activations.findOne({ qr_id: qrCode._id });
 
     if (!activation) {
       return NextResponse.json({
@@ -26,9 +36,10 @@ export async function GET(request) {
       });
     }
 
-    // Priority: shop_name > area > city > state
+    // Priority: shop_name > town > area > city > state
     const location = 
       activation.shop_name ||
+      activation.location?.town ||
       activation.location?.area ||
       activation.location?.city ||
       activation.location?.state ||
@@ -39,6 +50,7 @@ export async function GET(request) {
       location: location,
       details: {
         shop: activation.shop_name,
+        town: activation.location?.town,
         area: activation.location?.area,
         city: activation.location?.city,
         state: activation.location?.state,
@@ -50,6 +62,6 @@ export async function GET(request) {
       success: false,
       location: 'आपके शहर',
       error: error.message
-    }, { status: 200 }); // Don't fail user experience
+    }, { status: 200 });
   }
 }
