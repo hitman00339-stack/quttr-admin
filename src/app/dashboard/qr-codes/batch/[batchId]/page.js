@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
-  ArrowLeft, QrCode, Printer, Download, Loader2, 
-  CheckCircle, AlertCircle, Package, Calendar, TrendingUp,
+  ArrowLeft, QrCode, Printer, Loader2, 
+  CheckCircle, AlertCircle, TrendingUp,
   Copy, ExternalLink
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -16,7 +16,7 @@ export default function BatchDetailPage() {
   const batchId = params.batchId;
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
-  const [view, setView] = useState('grid'); // 'grid' or 'list'
+  const [view, setView] = useState('grid');
 
   useEffect(() => {
     if (batchId) loadBatch();
@@ -42,15 +42,13 @@ export default function BatchDetailPage() {
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    toast.success('Copied to clipboard!');
+    toast.success('Copied!');
   };
 
   const formatDate = (date) => {
     if (!date) return 'N/A';
     return new Date(date).toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
+      day: 'numeric', month: 'short', year: 'numeric',
     });
   };
 
@@ -86,8 +84,7 @@ export default function BatchDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 no-print">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/qr-codes" className="btn-icon">
             <ArrowLeft className="w-4 h-4" />
@@ -100,14 +97,13 @@ export default function BatchDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => window.print()} className="btn-accent no-print">
+          <button onClick={() => window.print()} className="btn-accent">
             <Printer className="w-4 h-4" />
             Print All
           </button>
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 no-print">
         <div className="stat-card">
           <div className="flex items-center justify-between">
@@ -130,7 +126,7 @@ export default function BatchDetailPage() {
         <div className="stat-card">
           <div className="flex items-center justify-between">
             <div>
-              <p className="stat-label">Pending Activation</p>
+              <p className="stat-label">Pending</p>
               <p className="stat-value text-warning">{stats.inactive}</p>
             </div>
             <AlertCircle className="w-8 h-8 text-warning opacity-50" />
@@ -154,13 +150,12 @@ export default function BatchDetailPage() {
         </div>
       )}
 
-      {/* View Toggle */}
       <div className="flex gap-2 no-print">
         <button
           onClick={() => setView('grid')}
           className={`btn ${view === 'grid' ? 'btn-accent' : 'btn-outline'}`}
         >
-          Grid View (with QR)
+          Grid View
         </button>
         <button
           onClick={() => setView('list')}
@@ -170,7 +165,6 @@ export default function BatchDetailPage() {
         </button>
       </div>
 
-      {/* QR Codes */}
       {view === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 print-grid">
           {codes.map((code) => (
