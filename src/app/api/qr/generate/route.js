@@ -4,11 +4,10 @@ import { getDb } from '@/lib/mongodb';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Generate unique short code
-function generateShortCode(length = 6) {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluded confusing chars
+function generateShortCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
-  for (let i = 0; i < length; i++) {
+  for (let i = 0; i < 6; i++) {
     code += chars[Math.floor(Math.random() * chars.length)];
   }
   return code;
@@ -17,146 +16,91 @@ function generateShortCode(length = 6) {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { 
-      quantity = 1, 
-      batch_name = '',
-      notes = '',
-      campaign = ''
-    } = body;
+    const { quantity = 10, batch_name = '', notes = '' } = body;
     
-    if (quantity < 1 || quantity > 1000) {
-      return NextResponse.json({
-        success: false,
-        message: 'Quantity must be between 1 and 1000'
-      }, { status: 400 });
+    if (quantity < 1 || quantity > 500) {
+      return NextResponse.json({ success: false, message: 'Quantity must be 1-500' }, { status: 400 });
     }
     
     const db = await getDb();
     const collection = db.collection('qr_codes');
     
-    // Generate batch info
     const batchId = `BATCH_${Date.now()}`;
-    const batchDisplayName = batch_name || `Batch ${new Date().toLocaleDateString()}`;
-    
-    // Generate QR codes
-    const qrCodes = [];
+    const batchDisplayName = batch_name || `Batch ${new Date().toLocaleDateString('en-IN')}`;
     const baseUrl = process.env.NEXT_PUBLIC_QR_BASE_URL || 'https://quttrr.com';
+    
+    const qrCodes = [];
+    const usedCodes = new Set();
     
     for (let i = 0; i < quantity; i++) {
       let short_code;
       let attempts = 0;
       
-      // Generate unique code
       do {
-        short_code = generateShortCode(6);
+        short_code = generateShortCode();
+        if (usedCodes.has(short_code)) continue;
         const exists = await collection.findOne({ short_code });
-        if (!exists) break;
+        if (!exists) { usedCodes.add(short_code); break; }
         attempts++;
       } while (attempts < 10);
       
-      if (attempts >= 10) {
-        return NextResponse.json({
-          success: false,
-          message: 'Failed to generate unique code'
-        }, { status: 500 });
-      }
-      
-      const qrDoc = {
+      qrCodes.push({
         short_code,
         full_url: `${baseUrl}/q/${short_code}`,
         status: 'INACTIVE',
         batch_id: batchId,
         batch_name: batchDisplayName,
-        campaign: campaign || null,
         notes: notes || null,
         total_scans: 0,
         created_at: new Date(),
         updated_at: new Date(),
-      };
-      
-      qrCodes.push(qrDoc);
+      });
     }
     
-    // Bulk insert
     await collection.insertMany(qrCodes);
     
     return NextResponse.json({
       success: true,
-      message: `Generated ${quantity} QR codes`,
       batch_id: batchId,
       batch_name: batchDisplayName,
       count: quantity,
-      codes: qrCodes.map(q => ({
-        short_code: q.short_code,
-        full_url: q.full_url,
-      })),
+      codes: qrCodes.map(q => ({ short_code: q.short_code, full_url: q.full_url })),
     });
-    
   } catch (error) {
-    console.error('Generate QR error:', error);
-    return NextResponse.json({
-      success: false,
-      message: 'Failed to generate QR codes',
-      error: error.message,
-    }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 
-// Get all QR codes
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
-    const batch = searchParams.get('batch');
-    const limit = parseInt(searchParams.get('limit') || '100');
-    const skip = parseInt(searchParams.get('skip') || '0');
+    const limit = parseInt(searchParams.get('limit') || '50');
     
     const db = await getDb();
-    const collection = db.collection('qr_codes');
-    
-    // Build query
     const query = {};
-    if (status) query.status = status;
-    if (batch) query.batch_id = batch;
+    if (status && status !== 'ALL') query.status = status;
     
-    // Get total count
-    const total = await collection.countDocuments(query);
+    const total = await db.collection('qr_codes').countDocuments(query);
+    const codes = await db.collection('qr_codes')
+      .find(query).sort({ created_at: -1 }).limit(limit).toArray();
     
-    // Get QR codes
-    const codes = await collection
-      .find(query)
-      .sort({ created_at: -1 })
-      .skip(skip)
-      .limit(limit)
-      .toArray();
-    
-    // Get activation info for each
     const activations = await db.collection('qr_activations')
-      .find({ qr_id: { $in: codes.map(c => c._id) } })
-      .toArray();
+      .find({ qr_id: { $in: codes.map(c => c._id) } }).toArray();
     
-    const activationMap = new Map(
-      activations.map(a => [a.qr_id.toString(), a])
-    );
-    
-    const enrichedCodes = codes.map(code => ({
-      ...code,
-      activation: activationMap.get(code._id.toString()) || null,
-    }));
+    const activationMap = new Map(activations.map(a => [a.qr_id.toString(), a]));
     
     return NextResponse.json({
       success: true,
       total,
       count: codes.length,
-      codes: enrichedCodes,
+      codes: codes.map(code => ({
+        ...code,
+        _id: code._id.toString(),
+        activation: activationMap.get(code._id.toString()) || null,
+      })),
     });
-    
   } catch (error) {
-    console.error('List QR error:', error);
-    return NextResponse.json({
-      success: false,
-      message: 'Failed to fetch QR codes',
-      error: error.message,
-    }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
