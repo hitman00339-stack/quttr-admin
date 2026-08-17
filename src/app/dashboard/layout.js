@@ -8,6 +8,7 @@ import {
   BarChart3, Settings, LogOut, Search, Command, Menu, X,
   Sparkles, Scissors, ChevronRight,
   AlertCircle, UserCheck, ShoppingBag,
+  QrCode,
 } from 'lucide-react';
 import { authService } from '../../services/auth';
 
@@ -19,6 +20,7 @@ const navigation = [
   { name: 'Users', href: '/dashboard/users', icon: Users },
   { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
   { name: 'Products', href: '/dashboard/products', icon: ShoppingBag },
+  { name: 'QR Codes', href: '/dashboard/qr-codes', icon: QrCode },
   { name: 'Reviews', href: '/dashboard/reviews', icon: Star },
   { name: 'Notices', href: '/dashboard/notices', icon: Bell },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
