@@ -1,46 +1,26 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-
-// Pre-load QR library once for entire app
-let qrLibraryPromise = null;
-
-function loadQRLibrary() {
-  if (typeof window === 'undefined') return Promise.resolve(null);
-  if (window.QRCode) return Promise.resolve(window.QRCode);
-  
-  if (!qrLibraryPromise) {
-    qrLibraryPromise = new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js';
-      script.async = true;
-      script.onload = () => resolve(window.QRCode);
-      script.onerror = () => reject(new Error('Failed to load QR library'));
-      document.head.appendChild(script);
-    });
-  }
-  
-  return qrLibraryPromise;
-}
+import QRCode from 'qrcode';
 
 export default function ScissorQR({ value, size = 300 }) {
   const canvasRef = useRef(null);
-  const [error, setError] = useState(null);
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState(null);
   
   useEffect(() => {
     let cancelled = false;
     
-    async function draw() {
+    async function drawQR() {
+      if (!canvasRef.current || !value) return;
+      
       try {
-        const QRCode = await loadQRLibrary();
-        if (cancelled || !QRCode || !canvasRef.current || !value) return;
-        
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
         const totalSize = size;
         const qrSize = size * 0.7;
         
+        // Set canvas size
         canvas.width = totalSize;
         canvas.height = totalSize;
         
@@ -48,24 +28,29 @@ export default function ScissorQR({ value, size = 300 }) {
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, totalSize, totalSize);
         
-        // Create temp canvas for QR
-        const tempCanvas = document.createElement('canvas');
-        
-        await new Promise((resolve, reject) => {
-          QRCode.toCanvas(tempCanvas, value, {
-            width: qrSize,
-            margin: 1,
-            errorCorrectionLevel: 'H',
-            color: { dark: '#000000', light: '#FFFFFF' }
-          }, (err) => {
-            if (err) reject(err);
-            else resolve();
-          });
+        // Generate QR to data URL first
+        const qrDataUrl = await QRCode.toDataURL(value, {
+          width: qrSize,
+          margin: 1,
+          errorCorrectionLevel: 'H',
+          color: { dark: '#000000', light: '#FFFFFF' }
         });
         
         if (cancelled) return;
         
-        // === BARBER THEME ===
+        // Load QR image
+        const qrImg = new Image();
+        qrImg.crossOrigin = 'anonymous';
+        
+        await new Promise((resolve, reject) => {
+          qrImg.onload = resolve;
+          qrImg.onerror = reject;
+          qrImg.src = qrDataUrl;
+        });
+        
+        if (cancelled) return;
+        
+        // === Draw Barber Theme ===
         
         // Top stripes
         const stripeH = Math.max(20, totalSize * 0.08);
@@ -94,18 +79,20 @@ export default function ScissorQR({ value, size = 300 }) {
         // Draw QR in center
         const qrX = (totalSize - qrSize) / 2;
         const qrY = (totalSize - qrSize) / 2;
-        ctx.drawImage(tempCanvas, qrX, qrY, qrSize, qrSize);
+        ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
         
         // Center logo with scissors
         const cx = totalSize / 2;
         const cy = totalSize / 2;
         const logoR = qrSize * 0.13;
         
+        // White circle
         ctx.fillStyle = '#FFFFFF';
         ctx.beginPath();
         ctx.arc(cx, cy, logoR, 0, Math.PI * 2);
         ctx.fill();
         
+        // Red border
         ctx.strokeStyle = '#E63946';
         ctx.lineWidth = 3;
         ctx.beginPath();
@@ -118,6 +105,7 @@ export default function ScissorQR({ value, size = 300 }) {
         ctx.lineCap = 'round';
         const s = logoR * 0.7;
         
+        // Scissor handles (circles)
         ctx.beginPath();
         ctx.arc(cx - s/2, cy - s/3, s/4, 0, Math.PI * 2);
         ctx.stroke();
@@ -126,6 +114,7 @@ export default function ScissorQR({ value, size = 300 }) {
         ctx.arc(cx - s/2, cy + s/3, s/4, 0, Math.PI * 2);
         ctx.stroke();
         
+        // Scissor blades
         ctx.beginPath();
         ctx.moveTo(cx - s/4, cy - s/3);
         ctx.lineTo(cx + s/2, cy + s/2);
@@ -142,39 +131,20 @@ export default function ScissorQR({ value, size = 300 }) {
         ctx.textAlign = 'center';
         ctx.fillText('SCAN TO BOOK', totalSize / 2, totalSize - (stripeH / 2) + 4);
         
-        setReady(true);
+        if (!cancelled) {
+          setReady(true);
+          setError(null);
+        }
       } catch (err) {
         console.error('QR draw error:', err);
-        if (!cancelled) setError(err.message);
+        if (!cancelled) setError(err.message || 'Failed to generate QR');
       }
     }
     
-    draw();
+    drawQR();
     
     return () => { cancelled = true; };
   }, [value, size]);
-  
-  if (error) {
-    return (
-      <div style={{
-        width: '100%',
-        maxWidth: `${size}px`,
-        aspectRatio: '1',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#1a1a1a',
-        borderRadius: '8px',
-        border: '1px solid #333',
-        color: '#ff4444',
-        fontSize: '12px',
-        padding: '20px',
-        textAlign: 'center',
-      }}>
-        Error loading QR
-      </div>
-    );
-  }
   
   return (
     <div style={{ position: 'relative', width: '100%', maxWidth: `${size}px` }}>
@@ -185,22 +155,20 @@ export default function ScissorQR({ value, size = 300 }) {
           height: 'auto',
           display: 'block',
           borderRadius: '8px',
-          opacity: ready ? 1 : 0,
+          opacity: ready ? 1 : 0.3,
           transition: 'opacity 0.3s',
         }} 
       />
-      {!ready && (
+      {!ready && !error && (
         <div style={{
           position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          aspectRatio: '1',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'center',
-          background: '#fff',
-          borderRadius: '8px',
+          gap: '8px',
         }}>
           <div style={{
             width: '32px',
@@ -208,12 +176,27 @@ export default function ScissorQR({ value, size = 300 }) {
             border: '3px solid #E63946',
             borderTopColor: 'transparent',
             borderRadius: '50%',
-            animation: 'qrSpin 0.8s linear infinite',
+            animation: 'qrSpinAnim 0.8s linear infinite',
           }} />
+          <span style={{ fontSize: '11px', color: '#666' }}>Loading QR...</span>
+        </div>
+      )}
+      {error && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          textAlign: 'center',
+          color: '#ff4444',
+          fontSize: '12px',
+          padding: '10px',
+        }}>
+          ⚠️ {error}
         </div>
       )}
       <style jsx>{`
-        @keyframes qrSpin {
+        @keyframes qrSpinAnim {
           to { transform: rotate(360deg); }
         }
       `}</style>
