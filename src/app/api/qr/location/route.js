@@ -36,10 +36,10 @@ export async function GET(request) {
       });
     }
 
-    // Priority: shop_name > town > area > city > state
+    // Priority: TOWN > shop_name > area > city > state
     const location = 
-      activation.shop_name ||
       activation.location?.town ||
+      activation.shop_name ||
       activation.location?.area ||
       activation.location?.city ||
       activation.location?.state ||
@@ -49,8 +49,8 @@ export async function GET(request) {
       success: true,
       location: location,
       details: {
-        shop: activation.shop_name,
         town: activation.location?.town,
+        shop: activation.shop_name,
         area: activation.location?.area,
         city: activation.location?.city,
         state: activation.location?.state,
