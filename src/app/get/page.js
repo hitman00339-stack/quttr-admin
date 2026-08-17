@@ -66,13 +66,18 @@ function LandingContent() {
   const qrId = searchParams.get('qr') || '';
   const sid = searchParams.get('sid') || '';
   const location = searchParams.get('loc') || searchParams.get('location') || '';
-  
+
   const [sessionId, setSessionId] = useState('');
-  const [locationText, setLocationText] = useState('आपके शहर');
+  const [scrolled, setScrolled] = useState(false);
+  const [locationText, setLocationText] = useState('');
+  const [shopName, setShopName] = useState('');
   const trackedPageView = useRef(false);
 
   useEffect(() => {
     setSessionId(sid || makeSessionId());
+    const onScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   useEffect(() => {
@@ -82,10 +87,8 @@ function LandingContent() {
       fetch(`/api/qr/location?qr=${qrId}`)
         .then(r => r.json())
         .then(data => {
-          if (data.success && data.location) {
-            // Priority: town > shop_name > city
-            setLocationText(data.details?.town || data.location);
-          }
+          if (data.success && data.location) setLocationText(data.location);
+          if (data.success && data.shopName) setShopName(data.shopName);
         })
         .catch(() => {});
     }
@@ -150,8 +153,14 @@ function LandingContent() {
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+Devanagari:wght@400;500;600;700;800;900&display=swap"
       />
 
+      <StickyHeader scrolled={scrolled} onDownload={downloadCustomer} />
+
       <main className="bg-black text-white antialiased overflow-x-hidden">
-        <HeroSection onDownload={downloadCustomer} locationText={locationText} />
+        <HeroSection
+          onDownload={downloadCustomer}
+          locationText={locationText}
+          shopName={shopName}
+        />
         <FeatureOne />
         <FeatureTwo />
         <FeatureThree />
@@ -159,7 +168,7 @@ function LandingContent() {
         <HowItWorks />
         <TestimonialsSection />
         <BarberSection onDownload={downloadBusiness} />
-        <FinalCTASection onDownload={downloadCustomer} locationText={locationText} />
+        <FinalCTASection onDownload={downloadCustomer} locationText={locationText} shopName={shopName} />
         <FooterSection />
       </main>
 
@@ -168,58 +177,158 @@ function LandingContent() {
   );
 }
 
-function HeroSection({ onDownload, locationText }) {
+function StickyHeader({ scrolled, onDownload }) {
+  return (
+    <header
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+        scrolled ? 'bg-black/85 backdrop-blur-xl border-b border-[#FFD700]/[0.15]' : 'bg-transparent'
+      }`}
+    >
+      <div className="max-w-7xl mx-auto px-4 md:px-12 h-16 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <img
+            src="/quttr-logo.png"
+            alt="Quttr"
+            className="w-9 h-9 object-contain"
+            onError={(e) => { e.target.style.display = 'none'; }}
+          />
+          <span className="text-[17px] font-black tracking-tight">
+            क्यूटर<span className="text-[#FFD700]">.</span>
+          </span>
+        </div>
+
+        <nav className="hidden md:flex items-center gap-8 text-[13px] text-white/70 font-semibold">
+          <a href="#features" className="hover:text-[#FFD700] transition-colors">फीचर्स</a>
+          <a href="#barbers" className="hover:text-[#FFD700] transition-colors">बार्बर</a>
+          <a href="#download" className="hover:text-[#FFD700] transition-colors">डाउनलोड</a>
+        </nav>
+
+        <button
+          onClick={onDownload}
+          className="qr-hindi text-[13px] font-bold bg-gradient-to-r from-[#E63946] to-[#B01824] text-white px-5 py-2.5 rounded-full hover:shadow-[0_0_20px_rgba(230,57,70,0.6)] transition-all"
+        >
+          डाउनलोड
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function HeroSection({ onDownload, locationText, shopName }) {
   const [ref, inView] = useInView();
 
+  // Display label: shop name takes priority, then location, then generic
+  const displayShop = shopName || '';
+  const displayCity = locationText || 'आपके शहर';
+
   return (
-    <section ref={ref} className="relative min-h-screen flex items-center justify-center px-4 pt-16 pb-20 overflow-hidden">
+    <section ref={ref} className="relative min-h-screen flex items-center justify-center px-4 pt-32 pb-20 overflow-hidden">
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-[#E63946]/[0.18] rounded-full blur-[140px]" />
         <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-[#FFD700]/[0.1] rounded-full blur-[120px]" />
       </div>
 
       <div className={`relative z-10 max-w-5xl mx-auto text-center w-full transition-all duration-1000 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-        
-        {/* Quttr Brand Name */}
-        <div className="mb-8 mt-8">
-          <h1 className="text-[36px] md:text-[48px] font-black tracking-tight">
-            <span className="qr-gold-red-gradient">Quttr</span>
-            <span className="text-[#FFD700]">.</span>
-          </h1>
-        </div>
 
-        {/* LOGO - No rotating text */}
+        {/* LOGO with Static Semi-circular Arc Text */}
         <div className="flex justify-center mb-8">
-          <div className="relative w-40 h-40 md:w-48 md:h-48 qr-logo-float">
-            <div className="absolute inset-0 bg-[#E63946]/60 blur-3xl rounded-full qr-logo-pulse" />
-            
-            <div className="relative w-full h-full flex items-center justify-center rounded-full bg-gradient-to-br from-[#E63946] to-[#B01824] border-4 border-[#FFD700]/60 shadow-[0_0_60px_rgba(230,57,70,0.8)]">
-              <img 
-                src="/quttr-logo.png" 
-                alt="Quttr"
-                className="w-full h-full object-contain absolute inset-0 p-3"
-                onError={(e) => { 
-                  e.target.style.display = 'none';
-                  e.target.nextElementSibling.style.display = 'flex';
+          <div className="relative w-72 h-72 md:w-96 md:h-96 qr-logo-float">
+
+            {/* Semi-circular Text SVG - TOP ARC ONLY, NO ROTATION */}
+            <svg
+              viewBox="0 0 400 400"
+              className="absolute inset-0 w-full h-full"
+              style={{ filter: 'drop-shadow(0 0 8px rgba(255, 215, 0, 0.5))' }}
+            >
+              <defs>
+                {/* Top semi-circle arc path */}
+                <path
+                  id="topArcPath"
+                  d="M 60,200 A 140,140 0 0,1 340,200"
+                />
+                {/* Bottom semi-circle arc path for second line */}
+                <path
+                  id="bottomArcPath"
+                  d="M 80,220 A 120,120 0 0,0 320,220"
+                />
+              </defs>
+
+              {/* Top arc text - shop name or tagline */}
+              <text
+                fill="#FFD700"
+                style={{
+                  fontSize: '17px',
+                  fontWeight: '900',
+                  letterSpacing: '1.5px',
+                  fontFamily: "'Noto Sans Devanagari', sans-serif",
                 }}
-              />
-              <div className="hidden w-full h-full items-center justify-center">
-                <svg viewBox="0 0 24 24" className="w-16 h-16 md:w-20 md:h-20 text-[#FFD700]" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="6" cy="6" r="3"/>
-                  <circle cx="6" cy="18" r="3"/>
-                  <line x1="20" y1="4" x2="8.12" y2="15.88" strokeLinecap="round"/>
-                  <line x1="14.47" y1="14.48" x2="20" y2="20" strokeLinecap="round"/>
-                  <line x1="8.12" y1="8.12" x2="12" y2="12" strokeLinecap="round"/>
-                </svg>
+              >
+                <textPath href="#topArcPath" startOffset="50%" textAnchor="middle">
+                  {displayShop ? `✂️ ${displayShop}` : '✂️ क्यूटर · QUTTR ✂️'}
+                </textPath>
+              </text>
+
+              {/* Bottom arc text - tagline */}
+              <text
+                fill="rgba(255,255,255,0.55)"
+                style={{
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  letterSpacing: '1px',
+                  fontFamily: "'Noto Sans Devanagari', sans-serif",
+                }}
+              >
+                <textPath href="#bottomArcPath" startOffset="50%" textAnchor="middle">
+                  बुकिंग सेकंडों में
+                </textPath>
+              </text>
+            </svg>
+
+            {/* Center Logo */}
+            <div className="absolute inset-16 md:inset-20 flex items-center justify-center">
+              <div className="relative w-full h-full">
+                <div className="absolute inset-0 bg-[#E63946]/60 blur-3xl rounded-full qr-logo-pulse" />
+                <div className="relative w-full h-full flex items-center justify-center rounded-full bg-gradient-to-br from-[#E63946] to-[#B01824] border-4 border-[#FFD700]/60 shadow-[0_0_60px_rgba(230,57,70,0.8)]">
+                  <img
+                    src="/quttr-logo.png"
+                    alt="Quttr"
+                    className="w-full h-full object-contain absolute inset-0 p-3"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.nextElementSibling.style.display = 'flex';
+                    }}
+                  />
+                  <div className="hidden w-full h-full items-center justify-center">
+                    <svg viewBox="0 0 24 24" className="w-16 h-16 md:w-20 md:h-20 text-[#FFD700]" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="6" cy="6" r="3"/>
+                      <circle cx="6" cy="18" r="3"/>
+                      <line x1="20" y1="4" x2="8.12" y2="15.88" strokeLinecap="round"/>
+                      <line x1="14.47" y1="14.48" x2="20" y2="20" strokeLinecap="round"/>
+                      <line x1="8.12" y1="8.12" x2="12" y2="12" strokeLinecap="round"/>
+                    </svg>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Location Badge - Shows Town */}
+        {/* Location / Shop Badge */}
         <div className="inline-flex items-center gap-2 mb-6 max-w-[95%]">
           <span className="qr-hindi text-[14px] md:text-[16px] font-black tracking-wider px-5 py-3 rounded-full border-2 border-[#FFD700]/50 bg-gradient-to-r from-[#FFD700]/[0.15] via-[#E63946]/[0.1] to-[#FFD700]/[0.15] backdrop-blur-md shadow-[0_0_20px_rgba(255,215,0,0.2)]">
-            📍 <span className="text-white/90">अब आपके शहर</span> <span className="text-[#FFD700] font-black uppercase">{locationText}</span> <span className="text-white/90">में भी!</span>
+            {displayShop ? (
+              <>
+                ✂️ <span className="text-white/90">स्कैन किया</span>{' '}
+                <span className="text-[#FFD700] font-black uppercase">{displayShop}</span>{' '}
+                <span className="text-white/90">से</span>
+              </>
+            ) : (
+              <>
+                📍 <span className="text-white/90">अब</span>{' '}
+                <span className="text-[#FFD700] font-black uppercase">{displayCity}</span>{' '}
+                <span className="text-white/90">में भी उपलब्ध!</span>
+              </>
+            )}
           </span>
         </div>
 
@@ -539,7 +648,7 @@ function BarberSection({ onDownload }) {
     { hi: 'मार्केटिंग सपोर्ट', en: 'Marketing tools' },
   ];
   return (
-    <section ref={ref} className="px-4 py-24 md:py-32 border-t border-white/[0.06]" style={{ background: 'linear-gradient(180deg, #050A20 0%, #000000 100%)' }}>
+    <section ref={ref} id="barbers" className="px-4 py-24 md:py-32 border-t border-white/[0.06]" style={{ background: 'linear-gradient(180deg, #050A20 0%, #000000 100%)' }}>
       <div className="max-w-6xl mx-auto">
         <div className={`transition-all duration-1000 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <div className="flex flex-col items-center mb-12">
@@ -558,7 +667,7 @@ function BarberSection({ onDownload }) {
               <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight qr-blue-gold-gradient mb-6">बढ़ाएं</h2>
               <p className="text-[18px] md:text-[24px] font-bold text-[#FFD700] mb-4">Grow Your Business.</p>
               <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed mb-8 font-medium">
-                हज़ारों बार्बर पहले से Quttr Business के साथ अपना बिज़नेस बढ़ा रहे हैं।
+                हज़ारों बार्बर पहले से क्यूटर बिज़नेस के साथ अपना बिज़नेस बढ़ा रहे हैं।
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <button onClick={onDownload} className="qr-mega-btn-blue group relative inline-flex items-center justify-center gap-3 text-white text-[15px] md:text-[18px] font-black px-6 py-4 md:px-8 md:py-5 rounded-full transition-all duration-300 overflow-hidden">
@@ -567,7 +676,7 @@ function BarberSection({ onDownload }) {
                     <svg viewBox="0 0 512 512" className="w-6 h-6 md:w-8 md:h-8 flex-shrink-0">
                       <path fill="#FFD700" d="M99 8c-6 3-11 9-13 17v462c2 8 7 14 13 17l255-248L99 8z" />
                     </svg>
-                    <span className="qr-hindi">Quttr Business डाउनलोड</span>
+                    <span className="qr-hindi">क्यूटर बिज़नेस डाउनलोड</span>
                   </div>
                 </button>
                 <a href="tel:+919519953149" className="qr-hindi inline-flex items-center justify-center gap-2 text-[15px] font-bold text-[#FFD700] hover:text-white px-6 py-4 rounded-full border-2 border-[#FFD700]/40 hover:border-[#FFD700] transition-all">
@@ -599,8 +708,9 @@ function BarberSection({ onDownload }) {
   );
 }
 
-function FinalCTASection({ onDownload, locationText }) {
+function FinalCTASection({ onDownload, locationText, shopName }) {
   const [ref, inView] = useInView();
+  const displayLabel = shopName || locationText || 'आपके शहर';
   return (
     <section ref={ref} id="download" className="relative px-4 py-32 md:py-48 border-t border-white/[0.06] overflow-hidden">
       <div className="absolute inset-0 pointer-events-none">
@@ -608,13 +718,17 @@ function FinalCTASection({ onDownload, locationText }) {
       </div>
       <div className={`relative max-w-4xl mx-auto text-center transition-all duration-1000 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
         <div className="qr-hindi inline-block text-[14px] md:text-[16px] font-bold text-[#FFD700] mb-6 px-5 py-2.5 rounded-full border border-[#FFD700]/40 bg-[#FFD700]/[0.08]">
-          📍 <span className="uppercase font-black">{locationText}</span> में उपलब्ध
+          {shopName ? (
+            <><span className="text-white/80">✂️</span> <span className="uppercase font-black">{shopName}</span> <span className="text-white/80">पर उपलब्ध</span></>
+          ) : (
+            <>📍 <span className="uppercase font-black">{displayLabel}</span> में उपलब्ध</>
+          )}
         </div>
         <h2 className="qr-hindi text-[60px] md:text-[140px] font-black leading-[1.15] tracking-tight mb-4">
           <span className="qr-gold-red-gradient">तैयार?</span>
         </h2>
         <p className="qr-hindi text-[20px] md:text-[28px] text-white/80 mb-4 font-bold">
-          Quttr डाउनलोड करें
+          क्यूटर डाउनलोड करें
         </p>
         <p className="qr-hindi text-[16px] md:text-[20px] text-white/50 mb-12 max-w-2xl mx-auto leading-relaxed">
           इंतज़ार को कहें अलविदा।
@@ -643,7 +757,7 @@ function FooterSection() {
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <span className="text-[20px] font-black">Quttr<span className="text-[#FFD700]">.</span></span>
+            <span className="qr-hindi text-[20px] font-black">क्यूटर<span className="text-[#FFD700]">.</span></span>
           </div>
           <p className="qr-hindi text-[15px] text-white/60 font-semibold mb-2">भारत का सबसे तेज़ बार्बर बुकिंग ऐप</p>
         </div>
@@ -670,7 +784,7 @@ function GlobalStyles() {
       .qr-hero-title { font-feature-settings: 'kern' 1; overflow: visible !important; }
       .qr-hindi { font-family: 'Noto Sans Devanagari', 'Inter', sans-serif; line-height: 1.4 !important; }
       h1.qr-hindi, h2.qr-hindi { line-height: 1.25 !important; padding-bottom: 0.1em; }
-      
+
       .qr-gold-red-gradient {
         background: linear-gradient(135deg, #FFD700 0%, #E63946 50%, #FFD700 100%);
         background-size: 200% auto;
@@ -693,7 +807,8 @@ function GlobalStyles() {
         0%, 100% { background-position: 0% 50%; }
         50% { background-position: 100% 50%; }
       }
-      
+
+      /* No rotation — static semi-circular arc text only */
       .qr-mega-btn {
         background: linear-gradient(135deg, #E63946 0%, #B01824 100%);
         box-shadow: 0 0 0 1px rgba(255,215,0,0.3), 0 15px 50px -8px rgba(230,57,70,0.7), 0 0 80px rgba(255,215,0,0.25);
