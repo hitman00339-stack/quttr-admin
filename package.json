@@ -1,0 +1,39 @@
+{
+  "name": "quttr-admin",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@react-three/drei": "^9.92.0",
+    "@react-three/fiber": "^8.15.0",
+    "axios": "^1.7.9",
+    "bcryptjs": "^2.4.3",
+    "date-fns": "^4.1.0",
+    "framer-motion": "^11.0.3",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.469.0",
+    "mongodb": "^6.3.0",
+    "next": "^14.2.15",
+    "qrcode": "^1.5.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hot-toast": "^2.5.1",
+    "recharts": "^2.15.0",
+    "socket.io-client": "^4.8.1",
+    "three": "^0.160.0",
+    "ua-parser-js": "^1.0.37"
+  },
+  "devDependencies": {
+    "@tailwindcss/forms": "^0.5.10",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.15",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.17"
+  }
+}
