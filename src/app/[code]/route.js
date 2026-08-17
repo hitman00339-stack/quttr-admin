@@ -101,6 +101,7 @@ export async function GET(request, { params }) {
     
     const redirectUrl = `${baseUrl}?${params_url.toString()}`;
     
+    // Log scan asynchronously
     (async () => {
       try {
         const db = await getDb();
