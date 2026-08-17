@@ -4,12 +4,12 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   QrCode, Plus, Search, TrendingUp, CheckCircle, AlertCircle, 
-  Loader2, Package, Eye, Calendar, BarChart3, Layers
+  Loader2, Package, Eye, Calendar, BarChart3, Layers, Camera
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 export default function QRCodesPage() {
-  const [tab, setTab] = useState('batches'); // 'batches' or 'all'
+  const [tab, setTab] = useState('batches');
   const [stats, setStats] = useState(null);
   const [batches, setBatches] = useState([]);
   const [codes, setCodes] = useState([]);
@@ -69,16 +69,22 @@ export default function QRCodesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header with 2 buttons */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-heading">QR Codes</h1>
-          <p className="text-caption mt-1">Manage all QR codes and view analytics</p>
+          <p className="text-caption mt-1">Generate, scan and manage QR codes</p>
         </div>
-        <Link href="/dashboard/qr-codes/generate" className="btn-brand">
-          <Plus className="w-4 h-4" />
-          Generate New Batch
-        </Link>
+        <div className="flex gap-2 flex-wrap">
+          <Link href="/dashboard/qr-codes/scan" className="btn-accent">
+            <Camera className="w-4 h-4" />
+            Scan QR
+          </Link>
+          <Link href="/dashboard/qr-codes/generate" className="btn-brand">
+            <Plus className="w-4 h-4" />
+            Generate New Batch
+          </Link>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -110,7 +116,7 @@ export default function QRCodesPage() {
         <div className="stat-card">
           <div className="flex items-center justify-between">
             <div>
-              <p className="stat-label">Inactive</p>
+              <p className="stat-label">Pending</p>
               <p className="stat-value text-warning">{stats?.inactive_qr || 0}</p>
             </div>
             <div className="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center">
@@ -187,7 +193,6 @@ export default function QRCodesPage() {
           <p className="text-caption mt-4">Loading...</p>
         </div>
       ) : tab === 'batches' ? (
-        // Batches View
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredBatches.length === 0 ? (
             <div className="col-span-full card p-12 text-center">
@@ -254,7 +259,6 @@ export default function QRCodesPage() {
           )}
         </div>
       ) : (
-        // All QR Codes View
         <div className="card overflow-hidden">
           {filteredCodes.length === 0 ? (
             <div className="p-12 text-center">
@@ -275,7 +279,7 @@ export default function QRCodesPage() {
                     <th className="text-left px-6 py-3 text-2xs font-semibold text-white/50 uppercase tracking-wider">Location</th>
                     <th className="text-left px-6 py-3 text-2xs font-semibold text-white/50 uppercase tracking-wider">Scans</th>
                     <th className="text-left px-6 py-3 text-2xs font-semibold text-white/50 uppercase tracking-wider">Batch</th>
-                    <th className="text-left px-6 py-3 text-2xs font-semibold text-white/50 uppercase tracking-wider">Created</th>
+                    <th className="text-left px-6 py-3 text-2xs font-semibold text-white/50 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.04]">
@@ -310,7 +314,12 @@ export default function QRCodesPage() {
                         <span className="text-xs text-white/50">{code.batch_name}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-xs text-white/50">{formatDate(code.created_at)}</span>
+                        <Link 
+                          href={`/dashboard/qr-codes/${code.short_code}`}
+                          className="text-sm text-accent-500 hover:text-accent-400"
+                        >
+                          View
+                        </Link>
                       </td>
                     </tr>
                   ))}
