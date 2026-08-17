@@ -1,90 +1,49 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { 
-  ArrowLeft, QrCode, Loader2, MapPin, Save, Trash2, 
-  CheckCircle, AlertCircle, TrendingUp, Copy, ExternalLink, Edit3
+  ArrowLeft, Loader2, Save, MapPin, CheckCircle, Trash2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import ScissorQR from '@/components/qr/ScissorQR';
 
 const LOCATION_TYPES = [
-  { id: 'barber_shop', name: 'Barber Shop', icon: '💈', requires: ['shop_name', 'owner_name', 'owner_phone'] },
-  { id: 'salon', name: 'Salon / Beauty Parlour', icon: '💇', requires: ['shop_name', 'owner_name', 'owner_phone'] },
-  { id: 'restaurant', name: 'Restaurant / Cafe', icon: '🍽️', requires: ['shop_name', 'owner_name'] },
-  { id: 'gym', name: 'Gym / Fitness Center', icon: '💪', requires: ['shop_name', 'owner_name'] },
-  { id: 'medical', name: 'Medical Store / Clinic', icon: '⚕️', requires: ['shop_name'] },
-  { id: 'kirana', name: 'Kirana / General Store', icon: '🏪', requires: ['shop_name', 'owner_name'] },
-  { id: 'mall', name: 'Mall / Shopping Complex', icon: '🏬', requires: ['shop_name'] },
-  { id: 'office', name: 'Office / Coworking', icon: '🏢', requires: ['shop_name'] },
-  { id: 'college', name: 'College / Institute', icon: '🎓', requires: ['shop_name'] },
-  { id: 'transit', name: 'Bus Stop / Metro Station', icon: '🚏', requires: [] },
-  { id: 'public_place', name: 'Public Place / Wall', icon: '🏙️', requires: [] },
-  { id: 'vehicle', name: 'Vehicle (Auto/Bus/Cab)', icon: '🚗', requires: ['vehicle_number', 'vehicle_type'] },
-  { id: 'other', name: 'Other', icon: '📍', requires: [] },
-];
-
-const VEHICLE_TYPES = [
-  { id: 'auto', name: 'Auto Rickshaw' },
-  { id: 'bus', name: 'Bus' },
-  { id: 'cab', name: 'Taxi / Cab' },
-  { id: 'truck', name: 'Truck / Delivery' },
-  { id: 'bike', name: 'Bike / Scooter' },
-  { id: 'other', name: 'Other Vehicle' },
-];
-
-const PLACEMENT_POSITIONS = [
-  { id: 'entrance', name: 'Near Entrance / Door' },
-  { id: 'inside', name: 'Inside / Waiting Area' },
-  { id: 'counter', name: 'Counter / Billing Area' },
-  { id: 'window', name: 'Window / Glass' },
-  { id: 'wall', name: 'Wall / Pole' },
-  { id: 'mirror', name: 'Near Mirror' },
-  { id: 'vehicle_back', name: 'Vehicle Back' },
-  { id: 'vehicle_side', name: 'Vehicle Side' },
-  { id: 'vehicle_inside', name: 'Inside Vehicle' },
-  { id: 'other', name: 'Other Position' },
-];
-
-const INDIAN_STATES = [
-  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
-  'Delhi', 'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh',
-  'Jammu and Kashmir', 'Jharkhand', 'Karnataka', 'Kerala', 'Ladakh',
-  'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
-  'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim',
-  'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand',
-  'West Bengal', 'Chandigarh', 'Puducherry'
+  { id: 'barber_shop', name: '💈 Barber Shop', needsShop: true },
+  { id: 'salon', name: '💇 Salon / Beauty Parlour', needsShop: true },
+  { id: 'restaurant', name: '🍽️ Restaurant / Cafe', needsShop: true },
+  { id: 'gym', name: '💪 Gym / Fitness Center', needsShop: true },
+  { id: 'medical', name: '⚕️ Medical Store / Clinic', needsShop: true },
+  { id: 'kirana', name: '🏪 Kirana / General Store', needsShop: true },
+  { id: 'mall', name: '🏬 Mall / Shopping Complex', needsShop: true },
+  { id: 'office', name: '🏢 Office / Coworking', needsShop: true },
+  { id: 'college', name: '🎓 College / Institute', needsShop: true },
+  { id: 'transit', name: '🚏 Bus Stop / Metro Station', needsShop: false },
+  { id: 'public_place', name: '🏙️ Public Place / Wall', needsShop: false },
+  { id: 'vehicle', name: '🚗 Vehicle (Auto/Bus/Cab)', needsShop: false, isVehicle: true },
+  { id: 'other', name: '📍 Other', needsShop: false },
 ];
 
 export default function QRDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const shortCode = params.code;
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
   const [data, setData] = useState(null);
-  const [editing, setEditing] = useState(false);
-  const [gpsLocation, setGpsLocation] = useState(null);
+  const [gpsCaptured, setGpsCaptured] = useState(false);
   
   const [formData, setFormData] = useState({
-    location_type: '',
+    location_type: 'barber_shop',
     shop_name: '',
-    owner_name: '',
-    owner_phone: '',
-    owner_whatsapp: '',
     vehicle_number: '',
-    vehicle_type: '',
     state: '',
     city: '',
     town: '',
-    area: '',
-    address: '',
-    landmark: '',
-    pincode: '',
-    placement_position: '',
+    gps_lat: null,
+    gps_lng: null,
     notes: '',
   });
 
@@ -102,104 +61,128 @@ export default function QRDetailPage() {
         setData(result);
         if (result.activation) {
           setFormData({
-            location_type: result.activation.location_type || '',
+            location_type: result.activation.location_type || 'barber_shop',
             shop_name: result.activation.shop_name || '',
-            owner_name: result.activation.owner_name || '',
-            owner_phone: result.activation.owner_phone || '',
-            owner_whatsapp: result.activation.owner_whatsapp || '',
             vehicle_number: result.activation.vehicle_number || '',
-            vehicle_type: result.activation.vehicle_type || '',
             state: result.activation.location?.state || '',
             city: result.activation.location?.city || '',
             town: result.activation.location?.town || '',
-            area: result.activation.location?.area || '',
-            address: result.activation.location?.address || '',
-            landmark: result.activation.location?.landmark || '',
-            pincode: result.activation.location?.pincode || '',
-            placement_position: result.activation.placement_position || '',
+            gps_lat: result.activation.gps_location?.latitude || null,
+            gps_lng: result.activation.gps_location?.longitude || null,
             notes: result.activation.notes || '',
           });
-        } else {
-          setEditing(true);
+          if (result.activation.gps_location) {
+            setGpsCaptured(true);
+          }
         }
-      } else {
-        toast.error('QR not found');
       }
     } catch (error) {
-      toast.error('Failed to load QR');
+      toast.error('Failed to load');
     } finally {
       setLoading(false);
     }
   };
 
-  const captureGPS = () => {
+  const captureGPSAndLocation = async () => {
     if (!navigator.geolocation) {
-      toast.error('GPS not supported');
+      toast.error('GPS not supported on this device');
       return;
     }
     
-    toast.loading('Getting location...', { id: 'gps' });
+    setGpsLoading(true);
+    toast.loading('📍 Getting location...', { id: 'gps' });
     
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setGpsLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-        });
-        toast.success('Location captured!', { id: 'gps' });
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        
+        try {
+          // Use OpenStreetMap Nominatim (FREE) for reverse geocoding
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=en&zoom=18`
+          );
+          
+          const data = await response.json();
+          
+          if (data && data.address) {
+            const addr = data.address;
+            
+            // Extract state and city
+            const state = addr.state || addr.state_district || '';
+            const city = addr.city || addr.town || addr.county || addr.suburb || '';
+            
+            setFormData(prev => ({
+              ...prev,
+              state,
+              city,
+              gps_lat: lat,
+              gps_lng: lng,
+            }));
+            
+            setGpsCaptured(true);
+            toast.success(`📍 ${city}, ${state}`, { id: 'gps' });
+          } else {
+            // Just save GPS if reverse geocoding fails
+            setFormData(prev => ({ ...prev, gps_lat: lat, gps_lng: lng }));
+            setGpsCaptured(true);
+            toast.success('GPS captured! Fill state/city manually', { id: 'gps' });
+          }
+        } catch (err) {
+          setFormData(prev => ({ ...prev, gps_lat: lat, gps_lng: lng }));
+          setGpsCaptured(true);
+          toast.success('GPS captured!', { id: 'gps' });
+        } finally {
+          setGpsLoading(false);
+        }
       },
       (error) => {
-        toast.error('Could not get location', { id: 'gps' });
+        setGpsLoading(false);
+        let msg = 'Could not get location';
+        if (error.code === 1) msg = 'Please allow location permission';
+        toast.error(msg, { id: 'gps' });
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 15000 }
     );
   };
 
-  const getSelectedType = () => LOCATION_TYPES.find(t => t.id === formData.location_type);
-  const isFieldRequired = (field) => getSelectedType()?.requires?.includes(field) || false;
-
-  const validateForm = () => {
-    if (!formData.location_type) {
-      toast.error('Please select location type');
-      return false;
-    }
-    if (!formData.state) {
-      toast.error('Please select state');
-      return false;
-    }
-    if (!formData.city) {
-      toast.error('Please enter city');
-      return false;
-    }
-    const type = getSelectedType();
-    if (type) {
-      for (const field of type.requires) {
-        if (!formData[field]) {
-          const fieldNames = {
-            shop_name: 'Shop Name',
-            owner_name: 'Owner Name',
-            owner_phone: 'Owner Phone',
-            vehicle_number: 'Vehicle Number',
-            vehicle_type: 'Vehicle Type',
-          };
-          toast.error(`Please enter ${fieldNames[field]}`);
-          return false;
-        }
-      }
-    }
-    return true;
-  };
-
   const handleSave = async () => {
-    if (!validateForm()) return;
+    // Validation
+    if (!formData.location_type) {
+      toast.error('Select location type');
+      return;
+    }
+    if (!formData.town) {
+      toast.error('Please enter Town name');
+      return;
+    }
+    
+    const type = LOCATION_TYPES.find(t => t.id === formData.location_type);
+    
+    if (type?.needsShop && !formData.shop_name) {
+      toast.error('Please enter shop name');
+      return;
+    }
+    if (type?.isVehicle && !formData.vehicle_number) {
+      toast.error('Please enter vehicle number');
+      return;
+    }
 
     setSaving(true);
     try {
       const payload = {
         short_code: shortCode,
-        ...formData,
-        gps_location: gpsLocation,
+        location_type: formData.location_type,
+        shop_name: formData.shop_name,
+        vehicle_number: formData.vehicle_number,
+        state: formData.state,
+        city: formData.city,
+        town: formData.town,
+        notes: formData.notes,
+        gps_location: (formData.gps_lat && formData.gps_lng) ? {
+          latitude: formData.gps_lat,
+          longitude: formData.gps_lng,
+        } : null,
       };
       
       const res = await fetch('/api/qr/activate', {
@@ -211,8 +194,7 @@ export default function QRDetailPage() {
       const result = await res.json();
       
       if (result.success) {
-        toast.success(result.message);
-        setEditing(false);
+        toast.success('✅ QR Activated!');
         loadQR();
       } else {
         toast.error(result.message || 'Failed to save');
@@ -234,13 +216,8 @@ export default function QRDetailPage() {
         loadQR();
       }
     } catch (error) {
-      toast.error('Failed to deactivate');
+      toast.error('Failed');
     }
-  };
-
-  const copyUrl = () => {
-    navigator.clipboard.writeText(data.qr_code.full_url);
-    toast.success('Copied!');
   };
 
   if (loading) {
@@ -251,425 +228,221 @@ export default function QRDetailPage() {
     );
   }
 
-  if (!data) {
-    return (
-      <div className="card p-12 text-center">
-        <AlertCircle className="w-16 h-16 text-white/20 mx-auto mb-4" />
-        <p className="text-body mb-4">QR not found</p>
-        <Link href="/dashboard/qr-codes" className="btn-outline inline-flex">
-          <ArrowLeft className="w-4 h-4" />
-          Back
-        </Link>
-      </div>
-    );
-  }
-
-  const { qr_code, activation } = data;
-  const selectedType = getSelectedType();
-  const isVehicle = formData.location_type === 'vehicle';
-  const needsShop = selectedType?.requires?.includes('shop_name');
-  const needsOwner = selectedType?.requires?.includes('owner_name');
+  const selectedType = LOCATION_TYPES.find(t => t.id === formData.location_type);
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/qr-codes" className="btn-icon">
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <div>
-            <h1 className="text-heading font-mono">{qr_code.short_code}</h1>
-            <p className="text-caption mt-1">QR Code Details</p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          {qr_code.status === 'ACTIVE' && <span className="chip-success">✅ Active</span>}
-          {qr_code.status === 'INACTIVE' && <span className="chip-warning">⏳ Pending</span>}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="stat-card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="stat-label">Total Scans</p>
-              <p className="stat-value text-accent-500">{qr_code.total_scans}</p>
-            </div>
-            <TrendingUp className="w-8 h-8 text-accent-500 opacity-50" />
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="stat-label">Status</p>
-              <p className="stat-value text-white text-lg">{qr_code.status}</p>
-            </div>
-            <QrCode className="w-8 h-8 opacity-50" />
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="stat-label">Location</p>
-              <p className="stat-value text-white text-lg">
-                {activation?.location?.town || activation?.location?.city || 'Not set'}
-              </p>
-            </div>
-            <MapPin className="w-8 h-8 opacity-50" />
+            <h1 className="text-heading font-mono">{data?.qr_code?.short_code}</h1>
+            <p className="text-caption mt-1">
+              {data?.qr_code?.status === 'ACTIVE' ? '✅ Active' : '⏳ Not activated'} · {data?.qr_code?.total_scans || 0} scans
+            </p>
           </div>
         </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
+        {/* Left: QR Code */}
         <div className="card p-6">
           <h3 className="text-title mb-4">QR Code</h3>
-          <div className="flex justify-center mb-6">
-            <ScissorQR value={qr_code.full_url} size={300} />
-          </div>
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.03]">
-              <code className="flex-1 text-sm text-white/80 truncate">{qr_code.full_url}</code>
-              <button onClick={copyUrl} className="btn-icon">
-                <Copy className="w-4 h-4" />
-              </button>
-              <a href={qr_code.full_url} target="_blank" rel="noopener noreferrer" className="btn-icon">
-                <ExternalLink className="w-4 h-4" />
-              </a>
-            </div>
-          </div>
-        </div>
-
-        <div className="card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-title">
-              {activation && !editing ? '📍 Location Details' : '✨ Activate QR Code'}
-            </h3>
-            {activation && !editing && (
-              <button onClick={() => setEditing(true)} className="btn-outline">
-                <Edit3 className="w-4 h-4" />
-                Edit
-              </button>
+          <div className="flex justify-center mb-4">
+            {data?.qr_code?.full_url && (
+              <ScissorQR value={data.qr_code.full_url} size={280} />
             )}
           </div>
-
-          {!editing && activation ? (
-            <div className="space-y-4">
-              <div className="p-3 rounded-xl bg-white/[0.03]">
-                <p className="label">Type</p>
-                <p className="text-white flex items-center gap-2 text-lg">
-                  {LOCATION_TYPES.find(t => t.id === activation.location_type)?.icon}
-                  {LOCATION_TYPES.find(t => t.id === activation.location_type)?.name}
-                </p>
-              </div>
-              
-              {activation.shop_name && (
-                <div className="p-3 rounded-xl bg-white/[0.03]">
-                  <p className="label">Shop / Place Name</p>
-                  <p className="text-white text-lg font-medium">{activation.shop_name}</p>
-                </div>
-              )}
-              
-              {activation.owner_name && (
-                <div className="p-3 rounded-xl bg-white/[0.03]">
-                  <p className="label">Owner</p>
-                  <p className="text-white">
-                    {activation.owner_name}
-                    {activation.owner_phone && (
-                      <span className="text-white/60 ml-2">· {activation.owner_phone}</span>
-                    )}
-                  </p>
-                </div>
-              )}
-
-              {activation.vehicle_number && (
-                <div className="p-3 rounded-xl bg-white/[0.03]">
-                  <p className="label">Vehicle</p>
-                  <p className="text-white font-mono">{activation.vehicle_number}</p>
-                  <p className="text-xs text-white/60">{activation.vehicle_type}</p>
-                </div>
-              )}
-              
-              <div className="p-3 rounded-xl bg-white/[0.03]">
-                <p className="label">📍 Location</p>
-                {activation.location?.town && (
-                  <p className="text-[#FFD700] font-bold text-lg">{activation.location.town}</p>
+          <div className="p-3 bg-white/[0.03] rounded-xl">
+            <p className="text-xs text-white/60 break-all text-center">
+              {data?.qr_code?.full_url}
+            </p>
+          </div>
+          
+          {data?.activation && (
+            <div className="mt-4 p-4 bg-success/10 border border-success/20 rounded-xl">
+              <p className="text-success font-bold mb-2">✅ Activated</p>
+              <div className="text-sm space-y-1">
+                {data.activation.shop_name && (
+                  <p><span className="text-white/50">Shop:</span> {data.activation.shop_name}</p>
                 )}
-                <p className="text-white">
-                  {[activation.location?.area, activation.location?.city, activation.location?.state].filter(Boolean).join(', ')}
-                </p>
-                {activation.location?.address && (
-                  <p className="text-sm text-white/60 mt-1">{activation.location.address}</p>
+                {data.activation.location?.town && (
+                  <p><span className="text-white/50">Town:</span> <span className="text-[#FFD700] font-bold">{data.activation.location.town}</span></p>
                 )}
-                {activation.location?.landmark && (
-                  <p className="text-xs text-white/50 mt-1">📌 {activation.location.landmark}</p>
+                {data.activation.location?.city && (
+                  <p><span className="text-white/50">City:</span> {data.activation.location.city}</p>
+                )}
+                {data.activation.location?.state && (
+                  <p><span className="text-white/50">State:</span> {data.activation.location.state}</p>
                 )}
               </div>
-
-              {activation.placement_position && (
-                <div className="p-3 rounded-xl bg-white/[0.03]">
-                  <p className="label">Placement</p>
-                  <p className="text-white">
-                    {PLACEMENT_POSITIONS.find(p => p.id === activation.placement_position)?.name}
-                  </p>
-                </div>
-              )}
-              
-              {activation.notes && (
-                <div className="p-3 rounded-xl bg-white/[0.03]">
-                  <p className="label">Notes</p>
-                  <p className="text-sm text-white/70">{activation.notes}</p>
-                </div>
-              )}
-              
-              <div className="pt-4 border-t border-white/10">
-                <button onClick={handleDeactivate} className="btn-outline text-error border-error/30 w-full">
-                  <Trash2 className="w-4 h-4" />
-                  Deactivate QR
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <label className="label"><span className="text-error">*</span> Location Type</label>
-                <select
-                  value={formData.location_type}
-                  onChange={(e) => setFormData({...formData, location_type: e.target.value})}
-                  className="input"
-                >
-                  <option value="">Select location type...</option>
-                  {LOCATION_TYPES.map(type => (
-                    <option key={type.id} value={type.id}>{type.icon} {type.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {formData.location_type && (
-                <>
-                  {isVehicle && (
-                    <>
-                      <div>
-                        <label className="label"><span className="text-error">*</span> Vehicle Number</label>
-                        <input
-                          type="text"
-                          value={formData.vehicle_number}
-                          onChange={(e) => setFormData({...formData, vehicle_number: e.target.value.toUpperCase()})}
-                          className="input font-mono"
-                          placeholder="e.g., DL-1RJ-1234"
-                        />
-                      </div>
-                      <div>
-                        <label className="label"><span className="text-error">*</span> Vehicle Type</label>
-                        <select
-                          value={formData.vehicle_type}
-                          onChange={(e) => setFormData({...formData, vehicle_type: e.target.value})}
-                          className="input"
-                        >
-                          <option value="">Select vehicle type...</option>
-                          {VEHICLE_TYPES.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                        </select>
-                      </div>
-                    </>
-                  )}
-
-                  {needsShop && !isVehicle && (
-                    <div>
-                      <label className="label"><span className="text-error">*</span> Shop / Place Name</label>
-                      <input
-                        type="text"
-                        value={formData.shop_name}
-                        onChange={(e) => setFormData({...formData, shop_name: e.target.value})}
-                        className="input"
-                        placeholder="e.g., Sharma Barber Shop"
-                      />
-                      <p className="label-hint">Shows on landing page</p>
-                    </div>
-                  )}
-
-                  {needsOwner && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="label"><span className="text-error">*</span> Owner Name</label>
-                        <input
-                          type="text"
-                          value={formData.owner_name}
-                          onChange={(e) => setFormData({...formData, owner_name: e.target.value})}
-                          className="input"
-                          placeholder="Owner's name"
-                        />
-                      </div>
-                      <div>
-                        <label className="label">
-                          {isFieldRequired('owner_phone') && <span className="text-error">*</span>} Owner Phone
-                        </label>
-                        <input
-                          type="tel"
-                          value={formData.owner_phone}
-                          onChange={(e) => setFormData({...formData, owner_phone: e.target.value})}
-                          className="input"
-                          placeholder="+91 98765..."
-                          maxLength={15}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {needsOwner && (
-                    <div>
-                      <label className="label">Owner WhatsApp (Optional)</label>
-                      <input
-                        type="tel"
-                        value={formData.owner_whatsapp}
-                        onChange={(e) => setFormData({...formData, owner_whatsapp: e.target.value})}
-                        className="input"
-                        placeholder="Same as phone or different"
-                      />
-                    </div>
-                  )}
-
-                  <div className="pt-4 border-t border-white/10">
-                    <h4 className="text-sm font-semibold text-white mb-3">📍 Location Details</h4>
-                  </div>
-
-                  <div>
-                    <label className="label"><span className="text-error">*</span> State</label>
-                    <select
-                      value={formData.state}
-                      onChange={(e) => setFormData({...formData, state: e.target.value})}
-                      className="input"
-                    >
-                      <option value="">Select state...</option>
-                      {INDIAN_STATES.map(state => <option key={state} value={state}>{state}</option>)}
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="label"><span className="text-error">*</span> City</label>
-                      <input
-                        type="text"
-                        value={formData.city}
-                        onChange={(e) => setFormData({...formData, city: e.target.value})}
-                        className="input"
-                        placeholder="e.g., New Delhi"
-                      />
-                      <p className="label-hint">Main city</p>
-                    </div>
-                    <div>
-                      <label className="label">Town / Nagar</label>
-                      <input
-                        type="text"
-                        value={formData.town}
-                        onChange={(e) => setFormData({...formData, town: e.target.value})}
-                        className="input"
-                        placeholder="e.g., Lajpat Nagar"
-                      />
-                      <p className="label-hint">Shows on landing page</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="label">Area / Locality (Optional)</label>
-                    <input
-                      type="text"
-                      value={formData.area}
-                      onChange={(e) => setFormData({...formData, area: e.target.value})}
-                      className="input"
-                      placeholder="e.g., Block A, Market"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="label">Full Address</label>
-                    <textarea
-                      value={formData.address}
-                      onChange={(e) => setFormData({...formData, address: e.target.value})}
-                      className="input min-h-[70px] resize-none"
-                      placeholder="Shop complete address..."
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="label">Landmark</label>
-                      <input
-                        type="text"
-                        value={formData.landmark}
-                        onChange={(e) => setFormData({...formData, landmark: e.target.value})}
-                        className="input"
-                        placeholder="Near..."
-                      />
-                    </div>
-                    <div>
-                      <label className="label">PIN Code</label>
-                      <input
-                        type="text"
-                        value={formData.pincode}
-                        onChange={(e) => setFormData({...formData, pincode: e.target.value})}
-                        className="input"
-                        placeholder="110024"
-                        maxLength={6}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="label">Where is QR Placed?</label>
-                    <select
-                      value={formData.placement_position}
-                      onChange={(e) => setFormData({...formData, placement_position: e.target.value})}
-                      className="input"
-                    >
-                      <option value="">Select position...</option>
-                      {PLACEMENT_POSITIONS.map(pos => <option key={pos.id} value={pos.id}>{pos.name}</option>)}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="label">GPS Location (Optional)</label>
-                    <button onClick={captureGPS} className="btn-outline w-full" type="button">
-                      <MapPin className="w-4 h-4" />
-                      {gpsLocation ? '✅ GPS Captured' : 'Capture Current GPS'}
-                    </button>
-                    {gpsLocation && (
-                      <p className="text-xs text-white/50 mt-2">
-                        Lat: {gpsLocation.latitude.toFixed(6)}, Lng: {gpsLocation.longitude.toFixed(6)}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="label">Additional Notes</label>
-                    <textarea
-                      value={formData.notes}
-                      onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                      className="input min-h-[60px] resize-none"
-                      placeholder="Any additional information..."
-                    />
-                  </div>
-                </>
-              )}
-
-              <div className="flex gap-2 pt-4 border-t border-white/10">
-                <button
-                  onClick={handleSave}
-                  disabled={saving || !formData.location_type}
-                  className="btn-brand flex-1"
-                >
-                  {saving ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
-                  ) : (
-                    <><Save className="w-4 h-4" /> {activation ? 'Update' : 'Activate'}</>
-                  )}
-                </button>
-                {editing && activation && (
-                  <button onClick={() => { setEditing(false); loadQR(); }} className="btn-outline">
-                    Cancel
-                  </button>
-                )}
-              </div>
+              <button
+                onClick={handleDeactivate}
+                className="mt-3 text-xs text-error hover:underline flex items-center gap-1"
+              >
+                <Trash2 className="w-3 h-3" />
+                Deactivate
+              </button>
             </div>
           )}
+        </div>
+
+        {/* Right: Simple Form */}
+        <div className="card p-6">
+          <h3 className="text-title mb-4">
+            {data?.activation ? '✏️ Update Details' : '✨ Activate QR'}
+          </h3>
+
+          <div className="space-y-4">
+            {/* Step 1: GPS Capture */}
+            <div className="p-4 bg-gradient-to-br from-[#E63946]/10 to-[#FFD700]/5 border border-[#FFD700]/30 rounded-xl">
+              <p className="text-sm font-bold text-[#FFD700] mb-2">
+                📍 Step 1: Capture Location
+              </p>
+              <p className="text-xs text-white/60 mb-3">
+                Click below to auto-fill State and City using GPS
+              </p>
+              <button
+                onClick={captureGPSAndLocation}
+                disabled={gpsLoading}
+                className="btn-accent w-full"
+              >
+                {gpsLoading ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Getting location...</>
+                ) : gpsCaptured ? (
+                  <><CheckCircle className="w-4 h-4" /> ✅ GPS Captured - Re-capture</>
+                ) : (
+                  <><MapPin className="w-4 h-4" /> Capture GPS Now</>
+                )}
+              </button>
+              
+              {gpsCaptured && formData.gps_lat && (
+                <p className="text-xs text-white/50 mt-2 text-center">
+                  📍 {formData.gps_lat.toFixed(4)}, {formData.gps_lng.toFixed(4)}
+                </p>
+              )}
+            </div>
+
+            {/* Step 2: Location Type */}
+            <div>
+              <label className="label">
+                <span className="text-error">*</span> Step 2: Location Type
+              </label>
+              <select
+                value={formData.location_type}
+                onChange={(e) => setFormData({...formData, location_type: e.target.value})}
+                className="input"
+              >
+                {LOCATION_TYPES.map(type => (
+                  <option key={type.id} value={type.id}>{type.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Shop Name (if needed) */}
+            {selectedType?.needsShop && (
+              <div>
+                <label className="label">
+                  <span className="text-error">*</span> Shop Name
+                </label>
+                <input
+                  type="text"
+                  value={formData.shop_name}
+                  onChange={(e) => setFormData({...formData, shop_name: e.target.value})}
+                  className="input"
+                  placeholder="e.g., Sharma Barber Shop"
+                />
+                <p className="label-hint">This name will show on landing page</p>
+              </div>
+            )}
+
+            {/* Vehicle Number (if vehicle) */}
+            {selectedType?.isVehicle && (
+              <div>
+                <label className="label">
+                  <span className="text-error">*</span> Vehicle Number
+                </label>
+                <input
+                  type="text"
+                  value={formData.vehicle_number}
+                  onChange={(e) => setFormData({...formData, vehicle_number: e.target.value.toUpperCase()})}
+                  className="input font-mono"
+                  placeholder="e.g., DL-1RJ-1234"
+                />
+              </div>
+            )}
+
+            {/* Auto-filled State & City (read-only if GPS captured) */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">State</label>
+                <input
+                  type="text"
+                  value={formData.state}
+                  onChange={(e) => setFormData({...formData, state: e.target.value})}
+                  className={`input ${gpsCaptured ? 'bg-success/5 border-success/30' : ''}`}
+                  placeholder="Auto-filled from GPS"
+                />
+                {gpsCaptured && <p className="label-hint text-success">✅ Auto-filled</p>}
+              </div>
+              <div>
+                <label className="label">City</label>
+                <input
+                  type="text"
+                  value={formData.city}
+                  onChange={(e) => setFormData({...formData, city: e.target.value})}
+                  className={`input ${gpsCaptured ? 'bg-success/5 border-success/30' : ''}`}
+                  placeholder="Auto-filled from GPS"
+                />
+                {gpsCaptured && <p className="label-hint text-success">✅ Auto-filled</p>}
+              </div>
+            </div>
+
+            {/* Town - MAIN FIELD */}
+            <div className="p-4 bg-gradient-to-br from-[#FFD700]/10 to-[#E63946]/5 border-2 border-[#FFD700]/40 rounded-xl">
+              <label className="label text-[#FFD700]">
+                <span className="text-error">*</span> 🏘️ Town / Nagar (Required)
+              </label>
+              <input
+                type="text"
+                value={formData.town}
+                onChange={(e) => setFormData({...formData, town: e.target.value})}
+                className="input text-lg font-semibold"
+                placeholder="e.g., Lajpat Nagar, Karol Bagh"
+                autoFocus
+              />
+              <p className="label-hint text-[#FFD700] mt-2">
+                ✨ यह Town नाम landing page पर दिखेगा
+              </p>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label className="label">Notes (Optional)</label>
+              <textarea
+                value={formData.notes}
+                onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                className="input min-h-[60px] resize-none"
+                placeholder="Any additional notes..."
+              />
+            </div>
+
+            {/* Save Button */}
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="btn-brand w-full py-3"
+            >
+              {saving ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+              ) : (
+                <><Save className="w-4 h-4" /> {data?.activation ? 'Update' : 'Activate'} QR Code</>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
