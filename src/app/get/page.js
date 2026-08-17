@@ -68,15 +68,11 @@ function LandingContent() {
   const location = searchParams.get('loc') || searchParams.get('location') || '';
   
   const [sessionId, setSessionId] = useState('');
-  const [scrolled, setScrolled] = useState(false);
   const [locationText, setLocationText] = useState('आपके शहर');
   const trackedPageView = useRef(false);
 
   useEffect(() => {
     setSessionId(sid || makeSessionId());
-    const onScroll = () => setScrolled(window.scrollY > 50);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   useEffect(() => {
@@ -87,7 +83,8 @@ function LandingContent() {
         .then(r => r.json())
         .then(data => {
           if (data.success && data.location) {
-            setLocationText(data.location);
+            // Priority: town > shop_name > city
+            setLocationText(data.details?.town || data.location);
           }
         })
         .catch(() => {});
@@ -153,8 +150,6 @@ function LandingContent() {
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+Devanagari:wght@400;500;600;700;800;900&display=swap"
       />
 
-      <StickyHeader scrolled={scrolled} onDownload={downloadCustomer} />
-
       <main className="bg-black text-white antialiased overflow-x-hidden">
         <HeroSection onDownload={downloadCustomer} locationText={locationText} />
         <FeatureOne />
@@ -173,48 +168,11 @@ function LandingContent() {
   );
 }
 
-function StickyHeader({ scrolled, onDownload }) {
-  return (
-    <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-        scrolled ? 'bg-black/85 backdrop-blur-xl border-b border-[#FFD700]/[0.15]' : 'bg-transparent'
-      }`}
-    >
-      <div className="max-w-7xl mx-auto px-4 md:px-12 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <img 
-            src="/quttr-logo.png" 
-            alt="Quttr" 
-            className="w-9 h-9 object-contain"
-            onError={(e) => { e.target.style.display = 'none'; }}
-          />
-          <span className="text-[17px] font-black tracking-tight">
-            Quttr<span className="text-[#FFD700]">.</span>
-          </span>
-        </div>
-
-        <nav className="hidden md:flex items-center gap-8 text-[13px] text-white/70 font-semibold">
-          <a href="#features" className="hover:text-[#FFD700] transition-colors">फीचर्स</a>
-          <a href="#barbers" className="hover:text-[#FFD700] transition-colors">बार्बर</a>
-          <a href="#download" className="hover:text-[#FFD700] transition-colors">डाउनलोड</a>
-        </nav>
-
-        <button
-          onClick={onDownload}
-          className="qr-hindi text-[13px] font-bold bg-gradient-to-r from-[#E63946] to-[#B01824] text-white px-5 py-2.5 rounded-full hover:shadow-[0_0_20px_rgba(230,57,70,0.6)] transition-all"
-        >
-          डाउनलोड
-        </button>
-      </div>
-    </header>
-  );
-}
-
 function HeroSection({ onDownload, locationText }) {
   const [ref, inView] = useInView();
 
   return (
-    <section ref={ref} className="relative min-h-screen flex items-center justify-center px-4 pt-32 pb-20 overflow-hidden">
+    <section ref={ref} className="relative min-h-screen flex items-center justify-center px-4 pt-16 pb-20 overflow-hidden">
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-[#E63946]/[0.18] rounded-full blur-[140px]" />
         <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-[#FFD700]/[0.1] rounded-full blur-[120px]" />
@@ -222,67 +180,43 @@ function HeroSection({ onDownload, locationText }) {
 
       <div className={`relative z-10 max-w-5xl mx-auto text-center w-full transition-all duration-1000 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
         
-        {/* LOGO with Circular Rotating Text */}
+        {/* Quttr Brand Name */}
+        <div className="mb-8 mt-8">
+          <h1 className="text-[36px] md:text-[48px] font-black tracking-tight">
+            <span className="qr-gold-red-gradient">Quttr</span>
+            <span className="text-[#FFD700]">.</span>
+          </h1>
+        </div>
+
+        {/* LOGO - No rotating text */}
         <div className="flex justify-center mb-8">
-          <div className="relative w-72 h-72 md:w-96 md:h-96 qr-logo-float">
+          <div className="relative w-40 h-40 md:w-48 md:h-48 qr-logo-float">
+            <div className="absolute inset-0 bg-[#E63946]/60 blur-3xl rounded-full qr-logo-pulse" />
             
-            {/* Circular Text SVG - Rotating */}
-            <svg 
-              viewBox="0 0 400 400" 
-              className="absolute inset-0 w-full h-full qr-circular-text"
-            >
-              <defs>
-                <path 
-                  id="circlePath"
-                  d="M 200,200 m -160,0 a 160,160 0 1,1 320,0 a 160,160 0 1,1 -320,0"
-                />
-              </defs>
-              <text 
-                fill="#FFD700"
-                style={{ 
-                  fontSize: '18px', 
-                  fontWeight: '900',
-                  letterSpacing: '2px',
-                  fontFamily: "'Noto Sans Devanagari', sans-serif"
+            <div className="relative w-full h-full flex items-center justify-center rounded-full bg-gradient-to-br from-[#E63946] to-[#B01824] border-4 border-[#FFD700]/60 shadow-[0_0_60px_rgba(230,57,70,0.8)]">
+              <img 
+                src="/quttr-logo.png" 
+                alt="Quttr"
+                className="w-full h-full object-contain absolute inset-0 p-3"
+                onError={(e) => { 
+                  e.target.style.display = 'none';
+                  e.target.nextElementSibling.style.display = 'flex';
                 }}
-              >
-                <textPath href="#circlePath" startOffset="0%">
-                  ✂️ अब आपके शहर {locationText} में भी क्यूटर ✂️ बुकिंग सेकंडों में
-                </textPath>
-              </text>
-            </svg>
-            
-            {/* Center Logo */}
-            <div className="absolute inset-16 md:inset-20 flex items-center justify-center">
-              <div className="relative w-full h-full">
-                <div className="absolute inset-0 bg-[#E63946]/60 blur-3xl rounded-full qr-logo-pulse" />
-                
-                <div className="relative w-full h-full flex items-center justify-center rounded-full bg-gradient-to-br from-[#E63946] to-[#B01824] border-4 border-[#FFD700]/60 shadow-[0_0_60px_rgba(230,57,70,0.8)]">
-                  <img 
-                    src="/quttr-logo.png" 
-                    alt="Quttr"
-                    className="w-full h-full object-contain absolute inset-0 p-3"
-                    onError={(e) => { 
-                      e.target.style.display = 'none';
-                      e.target.nextElementSibling.style.display = 'flex';
-                    }}
-                  />
-                  <div className="hidden w-full h-full items-center justify-center">
-                    <svg viewBox="0 0 24 24" className="w-16 h-16 md:w-20 md:h-20 text-[#FFD700]" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="6" cy="6" r="3"/>
-                      <circle cx="6" cy="18" r="3"/>
-                      <line x1="20" y1="4" x2="8.12" y2="15.88" strokeLinecap="round"/>
-                      <line x1="14.47" y1="14.48" x2="20" y2="20" strokeLinecap="round"/>
-                      <line x1="8.12" y1="8.12" x2="12" y2="12" strokeLinecap="round"/>
-                    </svg>
-                  </div>
-                </div>
+              />
+              <div className="hidden w-full h-full items-center justify-center">
+                <svg viewBox="0 0 24 24" className="w-16 h-16 md:w-20 md:h-20 text-[#FFD700]" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="6" cy="6" r="3"/>
+                  <circle cx="6" cy="18" r="3"/>
+                  <line x1="20" y1="4" x2="8.12" y2="15.88" strokeLinecap="round"/>
+                  <line x1="14.47" y1="14.48" x2="20" y2="20" strokeLinecap="round"/>
+                  <line x1="8.12" y1="8.12" x2="12" y2="12" strokeLinecap="round"/>
+                </svg>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Premium Location Badge */}
+        {/* Location Badge - Shows Town */}
         <div className="inline-flex items-center gap-2 mb-6 max-w-[95%]">
           <span className="qr-hindi text-[14px] md:text-[16px] font-black tracking-wider px-5 py-3 rounded-full border-2 border-[#FFD700]/50 bg-gradient-to-r from-[#FFD700]/[0.15] via-[#E63946]/[0.1] to-[#FFD700]/[0.15] backdrop-blur-md shadow-[0_0_20px_rgba(255,215,0,0.2)]">
             📍 <span className="text-white/90">अब आपके शहर</span> <span className="text-[#FFD700] font-black uppercase">{locationText}</span> <span className="text-white/90">में भी!</span>
@@ -605,7 +539,7 @@ function BarberSection({ onDownload }) {
     { hi: 'मार्केटिंग सपोर्ट', en: 'Marketing tools' },
   ];
   return (
-    <section ref={ref} id="barbers" className="px-4 py-24 md:py-32 border-t border-white/[0.06]" style={{ background: 'linear-gradient(180deg, #050A20 0%, #000000 100%)' }}>
+    <section ref={ref} className="px-4 py-24 md:py-32 border-t border-white/[0.06]" style={{ background: 'linear-gradient(180deg, #050A20 0%, #000000 100%)' }}>
       <div className="max-w-6xl mx-auto">
         <div className={`transition-all duration-1000 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <div className="flex flex-col items-center mb-12">
@@ -760,23 +694,12 @@ function GlobalStyles() {
         50% { background-position: 100% 50%; }
       }
       
-      .qr-circular-text {
-        animation: qrSpinSlow 30s linear infinite;
-        filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.6));
-      }
-      @keyframes qrSpinSlow {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-      }
-      
       .qr-mega-btn {
         background: linear-gradient(135deg, #E63946 0%, #B01824 100%);
         box-shadow: 0 0 0 1px rgba(255,215,0,0.3), 0 15px 50px -8px rgba(230,57,70,0.7), 0 0 80px rgba(255,215,0,0.25);
         animation: qr-mega-pulse 2.5s ease-in-out infinite;
       }
-      .qr-mega-btn:hover {
-        transform: scale(1.03);
-      }
+      .qr-mega-btn:hover { transform: scale(1.03); }
       .qr-mega-btn:active { transform: scale(0.98); }
       .qr-mega-btn-blue {
         background: linear-gradient(135deg, #3949AB 0%, #1A237E 100%);
