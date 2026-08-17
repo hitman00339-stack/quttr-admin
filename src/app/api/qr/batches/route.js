@@ -4,7 +4,6 @@ import { getDb } from '@/lib/mongodb';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Get all batches
 export async function GET() {
   try {
     const db = await getDb();
