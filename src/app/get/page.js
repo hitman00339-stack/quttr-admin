@@ -300,25 +300,25 @@ function HeroSection({ onDownload, locationText }) {
                 />
               </defs>
 
-              {/* TOP ARC — क्यूटर in gold */}
+              {/* TOP ARC Quttr in gold */}
               <text
                 fill="#FFD700"
                 style={{
-                  fontSize: '22px',
+                  fontSize: '25px',
                   fontWeight: '900',
                   letterSpacing: '2px',
-                  fontFamily: "'Noto Sans Devanagari', sans-serif",
+                  fontFamily: "'Inter', 'Noto Sans Devanagari', sans-serif",
                 }}
               >
                 <textPath href="#topArcPath" startOffset="50%" textAnchor="middle">
-                  ✂️ क्यूटर ✂️
+                  ✂️ Quttr ✂️
                 </textPath>
               </text>
 
               {/* BOTTOM ARC — 📍 Now in [TOWN] with TOWN in white */}
               <text
                 style={{
-                  fontSize: '15px',
+                  fontSize: '23px',
                   fontWeight: '800',
                   letterSpacing: '1.5px',
                   fontFamily: "'Inter', 'Noto Sans Devanagari', sans-serif",
