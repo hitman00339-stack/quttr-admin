@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import sharp from 'sharp';
 import JSZip from 'jszip';
+import QRCode from 'qrcode';
 import path from 'path';
 import fs from 'fs/promises';
 import { getPosterConfig, getQRPixelCoords } from '@/lib/poster-config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // Allow up to 60s on Vercel Pro for bulk
+export const maxDuration = 60;
 
 let templateCache = null;
 let templateMetaCache = null;
@@ -22,16 +23,19 @@ async function loadTemplate() {
   return { buffer, meta };
 }
 
-async function fetchQRPNG(code, size) {
+async function generateQRBuffer(code, size) {
   const url = `https://quttrr.com/q/${code}`;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(url)}&margin=0&ecc=H&format=png`;
-  const res = await fetch(qrUrl);
-  if (!res.ok) throw new Error(`QR fetch failed for ${code}`);
-  return Buffer.from(await res.arrayBuffer());
+  return await QRCode.toBuffer(url, {
+    type: 'png',
+    width: size,
+    margin: 0,
+    errorCorrectionLevel: 'H',
+    color: { dark: '#000000', light: '#FFFFFF' },
+  });
 }
 
 async function makePoster(code, templateBuffer, qrCoords) {
-  const qrBuffer = await fetchQRPNG(code, qrCoords.width);
+  const qrBuffer = await generateQRBuffer(code, qrCoords.width);
   const qrResized = await sharp(qrBuffer)
     .resize(qrCoords.width, qrCoords.height, {
       fit: 'contain',
@@ -64,15 +68,13 @@ export async function POST(request) {
       );
     }
 
-    // 1. Load template once (cached after first call)
+    // Load template once
     const { buffer: templateBuffer, meta } = await loadTemplate();
-
-    // 2. Get calibrated QR position from DB
     const config = await getPosterConfig();
     const qrCoords = getQRPixelCoords(meta.width, meta.height, config);
 
-    // 3. Generate all posters in parallel (with concurrency limit for stability)
-    const CONCURRENCY = 5;
+    // Generate posters in parallel (concurrency limit for stability)
+    const CONCURRENCY = 8; // Higher since local QR generation is fast
     const posters = [];
     for (let i = 0; i < codes.length; i += CONCURRENCY) {
       const batch = codes.slice(i, i + CONCURRENCY);
@@ -90,7 +92,7 @@ export async function POST(request) {
       posters.push(...results);
     }
 
-    // 4. Package everything into ZIP
+    // Build ZIP
     const zip = new JSZip();
     let successCount = 0;
     let failCount = 0;
@@ -103,7 +105,6 @@ export async function POST(request) {
       }
     });
 
-    // 5. Add a README with batch info
     zip.file(
       'README.txt',
       `Quttr QR Posters — Batch Export\n` +
@@ -111,7 +112,7 @@ export async function POST(request) {
       `Total requested: ${codes.length}\n` +
       `Successful: ${successCount}\n` +
       `Failed: ${failCount}\n\n` +
-      `Each poster is a print-ready PNG (A4 portrait, 300 DPI).\n` +
+      `Each poster is a print-ready PNG (A4 portrait).\n` +
       `Print at 100% scale on A4 paper.\n` +
       `Recommended: 200 GSM paper + lamination for outdoor use.\n`
     );
