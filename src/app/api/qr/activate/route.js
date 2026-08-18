@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/mongodb';
+import { ObjectId } from 'mongodb';
+import { getCurrentAgent } from '@/lib/auth-agent';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Utility: trim strings + convert empty → null
 const clean = (v) => {
   if (v === undefined || v === null) return null;
   if (typeof v !== 'string') return v;
@@ -33,7 +34,6 @@ export async function POST(request) {
       pincode,
       placement_position,
       notes,
-      activated_by,
       gps_location,
     } = body;
 
@@ -46,7 +46,6 @@ export async function POST(request) {
 
     const db = await getDb();
     const qrCode = await db.collection('qr_codes').findOne({ short_code });
-
     if (!qrCode) {
       return NextResponse.json(
         { success: false, message: 'QR code not found' },
@@ -58,15 +57,27 @@ export async function POST(request) {
       .collection('qr_activations')
       .findOne({ qr_id: qrCode._id });
 
-    // Normalize location fields
+    // ============================================================
+    // 🎯 Determine WHO is activating
+    // ============================================================
+    // Try to get agent from session cookie
+    const agent = await getCurrentAgent();
+    let activatedBy = {
+      activated_by_type: 'admin',
+      activated_by_id: null,
+      activated_by_name: 'admin',
+    };
+    if (agent) {
+      activatedBy = {
+        activated_by_type: 'agent',
+        activated_by_id: new ObjectId(agent._id),
+        activated_by_name: agent.name,
+      };
+    }
+
     const cleanTown = clean(town);
     const cleanCity = clean(city);
     const cleanArea = clean(area);
-    const cleanState = clean(state);
-
-    // 🎯 Smart fallback: guarantee `town` is never null if city/area exists.
-    // This prevents "आपके शहर" from showing on landing page when admin
-    // forgets to fill Town but did fill City.
     const resolvedTown = cleanTown || cleanCity || cleanArea || null;
 
     const activationData = {
@@ -80,7 +91,7 @@ export async function POST(request) {
       vehicle_number: clean(vehicle_number),
       vehicle_type: clean(vehicle_type),
       location: {
-        state: cleanState,
+        state: clean(state),
         city: cleanCity,
         town: resolvedTown,
         area: cleanArea,
@@ -91,7 +102,10 @@ export async function POST(request) {
       placement_position: clean(placement_position),
       gps_location: gps_location || null,
       notes: clean(notes),
-      activated_by: activated_by || 'admin',
+      // 🆕 Who did it
+      ...activatedBy,
+      // legacy field kept for backward-compat
+      activated_by: activatedBy.activated_by_name,
       activated_at: existing ? existing.activated_at : new Date(),
       updated_at: new Date(),
     };
@@ -102,6 +116,17 @@ export async function POST(request) {
         .updateOne({ qr_id: qrCode._id }, { $set: activationData });
     } else {
       await db.collection('qr_activations').insertOne(activationData);
+
+      // Increment agent's total_activations counter (only on new activation)
+      if (activatedBy.activated_by_id) {
+        await db.collection('marketing_agents').updateOne(
+          { _id: activatedBy.activated_by_id },
+          {
+            $inc: { total_activations: 1 },
+            $set: { last_activation_at: new Date() },
+          }
+        );
+      }
     }
 
     await db.collection('qr_codes').updateOne(
@@ -112,7 +137,11 @@ export async function POST(request) {
     return NextResponse.json({
       success: true,
       message: existing ? 'Activation updated!' : 'QR activated successfully!',
-      activation: activationData,
+      activation: {
+        ...activationData,
+        qr_id: activationData.qr_id.toString(),
+        activated_by_id: activationData.activated_by_id?.toString() || null,
+      },
     });
   } catch (error) {
     console.error('[api/qr/activate POST] error:', error);
@@ -127,7 +156,6 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const short_code = searchParams.get('code');
-
     if (!short_code) {
       return NextResponse.json(
         { success: false, message: 'Code required' },
@@ -137,7 +165,6 @@ export async function GET(request) {
 
     const db = await getDb();
     const qrCode = await db.collection('qr_codes').findOne({ short_code });
-
     if (!qrCode) {
       return NextResponse.json(
         { success: false, message: 'QR not found' },
@@ -158,7 +185,14 @@ export async function GET(request) {
         status: qrCode.status,
         total_scans: qrCode.total_scans || 0,
       },
-      activation: activation || null,
+      activation: activation
+        ? {
+            ...activation,
+            _id: activation._id?.toString(),
+            qr_id: activation.qr_id.toString(),
+            activated_by_id: activation.activated_by_id?.toString() || null,
+          }
+        : null,
     });
   } catch (error) {
     console.error('[api/qr/activate GET] error:', error);
@@ -173,10 +207,8 @@ export async function DELETE(request) {
   try {
     const { searchParams } = new URL(request.url);
     const short_code = searchParams.get('code');
-
     const db = await getDb();
     const qrCode = await db.collection('qr_codes').findOne({ short_code });
-
     if (!qrCode) {
       return NextResponse.json(
         { success: false, message: 'QR not found' },
@@ -185,10 +217,12 @@ export async function DELETE(request) {
     }
 
     await db.collection('qr_activations').deleteOne({ qr_id: qrCode._id });
-    await db.collection('qr_codes').updateOne(
-      { _id: qrCode._id },
-      { $set: { status: 'INACTIVE', updated_at: new Date() } }
-    );
+    await db
+      .collection('qr_codes')
+      .updateOne(
+        { _id: qrCode._id },
+        { $set: { status: 'INACTIVE', updated_at: new Date() } }
+      );
 
     return NextResponse.json({ success: true, message: 'QR deactivated' });
   } catch (error) {
