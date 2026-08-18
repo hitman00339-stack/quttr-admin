@@ -8,7 +8,7 @@ import {
   BarChart3, Settings, LogOut, Search, Command, Menu, X,
   Sparkles, Scissors, ChevronRight,
   AlertCircle, UserCheck, ShoppingBag,
-  QrCode,
+  QrCode, Megaphone,
 } from 'lucide-react';
 import { authService } from '../../services/auth';
 
@@ -21,6 +21,7 @@ const navigation = [
   { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
   { name: 'Products', href: '/dashboard/products', icon: ShoppingBag },
   { name: 'QR Codes', href: '/dashboard/qr-codes', icon: QrCode },
+  { name: 'Marketing Team', href: '/dashboard/marketing', icon: Megaphone, badge: 'NEW' },
   { name: 'Reviews', href: '/dashboard/reviews', icon: Star },
   { name: 'Notices', href: '/dashboard/notices', icon: Bell },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
@@ -125,6 +126,11 @@ export default function DashboardLayout({ children }) {
                 )}
                 {item.highlight && !isActive && (
                   <div className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
+                )}
+                {item.badge && !isActive && (
+                  <span className="text-[9px] font-black tracking-wider px-1.5 py-0.5 rounded bg-gradient-to-r from-accent-500 to-accent-700 text-surface-100">
+                    {item.badge}
+                  </span>
                 )}
               </Link>
             );
