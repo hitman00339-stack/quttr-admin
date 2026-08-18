@@ -3,11 +3,11 @@ import sharp from 'sharp';
 import JSZip from 'jszip';
 import path from 'path';
 import fs from 'fs/promises';
-import { POSTER_CONFIG, getQRPixelCoords } from '@/lib/poster-config';
+import { getPosterConfig, getQRPixelCoords } from '@/lib/poster-config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // Vercel: allow up to 60s for bulk
+export const maxDuration = 60; // Allow up to 60s on Vercel Pro for bulk
 
 let templateCache = null;
 let templateMetaCache = null;
@@ -33,10 +33,15 @@ async function fetchQRPNG(code, size) {
 async function makePoster(code, templateBuffer, qrCoords) {
   const qrBuffer = await fetchQRPNG(code, qrCoords.width);
   const qrResized = await sharp(qrBuffer)
-    .resize(qrCoords.width, qrCoords.height, { fit: 'contain', background: '#ffffff' })
+    .resize(qrCoords.width, qrCoords.height, {
+      fit: 'contain',
+      background: '#ffffff',
+    })
     .toBuffer();
   return await sharp(templateBuffer)
-    .composite([{ input: qrResized, left: qrCoords.x, top: qrCoords.y }])
+    .composite([
+      { input: qrResized, left: qrCoords.x, top: qrCoords.y },
+    ])
     .png({ quality: 100, compressionLevel: 6 })
     .toBuffer();
 }
@@ -59,11 +64,14 @@ export async function POST(request) {
       );
     }
 
-    // Load template once
+    // 1. Load template once (cached after first call)
     const { buffer: templateBuffer, meta } = await loadTemplate();
-    const qrCoords = getQRPixelCoords(meta.width, meta.height);
 
-    // Generate all posters in parallel (with concurrency limit)
+    // 2. Get calibrated QR position from DB
+    const config = await getPosterConfig();
+    const qrCoords = getQRPixelCoords(meta.width, meta.height, config);
+
+    // 3. Generate all posters in parallel (with concurrency limit for stability)
     const CONCURRENCY = 5;
     const posters = [];
     for (let i = 0; i < codes.length; i += CONCURRENCY) {
@@ -82,7 +90,7 @@ export async function POST(request) {
       posters.push(...results);
     }
 
-    // Build ZIP
+    // 4. Package everything into ZIP
     const zip = new JSZip();
     let successCount = 0;
     let failCount = 0;
@@ -95,7 +103,7 @@ export async function POST(request) {
       }
     });
 
-    // Add a summary readme
+    // 5. Add a README with batch info
     zip.file(
       'README.txt',
       `Quttr QR Posters — Batch Export\n` +
@@ -103,8 +111,9 @@ export async function POST(request) {
       `Total requested: ${codes.length}\n` +
       `Successful: ${successCount}\n` +
       `Failed: ${failCount}\n\n` +
-      `Each poster is a print-ready PNG (A4 portrait).\n` +
-      `Print at 100% scale on A4 paper (200 GSM recommended).\n`
+      `Each poster is a print-ready PNG (A4 portrait, 300 DPI).\n` +
+      `Print at 100% scale on A4 paper.\n` +
+      `Recommended: 200 GSM paper + lamination for outdoor use.\n`
     );
 
     const zipBuffer = await zip.generateAsync({
