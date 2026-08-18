@@ -8,6 +8,7 @@ import {
   ArrowLeft, Loader2, Store, MapPin, User, Phone, Calendar,
   TrendingUp, Zap, Activity, Copy, ExternalLink, QrCode,
   Smartphone, Globe, Navigation, FileText, Clock, Package,
+  Printer,
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -94,6 +95,15 @@ export default function QRDetailPage() {
             </p>
           )}
         </div>
+
+        {/* ✅ NEW: Print Poster button */}
+        <Link
+          href={`/dashboard/qr-print/${qr.short_code}`}
+          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#E63946] to-[#B01824] text-white font-bold rounded-lg hover:shadow-[0_0_20px_rgba(230,57,70,0.5)] transition text-sm whitespace-nowrap flex-shrink-0"
+        >
+          <Printer className="w-4 h-4" />
+          <span className="hidden sm:inline">Print Poster</span>
+        </Link>
       </div>
 
       {/* Top metrics */}
@@ -346,6 +356,13 @@ export default function QRDetailPage() {
           <p className="text-sm text-white/60 mt-2">
             Print this QR and have a marketing agent scan it to activate.
           </p>
+          <Link
+            href={`/dashboard/qr-print/${qr.short_code}`}
+            className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-gradient-to-r from-[#E63946] to-[#B01824] text-white font-bold rounded-lg text-sm"
+          >
+            <Printer className="w-4 h-4" />
+            Print blank poster
+          </Link>
         </div>
       )}
     </div>
