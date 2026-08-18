@@ -1,475 +1,417 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
-  Search, Filter, Download, Loader2, MapPin, Store, User,
-  Zap, ExternalLink, ChevronLeft, ChevronRight, X, RefreshCw,
-  QrCode, TrendingUp,
+  ArrowLeft, Loader2, Store, MapPin, User, Phone, Calendar,
+  TrendingUp, Zap, Activity, Copy, ExternalLink, QrCode,
+  Smartphone, Globe, Navigation, FileText, Clock, Package,
+  Printer,
 } from 'lucide-react';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts';
 
-const SORT_OPTIONS = [
-  { id: 'newest', label: 'Newest First' },
-  { id: 'oldest', label: 'Oldest First' },
-  { id: 'most_scanned', label: 'Most Scanned' },
-];
-
-const STATUS_OPTIONS = [
-  { id: '', label: 'All Statuses' },
-  { id: 'ACTIVE', label: 'Active' },
-  { id: 'INACTIVE', label: 'Inactive' },
-];
-
-export default function QRExplorerPage() {
+export default function QRDetailPage() {
+  const params = useParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
-  // Filters
-  const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState({
-    agent: '',
-    state: '',
-    city: '',
-    town: '',
-    type: '',
-    status: '',
-    sort: 'newest',
-  });
-  const [page, setPage] = useState(1);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.code]);
 
   const load = async () => {
+    setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (search) params.set('search', search);
-      Object.entries(filters).forEach(([k, v]) => {
-        if (v) params.set(k, v);
-      });
-      params.set('page', page.toString());
-      params.set('limit', '50');
-
-      const res = await fetch(`/api/analytics/qr-explorer?${params.toString()}`);
+      const res = await fetch(`/api/analytics/qr/${params.code}`);
       const d = await res.json();
       if (d.success) setData(d);
-      else toast.error('Failed to load');
+      else toast.error(d.message || 'Failed to load');
     } catch (e) {
       toast.error('Network error');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
-  // Initial load + when page/filters change
-  useEffect(() => {
-    setLoading(true);
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, filters]);
-
-  // Debounced search
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setPage(1);
-      load();
-    }, 400);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
-
-  const totalPages = data ? Math.ceil(data.total / data.limit) : 1;
-  const activeFilterCount = Object.values(filters).filter((v) => v && v !== 'newest').length + (search ? 1 : 0);
-
-  const resetFilters = () => {
-    setSearch('');
-    setFilters({
-      agent: '', state: '', city: '', town: '', type: '', status: '', sort: 'newest',
-    });
-    setPage(1);
+  const copyUrl = () => {
+    if (!data?.qr?.full_url) return;
+    navigator.clipboard.writeText(data.qr.full_url);
+    toast.success('URL copied');
   };
 
-  const exportCSV = () => {
-    if (!data?.rows?.length) {
-      toast.error('No data to export');
-      return;
-    }
-    const headers = [
-      'QR Code', 'Shop Name', 'Location Type', 'Owner', 'Owner Phone',
-      'Town', 'City', 'State', 'Landmark', 'Pincode',
-      'GPS Lat', 'GPS Lng', 'Agent', 'Agent Type', 'Total Scans',
-      'Status', 'Activated At',
-    ];
-    const rows = data.rows.map((r) => [
-      r.qr_code,
-      r.shop_name || '',
-      r.location_type || '',
-      r.owner_name || '',
-      r.owner_phone || '',
-      r.town || '',
-      r.city || '',
-      r.state || '',
-      r.landmark || '',
-      r.pincode || '',
-      r.gps?.latitude || '',
-      r.gps?.longitude || '',
-      r.agent_name || '',
-      r.agent_type || '',
-      r.total_scans,
-      r.status,
-      r.activated_at ? new Date(r.activated_at).toLocaleString('en-IN') : '',
-    ]);
-    const csv = [headers, ...rows]
-      .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `quttr-qr-export-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    toast.success(`Exported ${data.rows.length} rows`);
-  };
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto p-12 flex justify-center">
+        <Loader2 className="w-8 h-8 text-[#FFD700] animate-spin" />
+      </div>
+    );
+  }
+  if (!data?.qr) {
+    return (
+      <div className="max-w-6xl mx-auto text-center py-20">
+        <QrCode className="w-16 h-16 mx-auto text-white/20 mb-3" />
+        <p className="text-white/60">QR code not found</p>
+        <Link href="/dashboard/qr-explorer" className="text-[#FFD700] mt-3 inline-block">
+          ← Back to Explorer
+        </Link>
+      </div>
+    );
+  }
+
+  const { qr, activation, daily_scans, device_breakdown, recent_scans } = data;
+  const isActivated = !!activation;
 
   return (
-    <div className="max-w-7xl mx-auto space-y-5">
+    <div className="max-w-6xl mx-auto space-y-5">
       {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <QrCode className="w-6 h-6 text-[#FFD700]" />
-            QR Explorer
+      <div className="flex items-start gap-3">
+        <Link href="/dashboard/qr-explorer" className="p-2 bg-white/[0.05] rounded-lg hover:bg-white/[0.1] flex-shrink-0">
+          <ArrowLeft className="w-4 h-4" />
+        </Link>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <span className="font-mono text-lg font-black text-[#FFD700] bg-[#FFD700]/10 px-3 py-1 rounded-lg">
+              {qr.short_code}
+            </span>
+            {qr.status === 'ACTIVE' ? (
+              <span className="text-[10px] px-2 py-0.5 bg-emerald-500/15 text-emerald-400 rounded-full font-bold">ACTIVE</span>
+            ) : (
+              <span className="text-[10px] px-2 py-0.5 bg-red-500/15 text-red-400 rounded-full font-bold">INACTIVE</span>
+            )}
+          </div>
+          <h1 className="text-2xl font-bold truncate">
+            {activation?.shop_name || <span className="text-white/50">Not activated yet</span>}
           </h1>
-          <p className="text-sm text-white/60 mt-1">
-            Search & filter every QR · click any row for full details · {data?.total || 0} total QRs
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => { setRefreshing(true); load(); }}
-            disabled={refreshing}
-            className="p-2 bg-white/[0.05] rounded-lg hover:bg-white/[0.1]"
-          >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-          </button>
-          <button
-            onClick={exportCSV}
-            disabled={!data?.rows?.length}
-            className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-lg text-sm font-bold hover:bg-emerald-500/20 disabled:opacity-40"
-          >
-            <Download className="w-4 h-4" />
-            Export CSV
-          </button>
-        </div>
-      </div>
-
-      {/* Filter panel */}
-      <div className="bg-white/[0.02] border border-white/10 rounded-xl p-4 space-y-3">
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-          <input
-            type="text"
-            placeholder="Search by shop, code, owner, town, agent..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-10 py-2.5 bg-white/[0.05] border border-white/10 rounded-lg text-sm text-white placeholder-white/30 focus:border-[#FFD700]/40 focus:outline-none"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
-            >
-              <X className="w-4 h-4" />
-            </button>
+          {activation && (
+            <p className="text-sm text-white/60 flex items-center gap-1 mt-1">
+              <MapPin className="w-3 h-3" />
+              {activation.location?.town || activation.location?.city || 'No location'}
+              {activation.location?.state && ` · ${activation.location.state}`}
+            </p>
           )}
         </div>
 
-        {/* Filter dropdowns */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
-          <FilterSelect
-            label="Agent"
-            value={filters.agent}
-            onChange={(v) => { setPage(1); setFilters({ ...filters, agent: v }); }}
-            options={[
-              { id: '', label: 'All Agents' },
-              ...(data?.filters?.agents || []).map((a) => ({ id: a._id, label: a.name })),
-            ]}
-          />
-          <FilterSelect
-            label="State"
-            value={filters.state}
-            onChange={(v) => { setPage(1); setFilters({ ...filters, state: v }); }}
-            options={[
-              { id: '', label: 'All States' },
-              ...(data?.filters?.states || []).map((s) => ({ id: s, label: s })),
-            ]}
-          />
-          <FilterSelect
-            label="City"
-            value={filters.city}
-            onChange={(v) => { setPage(1); setFilters({ ...filters, city: v }); }}
-            options={[
-              { id: '', label: 'All Cities' },
-              ...(data?.filters?.cities || []).map((s) => ({ id: s, label: s })),
-            ]}
-          />
-          <FilterSelect
-            label="Town"
-            value={filters.town}
-            onChange={(v) => { setPage(1); setFilters({ ...filters, town: v }); }}
-            options={[
-              { id: '', label: 'All Towns' },
-              ...(data?.filters?.towns || []).map((s) => ({ id: s, label: s })),
-            ]}
-          />
-          <FilterSelect
-            label="Type"
-            value={filters.type}
-            onChange={(v) => { setPage(1); setFilters({ ...filters, type: v }); }}
-            options={[
-              { id: '', label: 'All Types' },
-              ...(data?.filters?.types || []).map((s) => ({ id: s, label: formatType(s) })),
-            ]}
-          />
-          <FilterSelect
-            label="Status"
-            value={filters.status}
-            onChange={(v) => { setPage(1); setFilters({ ...filters, status: v }); }}
-            options={STATUS_OPTIONS}
-          />
-          <FilterSelect
-            label="Sort"
-            value={filters.sort}
-            onChange={(v) => { setPage(1); setFilters({ ...filters, sort: v }); }}
-            options={SORT_OPTIONS}
-          />
-        </div>
-
-        {/* Reset button */}
-        {activeFilterCount > 0 && (
-          <div className="flex items-center justify-between pt-2 border-t border-white/[0.06]">
-            <p className="text-xs text-white/50">
-              {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''} active
-            </p>
-            <button
-              onClick={resetFilters}
-              className="text-xs text-[#FFD700] hover:underline flex items-center gap-1"
-            >
-              <X className="w-3 h-3" />
-              Clear all filters
-            </button>
-          </div>
-        )}
+        {/* ✅ NEW: Print Poster button */}
+        <Link
+          href={`/dashboard/qr-print/${qr.short_code}`}
+          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#E63946] to-[#B01824] text-white font-bold rounded-lg hover:shadow-[0_0_20px_rgba(230,57,70,0.5)] transition text-sm whitespace-nowrap flex-shrink-0"
+        >
+          <Printer className="w-4 h-4" />
+          <span className="hidden sm:inline">Print Poster</span>
+        </Link>
       </div>
 
-      {/* Results table */}
-      <div className="bg-white/[0.02] border border-white/10 rounded-xl overflow-hidden">
-        {loading ? (
-          <div className="p-12 flex justify-center">
-            <Loader2 className="w-6 h-6 animate-spin text-[#FFD700]" />
+      {/* Top metrics */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard label="Total Scans" value={qr.total_scans} icon={TrendingUp} color="from-[#E63946] to-[#B01824]" />
+        <MetricCard
+          label="Last Scan"
+          value={qr.last_scanned_at ? timeAgo(qr.last_scanned_at) : 'Never'}
+          icon={Clock}
+          color="from-blue-500 to-blue-700"
+          isText
+        />
+        <MetricCard
+          label="Activated"
+          value={activation ? new Date(activation.activated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : 'Not yet'}
+          icon={Zap}
+          color="from-emerald-500 to-emerald-700"
+          isText
+        />
+        <MetricCard
+          label="Batch"
+          value={qr.batch_name || 'N/A'}
+          icon={Package}
+          color="from-[#FFD700] to-[#B08900]"
+          valueClass="text-black"
+          isText
+        />
+      </div>
+
+      {/* URL bar */}
+      <div className="bg-white/[0.02] border border-white/10 rounded-xl p-4 flex items-center gap-3">
+        <QrCode className="w-4 h-4 text-[#FFD700] flex-shrink-0" />
+        <code className="text-xs text-white/70 flex-1 truncate">{qr.full_url}</code>
+        <button
+          onClick={copyUrl}
+          className="p-2 bg-white/[0.05] rounded-lg hover:bg-white/[0.1]"
+          title="Copy URL"
+        >
+          <Copy className="w-3.5 h-3.5" />
+        </button>
+        <a
+          href={qr.full_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="p-2 bg-white/[0.05] rounded-lg hover:bg-white/[0.1]"
+          title="Open"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+        </a>
+      </div>
+
+      {isActivated ? (
+        <>
+          {/* Scan chart */}
+          <div className="bg-white/[0.02] border border-white/10 rounded-xl p-5">
+            <h3 className="font-bold text-sm mb-4 flex items-center gap-2">
+              <Activity className="w-4 h-4 text-[#FFD700]" />
+              Scans (last 30 days)
+            </h3>
+            {daily_scans.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 text-center">
+                <Activity className="w-8 h-8 text-white/10 mb-2" />
+                <p className="text-xs text-white/40">No scans yet</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={daily_scans}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="date" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 11 }} />
+                  <YAxis tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 11 }} />
+                  <Tooltip
+                    contentStyle={{
+                      background: '#1a1a1a',
+                      border: '1px solid rgba(255,215,0,0.3)',
+                      borderRadius: '8px',
+                    }}
+                  />
+                  <Line type="monotone" dataKey="count" stroke="#FFD700" strokeWidth={3} dot={{ fill: '#E63946', r: 3 }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
-        ) : !data?.rows?.length ? (
-          <div className="p-12 text-center">
-            <QrCode className="w-10 h-10 text-white/20 mx-auto mb-3" />
-            <p className="text-white/60">No QRs found</p>
-            <p className="text-xs text-white/40 mt-1">
-              Try changing filters or search terms
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* Desktop table */}
-            <div className="hidden lg:block overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-white/[0.03] border-b border-white/[0.06]">
-                  <tr>
-                    <Th>Code</Th>
-                    <Th>Shop / Location</Th>
-                    <Th>Town</Th>
-                    <Th>City · State</Th>
-                    <Th>Agent</Th>
-                    <Th className="text-right">Scans</Th>
-                    <Th>Status</Th>
-                    <Th>Date</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.rows.map((r) => (
-                    <tr key={r._id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition">
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/dashboard/qr-explorer/${r.qr_code}`}
-                          className="font-mono text-[#FFD700] text-xs font-bold bg-[#FFD700]/10 px-2 py-1 rounded hover:bg-[#FFD700]/20"
-                        >
-                          {r.qr_code}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Store className="w-3.5 h-3.5 text-white/40 flex-shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold truncate max-w-[200px]">
-                              {r.shop_name || <span className="text-white/40 italic">(no shop)</span>}
-                            </p>
-                            <p className="text-[10px] text-white/40">{formatType(r.location_type)}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-sm font-semibold text-white/80">
-                          {r.town || <span className="text-white/30">—</span>}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="text-xs text-white/70 truncate max-w-[140px]">{r.city || '—'}</p>
-                        <p className="text-[10px] text-white/40 truncate max-w-[140px]">{r.state || ''}</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        {r.agent_id ? (
-                          <Link
-                            href={`/dashboard/marketing/${r.agent_id}`}
-                            className="text-xs text-[#FFD700] hover:underline flex items-center gap-1"
-                          >
-                            <User className="w-3 h-3" />
-                            {r.agent_name}
-                          </Link>
-                        ) : (
-                          <span className="text-xs text-white/40 flex items-center gap-1">
-                            <User className="w-3 h-3" />
-                            {r.agent_name}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="text-sm font-black text-[#FFD700]">
-                          {r.total_scans.toLocaleString('en-IN')}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {r.status === 'ACTIVE' ? (
-                          <span className="text-[10px] px-2 py-0.5 bg-emerald-500/15 text-emerald-400 rounded-full font-bold">ACTIVE</span>
-                        ) : (
-                          <span className="text-[10px] px-2 py-0.5 bg-red-500/15 text-red-400 rounded-full font-bold">INACTIVE</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-white/50">
-                        {r.activated_at ? new Date(r.activated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+          {/* Details grid */}
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Shop / Location details */}
+            <div className="bg-white/[0.02] border border-white/10 rounded-xl p-5">
+              <h3 className="font-bold text-sm mb-4 flex items-center gap-2">
+                <Store className="w-4 h-4 text-[#FFD700]" />
+                Shop / Location Details
+              </h3>
+              <div className="space-y-2.5">
+                <DetailRow label="Type" value={formatType(activation.location_type)} />
+                <DetailRow label="Shop Name" value={activation.shop_name} highlight />
+                <DetailRow label="Owner" value={activation.owner_name} />
+                <DetailRow label="Owner Phone" value={activation.owner_phone} />
+                {activation.vehicle_number && (
+                  <DetailRow label="Vehicle Number" value={activation.vehicle_number} mono />
+                )}
+                <div className="border-t border-white/[0.06] my-3" />
+                <DetailRow label="Town" value={activation.location?.town} highlight />
+                <DetailRow label="City" value={activation.location?.city} />
+                <DetailRow label="State" value={activation.location?.state} />
+                <DetailRow label="Pincode" value={activation.location?.pincode} />
+                <DetailRow label="Landmark" value={activation.location?.landmark} />
+                <DetailRow label="Address" value={activation.location?.address} />
+                <DetailRow label="Placement" value={activation.placement_position} />
+              </div>
             </div>
 
-            {/* Mobile cards */}
-            <div className="lg:hidden divide-y divide-white/[0.05]">
-              {data.rows.map((r) => (
-                <Link
-                  key={r._id}
-                  href={`/dashboard/qr-explorer/${r.qr_code}`}
-                  className="block p-4 hover:bg-white/[0.02]"
-                >
-                  <div className="flex items-start justify-between gap-3 mb-2">
+            {/* Activation + GPS + Notes */}
+            <div className="space-y-4">
+              {/* Who activated */}
+              <div className="bg-white/[0.02] border border-white/10 rounded-xl p-5">
+                <h3 className="font-bold text-sm mb-4 flex items-center gap-2">
+                  <User className="w-4 h-4 text-[#FFD700]" />
+                  Activated By
+                </h3>
+                {activation.activated_by_id ? (
+                  <Link
+                    href={`/dashboard/marketing/${activation.activated_by_id}`}
+                    className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] transition"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#E63946] to-[#B01824] flex items-center justify-center text-white font-black border-2 border-[#FFD700]/30">
+                      {activation.activated_by_name?.[0]?.toUpperCase()}
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono text-[10px] text-[#FFD700] bg-[#FFD700]/10 px-1.5 py-0.5 rounded font-bold">
-                          {r.qr_code}
-                        </span>
-                        {r.status === 'ACTIVE' ? (
-                          <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/15 text-emerald-400 rounded font-bold">ACTIVE</span>
-                        ) : (
-                          <span className="text-[9px] px-1.5 py-0.5 bg-red-500/15 text-red-400 rounded font-bold">INACTIVE</span>
-                        )}
-                      </div>
-                      <p className="text-sm font-bold truncate">
-                        {r.shop_name || <span className="text-white/40 italic">(no shop)</span>}
-                      </p>
-                      <p className="text-xs text-white/50 truncate flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        {r.town || 'No town'}{r.city ? ` · ${r.city}` : ''}
-                      </p>
+                      <p className="font-semibold truncate">{activation.activated_by_name}</p>
+                      <p className="text-xs text-white/50">Marketing Agent · Click to view profile</p>
                     </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-lg font-black text-[#FFD700]">{r.total_scans}</p>
-                      <p className="text-[9px] text-white/40 uppercase">scans</p>
+                    <ExternalLink className="w-4 h-4 text-white/40" />
+                  </Link>
+                ) : (
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.03]">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-500 to-gray-700 flex items-center justify-center text-white font-black">
+                      A
+                    </div>
+                    <div>
+                      <p className="font-semibold">Admin</p>
+                      <p className="text-xs text-white/50">Activated from admin panel</p>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between text-[10px] text-white/40 mt-2">
-                    <span className="flex items-center gap-1">
-                      <User className="w-3 h-3" />{r.agent_name}
-                    </span>
-                    <span>
-                      {r.activated_at ? new Date(r.activated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}
-                    </span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="p-4 border-t border-white/[0.06] flex items-center justify-between">
-                <p className="text-xs text-white/50">
-                  Page {page} of {totalPages} · {data.total.toLocaleString('en-IN')} total
+                )}
+                <p className="text-xs text-white/40 mt-3">
+                  <Calendar className="w-3 h-3 inline mr-1" />
+                  {new Date(activation.activated_at).toLocaleString('en-IN', {
+                    day: '2-digit', month: 'short', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit',
+                  })}
                 </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="p-2 bg-white/[0.05] rounded-lg disabled:opacity-40 hover:bg-white/[0.1]"
+              </div>
+
+              {/* GPS */}
+              {activation.gps_location && (
+                <div className="bg-white/[0.02] border border-white/10 rounded-xl p-5">
+                  <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
+                    <Navigation className="w-4 h-4 text-[#FFD700]" />
+                    GPS Location
+                  </h3>
+                  <div className="p-3 rounded-lg bg-black/40 border border-white/5">
+                    <p className="text-xs text-white/50">Latitude · Longitude</p>
+                    <p className="font-mono text-sm text-[#FFD700] mt-1">
+                      {activation.gps_location.latitude?.toFixed(6)}, {activation.gps_location.longitude?.toFixed(6)}
+                    </p>
+                  </div>
+                  <a
+                    href={`https://www.google.com/maps?q=${activation.gps_location.latitude},${activation.gps_location.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 w-full inline-flex items-center justify-center gap-2 py-2 bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-bold hover:bg-blue-500/20"
                   >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <span className="text-sm font-bold px-3">{page}</span>
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    className="p-2 bg-white/[0.05] rounded-lg disabled:opacity-40 hover:bg-white/[0.1]"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+                    <ExternalLink className="w-3 h-3" />
+                    Open in Google Maps
+                  </a>
                 </div>
+              )}
+
+              {/* Notes */}
+              {activation.notes && (
+                <div className="bg-white/[0.02] border border-white/10 rounded-xl p-5">
+                  <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-[#FFD700]" />
+                    Notes
+                  </h3>
+                  <p className="text-sm text-white/80 whitespace-pre-wrap">{activation.notes}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Device breakdown */}
+          {device_breakdown.length > 0 && (
+            <div className="bg-white/[0.02] border border-white/10 rounded-xl p-5">
+              <h3 className="font-bold text-sm mb-4 flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-[#FFD700]" />
+                Scanner Devices
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {device_breakdown.map((d) => (
+                  <div key={d.name} className="p-3 rounded-lg bg-white/[0.03]">
+                    <p className="text-xs text-white/50 uppercase">{d.name}</p>
+                    <p className="text-xl font-black text-[#FFD700] mt-1">{d.count}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recent scans */}
+          <div className="bg-white/[0.02] border border-white/10 rounded-xl">
+            <div className="p-4 border-b border-white/[0.06]">
+              <h3 className="font-bold flex items-center gap-2">
+                <Activity className="w-4 h-4 text-[#FFD700]" />
+                Recent Scans ({recent_scans.length})
+              </h3>
+            </div>
+            {recent_scans.length === 0 ? (
+              <div className="p-12 text-center">
+                <Activity className="w-8 h-8 text-white/20 mx-auto mb-3" />
+                <p className="text-white/50">No scans yet</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-white/[0.05]">
+                {recent_scans.map((s) => (
+                  <div key={s._id} className="p-3 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-white/[0.05] flex items-center justify-center flex-shrink-0">
+                      <Smartphone className="w-4 h-4 text-white/50" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm">
+                        <span className="capitalize font-semibold">{s.device?.os || 'unknown'}</span>
+                        <span className="text-white/40"> · {s.device?.type || 'device'}</span>
+                      </p>
+                      <p className="text-xs text-white/50 flex items-center gap-1">
+                        <Globe className="w-3 h-3" />
+                        {s.scanner_location?.city || s.scanner_location?.country || 'Unknown location'}
+                      </p>
+                    </div>
+                    <span className="text-xs text-white/40">{timeAgo(s.scanned_at)}</span>
+                  </div>
+                ))}
               </div>
             )}
-          </>
-        )}
+          </div>
+        </>
+      ) : (
+        <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-8 text-center">
+          <QrCode className="w-12 h-12 text-yellow-500/50 mx-auto mb-3" />
+          <p className="text-lg font-bold text-yellow-400">This QR is not activated yet</p>
+          <p className="text-sm text-white/60 mt-2">
+            Print this QR and have a marketing agent scan it to activate.
+          </p>
+          <Link
+            href={`/dashboard/qr-print/${qr.short_code}`}
+            className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-gradient-to-r from-[#E63946] to-[#B01824] text-white font-bold rounded-lg text-sm"
+          >
+            <Printer className="w-4 h-4" />
+            Print blank poster
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MetricCard({ label, value, icon: Icon, color, valueClass = 'text-white', isText = false }) {
+  return (
+    <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10">
+      <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center mb-2`}>
+        <Icon className="w-4 h-4 text-white" />
       </div>
+      <p className="text-[10px] text-white/50 uppercase tracking-wider font-bold">{label}</p>
+      <p className={`font-black mt-1 ${isText ? 'text-sm' : 'text-2xl'} ${valueClass}`}>
+        {typeof value === 'number' ? value.toLocaleString('en-IN') : value}
+      </p>
     </div>
   );
 }
 
-function Th({ children, className = '' }) {
+function DetailRow({ label, value, highlight, mono }) {
   return (
-    <th className={`px-4 py-3 text-left text-[10px] font-black text-white/50 uppercase tracking-wider ${className}`}>
-      {children}
-    </th>
+    <div className="grid grid-cols-3 gap-3 text-sm">
+      <span className="text-white/50 uppercase text-[10px] font-bold tracking-wider self-center">
+        {label}
+      </span>
+      <span className={`col-span-2 ${highlight ? 'text-[#FFD700] font-bold' : 'text-white/90'} ${mono ? 'font-mono text-xs' : ''}`}>
+        {value || <span className="text-white/30 italic">—</span>}
+      </span>
+    </div>
   );
 }
 
-function FilterSelect({ label, value, onChange, options }) {
-  return (
-    <div>
-      <label className="text-[9px] text-white/40 uppercase tracking-wider block mb-1">{label}</label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full px-2 py-2 bg-white/[0.05] border border-white/10 rounded-lg text-xs text-white focus:border-[#FFD700]/40 focus:outline-none"
-      >
-        {options.map((o) => (
-          <option key={o.id} value={o.id} className="bg-neutral-900">
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
+function timeAgo(date) {
+  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const m = Math.floor(seconds / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d}d ago`;
+  return new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function formatType(t) {
-  if (!t) return 'Unknown';
+  if (!t) return '—';
   const map = {
-    barber_shop: '💈 Barber',
+    barber_shop: '💈 Barber Shop',
     salon: '💇 Salon',
     restaurant: '🍽️ Restaurant',
     gym: '💪 Gym',
@@ -479,7 +421,7 @@ function formatType(t) {
     office: '🏢 Office',
     college: '🎓 College',
     transit: '🚏 Transit',
-    public_place: '🏙️ Public',
+    public_place: '🏙️ Public Place',
     vehicle: '🚗 Vehicle',
     other: '📍 Other',
   };
