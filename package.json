@@ -17,6 +17,7 @@
     "framer-motion": "^11.0.3",
     "html5-qrcode": "^2.3.8",
     "jsonwebtoken": "^9.0.2",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.469.0",
     "mongodb": "^6.3.0",
     "next": "^14.2.15",
@@ -25,6 +26,7 @@
     "react-dom": "^18.3.1",
     "react-hot-toast": "^2.5.1",
     "recharts": "^2.15.0",
+    "sharp": "^0.33.5",
     "socket.io-client": "^4.8.1",
     "three": "^0.160.0",
     "ua-parser-js": "^1.0.37"
