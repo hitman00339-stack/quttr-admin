@@ -292,4 +292,196 @@ export default function QRExplorerPage() {
                     <Th className="text-right">Scans</Th>
                     <Th>Status</Th>
                     <Th>Date</Th>
-                  
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.rows.map((r) => (
+                    <tr key={r._id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition">
+                      <td className="px-4 py-3">
+                        <Link
+                          href={`/dashboard/qr-explorer/${r.qr_code}`}
+                          className="font-mono text-[#FFD700] text-xs font-bold bg-[#FFD700]/10 px-2 py-1 rounded hover:bg-[#FFD700]/20"
+                        >
+                          {r.qr_code}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Store className="w-3.5 h-3.5 text-white/40 flex-shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold truncate max-w-[200px]">
+                              {r.shop_name || <span className="text-white/40 italic">(no shop)</span>}
+                            </p>
+                            <p className="text-[10px] text-white/40">{formatType(r.location_type)}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm font-semibold text-white/80">
+                          {r.town || <span className="text-white/30">—</span>}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="text-xs text-white/70 truncate max-w-[140px]">{r.city || '—'}</p>
+                        <p className="text-[10px] text-white/40 truncate max-w-[140px]">{r.state || ''}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        {r.agent_id ? (
+                          <Link
+                            href={`/dashboard/marketing/${r.agent_id}`}
+                            className="text-xs text-[#FFD700] hover:underline flex items-center gap-1"
+                          >
+                            <User className="w-3 h-3" />
+                            {r.agent_name}
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-white/40 flex items-center gap-1">
+                            <User className="w-3 h-3" />
+                            {r.agent_name}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-sm font-black text-[#FFD700]">
+                          {r.total_scans.toLocaleString('en-IN')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {r.status === 'ACTIVE' ? (
+                          <span className="text-[10px] px-2 py-0.5 bg-emerald-500/15 text-emerald-400 rounded-full font-bold">ACTIVE</span>
+                        ) : (
+                          <span className="text-[10px] px-2 py-0.5 bg-red-500/15 text-red-400 rounded-full font-bold">INACTIVE</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-white/50">
+                        {r.activated_at ? new Date(r.activated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="lg:hidden divide-y divide-white/[0.05]">
+              {data.rows.map((r) => (
+                <Link
+                  key={r._id}
+                  href={`/dashboard/qr-explorer/${r.qr_code}`}
+                  className="block p-4 hover:bg-white/[0.02]"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-mono text-[10px] text-[#FFD700] bg-[#FFD700]/10 px-1.5 py-0.5 rounded font-bold">
+                          {r.qr_code}
+                        </span>
+                        {r.status === 'ACTIVE' ? (
+                          <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/15 text-emerald-400 rounded font-bold">ACTIVE</span>
+                        ) : (
+                          <span className="text-[9px] px-1.5 py-0.5 bg-red-500/15 text-red-400 rounded font-bold">INACTIVE</span>
+                        )}
+                      </div>
+                      <p className="text-sm font-bold truncate">
+                        {r.shop_name || <span className="text-white/40 italic">(no shop)</span>}
+                      </p>
+                      <p className="text-xs text-white/50 truncate flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {r.town || 'No town'}{r.city ? ` · ${r.city}` : ''}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-lg font-black text-[#FFD700]">{r.total_scans}</p>
+                      <p className="text-[9px] text-white/40 uppercase">scans</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-white/40 mt-2">
+                    <span className="flex items-center gap-1">
+                      <User className="w-3 h-3" />{r.agent_name}
+                    </span>
+                    <span>
+                      {r.activated_at ? new Date(r.activated_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="p-4 border-t border-white/[0.06] flex items-center justify-between">
+                <p className="text-xs text-white/50">
+                  Page {page} of {totalPages} · {data.total.toLocaleString('en-IN')} total
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="p-2 bg-white/[0.05] rounded-lg disabled:opacity-40 hover:bg-white/[0.1]"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-sm font-bold px-3">{page}</span>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="p-2 bg-white/[0.05] rounded-lg disabled:opacity-40 hover:bg-white/[0.1]"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Th({ children, className = '' }) {
+  return (
+    <th className={`px-4 py-3 text-left text-[10px] font-black text-white/50 uppercase tracking-wider ${className}`}>
+      {children}
+    </th>
+  );
+}
+
+function FilterSelect({ label, value, onChange, options }) {
+  return (
+    <div>
+      <label className="text-[9px] text-white/40 uppercase tracking-wider block mb-1">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-2 py-2 bg-white/[0.05] border border-white/10 rounded-lg text-xs text-white focus:border-[#FFD700]/40 focus:outline-none"
+      >
+        {options.map((o) => (
+          <option key={o.id} value={o.id} className="bg-neutral-900">
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function formatType(t) {
+  if (!t) return 'Unknown';
+  const map = {
+    barber_shop: '💈 Barber',
+    salon: '💇 Salon',
+    restaurant: '🍽️ Restaurant',
+    gym: '💪 Gym',
+    medical: '⚕️ Medical',
+    kirana: '🏪 Kirana',
+    mall: '🏬 Mall',
+    office: '🏢 Office',
+    college: '🎓 College',
+    transit: '🚏 Transit',
+    public_place: '🏙️ Public',
+    vehicle: '🚗 Vehicle',
+    other: '📍 Other',
+  };
+  return map[t] || t;
+}
