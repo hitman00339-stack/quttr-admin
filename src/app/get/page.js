@@ -210,7 +210,7 @@ function StickyHeader({ scrolled, onDownload }) {
             onError={(e) => { e.target.style.display = 'none'; }}
           />
           <span className="qr-hindi text-[16px] md:text-[17px] font-black tracking-tight">
-            क्यूटर<span className="text-[#FFD700]">.</span>
+            Quttr <span className="text-[#FFD700]">.</span>
           </span>
         </div>
 
@@ -629,9 +629,9 @@ function HowItWorks() {
 function TestimonialsSection() {
   const [ref, inView] = useInView();
   const testimonials = [
-    { quote: 'अब घंटों इंतज़ार नहीं करना पड़ता। क्यूटर ने काम आसान कर दिया।', name: 'राहुल शर्मा', city: 'दिल्ली' },
+    { quote: 'अब घंटों इंतज़ार नहीं करना पड़ता। Quttr ने काम आसान कर दिया।', name: 'राहुल शर्मा', city: 'दिल्ली' },
     { quote: 'क्यू ट्रैकिंग बहुत बढ़िया है। मैं सही समय पर पहुंचता हूं।', name: 'अमित कुमार', city: 'मुंबई' },
-    { quote: 'मेरा पसंदीदा बार्बर हमेशा क्यूटर पर मिलता है।', name: 'विकास सिंह', city: 'बैंगलोर' },
+    { quote: 'मेरा पसंदीदा बार्बर हमेशा Quttr पर मिलता है।', name: 'विकास सिंह', city: 'बैंगलोर' },
   ];
   return (
     <section ref={ref} className="px-4 py-24 md:py-32 border-t border-white/[0.06] bg-gradient-to-b from-[#0A0000] to-black">
@@ -700,7 +700,7 @@ function BarberSection({ onDownload }) {
               <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight qr-blue-gold-gradient mb-6">बढ़ाएं</h2>
               <p className="text-[18px] md:text-[24px] font-bold text-[#FFD700] mb-4">Grow Your Business.</p>
               <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed mb-8 font-medium">
-                हज़ारों बार्बर पहले से क्यूटर बिज़नेस के साथ अपना बिज़नेस बढ़ा रहे हैं।
+                हज़ारों बार्बर पहले से Quttr बिज़नेस के साथ अपना बिज़नेस बढ़ा रहे हैं।
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <button onClick={onDownload} className="qr-mega-btn-blue group relative inline-flex items-center justify-center gap-3 text-white text-[15px] md:text-[18px] font-black px-6 py-4 md:px-8 md:py-5 rounded-full transition-all duration-300 overflow-hidden">
@@ -709,7 +709,7 @@ function BarberSection({ onDownload }) {
                     <svg viewBox="0 0 512 512" className="w-6 h-6 md:w-8 md:h-8 flex-shrink-0">
                       <path fill="#FFD700" d="M99 8c-6 3-11 9-13 17v462c2 8 7 14 13 17l255-248L99 8z" />
                     </svg>
-                    <span className="qr-hindi">क्यूटर बिज़नेस डाउनलोड</span>
+                    <span className="qr-hindi">Quttr बिज़नेस डाउनलोड</span>
                   </div>
                 </button>
                 <a href="tel:+919519953149" className="qr-hindi inline-flex items-center justify-center gap-2 text-[15px] font-bold text-[#FFD700] hover:text-white px-6 py-4 rounded-full border-2 border-[#FFD700]/40 hover:border-[#FFD700] transition-all">
@@ -758,7 +758,7 @@ function FinalCTASection({ onDownload, locationText }) {
           <span className="qr-gold-red-gradient">तैयार?</span>
         </h2>
         <p className="qr-hindi text-[20px] md:text-[28px] text-white/80 mb-4 font-bold">
-          क्यूटर डाउनलोड करें
+         Quttr डाउनलोड करें
         </p>
         <p className="qr-hindi text-[16px] md:text-[20px] text-white/50 mb-12 max-w-2xl mx-auto leading-relaxed">
           इंतज़ार को कहें अलविदा।
@@ -778,7 +778,7 @@ function FooterSection() {
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <span className="qr-hindi text-[20px] font-black">क्यूटर<span className="text-[#FFD700]">.</span></span>
+            <span className="qr-hindi text-[20px] font-black">Quttr<span className="text-[#FFD700]">.</span></span>
           </div>
           <p className="qr-hindi text-[15px] text-white/60 font-semibold mb-2">भारत का सबसे तेज़ बार्बर बुकिंग ऐप</p>
         </div>
@@ -788,7 +788,7 @@ function FooterSection() {
           <a href="https://instagram.com/quttrofficial" target="_blank" rel="noopener noreferrer" className="text-white/60 hover:text-[#FFD700] transition-colors">Instagram</a>
         </div>
         <div className="pt-8 border-t border-white/[0.06] flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-[12px] text-white/40 font-semibold">© 2025 क्यूटर. सर्वाधिकार सुरक्षित.</p>
+          <p className="text-[12px] text-white/40 font-semibold">© 2025 Quttr. सर्वाधिकार सुरक्षित.</p>
           <p className="qr-hindi text-[12px] text-white/40 font-semibold">प्यार से भारत में बनाया गया 🇮🇳</p>
         </div>
       </div>
