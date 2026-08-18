@@ -65,7 +65,13 @@ function LandingContent() {
   const searchParams = useSearchParams();
   const qrId = searchParams.get('qr') || '';
   const sid = searchParams.get('sid') || '';
-  const location = searchParams.get('loc') || searchParams.get('location') || '';
+  // Support all common param names for backward compatibility
+  const rawLoc =
+    searchParams.get('town') ||
+    searchParams.get('city') ||
+    searchParams.get('loc') ||
+    searchParams.get('location') ||
+    '';
 
   const [sessionId, setSessionId] = useState('');
   const [scrolled, setScrolled] = useState(false);
@@ -79,18 +85,35 @@ function LandingContent() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  /**
+   * LOCATION RESOLUTION STRATEGY:
+   * 1. If URL has town/city/loc param → use it directly (best case)
+   * 2. Otherwise, if qr ID present → fetch from /api/qr/location
+   *    (API should return { success: true, town: "..." } — town takes priority over shopName)
+   * 3. Fallback → "आपके शहर"
+   */
   useEffect(() => {
-    if (location) {
-      setLocationText(decodeURIComponent(location));
-    } else if (qrId) {
+    if (rawLoc) {
+      setLocationText(decodeURIComponent(rawLoc));
+      return;
+    }
+    if (qrId) {
       fetch(`/api/qr/location?qr=${qrId}`)
         .then(r => r.json())
         .then(data => {
-          if (data.success && data.location) setLocationText(data.location);
+          if (!data || !data.success) return;
+          // Prefer town/city over shop name
+          const bestLocation =
+            data.town ||
+            data.city ||
+            data.location ||
+            data.shopName ||
+            '';
+          if (bestLocation) setLocationText(bestLocation);
         })
         .catch(() => {});
     }
-  }, [qrId, location]);
+  }, [qrId, rawLoc]);
 
   const trackEvent = useCallback(
     (event) => {
@@ -178,15 +201,15 @@ function StickyHeader({ scrolled, onDownload }) {
         scrolled ? 'bg-black/85 backdrop-blur-xl border-b border-[#FFD700]/[0.15]' : 'bg-transparent'
       }`}
     >
-      <div className="max-w-7xl mx-auto px-4 md:px-12 h-16 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 md:px-12 h-14 md:h-16 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <img
             src="/quttr-logo.png"
             alt="Quttr"
-            className="w-9 h-9 object-contain"
+            className="w-8 h-8 md:w-9 md:h-9 object-contain"
             onError={(e) => { e.target.style.display = 'none'; }}
           />
-          <span className="qr-hindi text-[17px] font-black tracking-tight">
+          <span className="qr-hindi text-[16px] md:text-[17px] font-black tracking-tight">
             क्यूटर<span className="text-[#FFD700]">.</span>
           </span>
         </div>
@@ -199,7 +222,7 @@ function StickyHeader({ scrolled, onDownload }) {
 
         <button
           onClick={onDownload}
-          className="qr-hindi text-[13px] font-bold bg-gradient-to-r from-[#E63946] to-[#B01824] text-white px-5 py-2.5 rounded-full hover:shadow-[0_0_20px_rgba(230,57,70,0.6)] transition-all"
+          className="qr-hindi text-[12px] md:text-[13px] font-bold bg-gradient-to-r from-[#E63946] to-[#B01824] text-white px-4 md:px-5 py-2 md:py-2.5 rounded-full hover:shadow-[0_0_20px_rgba(230,57,70,0.6)] transition-all"
         >
           डाउनलोड
         </button>
@@ -212,8 +235,8 @@ function StickyHeader({ scrolled, onDownload }) {
 function PlayStoreButton({ onClick, size = 'lg', fullWidth = true }) {
   const sizeClasses =
     size === 'lg'
-      ? 'text-[16px] sm:text-[20px] md:text-[24px] px-6 sm:px-10 md:px-14 py-5 md:py-6'
-      : 'text-[15px] md:text-[18px] px-6 py-4 md:px-8 md:py-5';
+      ? 'text-[15px] sm:text-[18px] md:text-[22px] px-6 sm:px-8 md:px-12 py-4 md:py-5'
+      : 'text-[14px] md:text-[16px] px-5 py-3 md:px-7 md:py-4';
 
   return (
     <button
@@ -221,12 +244,10 @@ function PlayStoreButton({ onClick, size = 'lg', fullWidth = true }) {
       className={`qr-playstore-btn group relative inline-flex items-center gap-3 text-white font-black rounded-full transition-all duration-300 overflow-hidden ${sizeClasses} ${fullWidth ? 'w-full max-w-md' : ''}`}
     >
       <span className="qr-btn-shine" />
-      {/* Colored corner accents (Play Store style) */}
       <span className="qr-ps-corner qr-ps-corner-tl" />
       <span className="qr-ps-corner qr-ps-corner-br" />
       <div className="relative z-10 flex items-center gap-3 justify-center w-full">
-        {/* Official multi-color Play Store icon */}
-        <svg viewBox="0 0 512 512" className="w-8 h-8 md:w-11 md:h-11 flex-shrink-0 drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)]">
+        <svg viewBox="0 0 512 512" className="w-7 h-7 md:w-10 md:h-10 flex-shrink-0 drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)]">
           <defs>
             <linearGradient id="ps-blue" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stopColor="#00C1FF" />
@@ -245,20 +266,16 @@ function PlayStoreButton({ onClick, size = 'lg', fullWidth = true }) {
               <stop offset="100%" stopColor="#00A344" />
             </linearGradient>
           </defs>
-          {/* Green (left/top triangle) */}
           <path fill="url(#ps-green)" d="M99 8c-6 3-11 9-13 17v462c2 8 7 14 13 17l188-239L99 8z" />
-          {/* Blue (right lower) */}
           <path fill="url(#ps-blue)" d="M99 504c2 4 6 7 10 9l183-176-77-81L99 504z" />
-          {/* Yellow (right) */}
           <path fill="url(#ps-yellow)" d="M354 256l83-48c11-6 11-22 0-28l-83-48-77 76 77 48z" />
-          {/* Red (right upper) */}
           <path fill="url(#ps-red)" d="M354 256l-72-72L99 8c-4 2-8 5-10 9l188 239 77 0z" />
         </svg>
         <div className="flex flex-col items-start text-left">
           <span className="text-[9px] md:text-[11px] font-black text-white/90 tracking-[0.2em] leading-none">
             GET IT ON
           </span>
-          <span className="text-[20px] sm:text-[24px] md:text-[30px] font-black leading-tight mt-1 text-white">
+          <span className="text-[18px] sm:text-[22px] md:text-[28px] font-black leading-tight mt-0.5 md:mt-1 text-white">
             Google Play
           </span>
         </div>
@@ -267,11 +284,17 @@ function PlayStoreButton({ onClick, size = 'lg', fullWidth = true }) {
   );
 }
 
+/* ================================================================
+   HERO SECTION — COMPACT so download button is visible on 1st screen
+   ================================================================ */
 function HeroSection({ onDownload, locationText }) {
   const [ref, inView] = useInView();
 
   return (
-    <section ref={ref} className="relative min-h-screen flex items-center justify-center px-4 pt-32 pb-20 overflow-hidden">
+    <section
+      ref={ref}
+      className="relative flex items-center justify-center px-4 pt-20 md:pt-24 pb-8 md:pb-14 overflow-hidden"
+    >
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-[#E63946]/[0.18] rounded-full blur-[140px]" />
         <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-[#FFD700]/[0.1] rounded-full blur-[120px]" />
@@ -279,35 +302,27 @@ function HeroSection({ onDownload, locationText }) {
 
       <div className={`relative z-10 max-w-5xl mx-auto text-center w-full transition-all duration-1000 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
 
-        {/* LOGO with Static Semi-circular Arc Text */}
-        <div className="flex justify-center mb-8">
-          <div className="relative w-56 h-56 md:w-72 md:h-72 qr-logo-float">
-
+        {/* LOGO with Static Semi-circular Arc Text — smaller for mobile */}
+        <div className="flex justify-center mb-4 md:mb-6">
+          <div className="relative w-44 h-44 sm:w-52 sm:h-52 md:w-64 md:h-64 qr-logo-float">
             <svg
               viewBox="0 0 400 400"
               className="absolute inset-0 w-full h-full"
               style={{ filter: 'drop-shadow(0 0 8px rgba(255, 215, 0, 0.5))' }}
             >
               <defs>
-                <path
-                  id="topArcPath"
-                  d="M 60,200 A 140,140 0 0,1 340,200"
-                />
-                {/* Bottom arc — text reads left → right along lower curve */}
-                <path
-                  id="bottomArcPath"
-                  d="M 60,200 A 140,140 0 0,0 340,200"
-                />
+                <path id="topArcPath" d="M 60,200 A 140,140 0 0,1 340,200" />
+                <path id="bottomArcPath" d="M 60,200 A 140,140 0 0,0 340,200" />
               </defs>
 
-              {/* TOP ARC Quttr in gold */}
+              {/* TOP ARC — Quttr in gold */}
               <text
                 fill="#FFD700"
                 style={{
-                  fontSize: '25px',
+                  fontSize: '26px',
                   fontWeight: '900',
                   letterSpacing: '2px',
-                  fontFamily: "'Inter', 'Noto Sans Devanagari', sans-serif",
+                  fontFamily: "'Inter', sans-serif",
                 }}
               >
                 <textPath href="#topArcPath" startOffset="50%" textAnchor="middle">
@@ -318,10 +333,10 @@ function HeroSection({ onDownload, locationText }) {
               {/* BOTTOM ARC — 📍 Now in [TOWN] with TOWN in white */}
               <text
                 style={{
-                  fontSize: '23px',
+                  fontSize: '22px',
                   fontWeight: '800',
                   letterSpacing: '1.5px',
-                  fontFamily: "'Inter', 'Noto Sans Devanagari', sans-serif",
+                  fontFamily: "'Inter', sans-serif",
                 }}
               >
                 <textPath href="#bottomArcPath" startOffset="50%" textAnchor="middle">
@@ -332,7 +347,7 @@ function HeroSection({ onDownload, locationText }) {
             </svg>
 
             {/* Center Logo */}
-            <div className="absolute inset-14 md:inset-16 flex items-center justify-center">
+            <div className="absolute inset-12 sm:inset-14 md:inset-16 flex items-center justify-center">
               <div className="relative w-full h-full">
                 <div className="absolute inset-0 bg-[#E63946]/60 blur-3xl rounded-full qr-logo-pulse" />
                 <div className="relative w-full h-full flex items-center justify-center rounded-full bg-gradient-to-br from-[#E63946] to-[#B01824] border-4 border-[#FFD700]/60 shadow-[0_0_60px_rgba(230,57,70,0.8)]">
@@ -346,7 +361,7 @@ function HeroSection({ onDownload, locationText }) {
                     }}
                   />
                   <div className="hidden w-full h-full items-center justify-center">
-                    <svg viewBox="0 0 24 24" className="w-12 h-12 md:w-16 md:h-16 text-[#FFD700]" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg viewBox="0 0 24 24" className="w-10 h-10 md:w-14 md:h-14 text-[#FFD700]" fill="none" stroke="currentColor" strokeWidth="2">
                       <circle cx="6" cy="6" r="3"/>
                       <circle cx="6" cy="18" r="3"/>
                       <line x1="20" y1="4" x2="8.12" y2="15.88" strokeLinecap="round"/>
@@ -361,66 +376,67 @@ function HeroSection({ onDownload, locationText }) {
         </div>
 
         {/* Location Badge */}
-        <div className="inline-flex items-center gap-2 mb-6 max-w-[95%]">
-          <span className="qr-hindi text-[14px] md:text-[16px] font-black tracking-wider px-5 py-3 rounded-full border-2 border-[#FFD700]/50 bg-gradient-to-r from-[#FFD700]/[0.15] via-[#E63946]/[0.1] to-[#FFD700]/[0.15] backdrop-blur-md shadow-[0_0_20px_rgba(255,215,0,0.2)]">
+        <div className="inline-flex items-center gap-2 mb-3 md:mb-4 max-w-[95%]">
+          <span className="qr-hindi text-[13px] md:text-[15px] font-black tracking-wider px-4 py-2 md:px-5 md:py-2.5 rounded-full border-2 border-[#FFD700]/50 bg-gradient-to-r from-[#FFD700]/[0.15] via-[#E63946]/[0.1] to-[#FFD700]/[0.15] backdrop-blur-md shadow-[0_0_20px_rgba(255,215,0,0.2)]">
             📍 <span className="text-white/90">अब आपके शहर</span>{' '}
             <span className="text-[#FFD700] font-black uppercase">{locationText}</span>{' '}
             <span className="text-white/90">में भी!</span>
           </span>
         </div>
 
-        <div className="inline-flex items-center gap-2 mb-6">
-          <span className="qr-hindi text-[10px] md:text-[11px] font-black tracking-[0.2em] text-white/60 uppercase px-4 py-2 rounded-full border border-white/10 bg-white/[0.03]">
+        {/* Indian #1 badge — hidden on very small screens to save space */}
+        <div className="hidden sm:inline-flex items-center gap-2 mb-3 md:mb-4">
+          <span className="qr-hindi text-[10px] md:text-[11px] font-black tracking-[0.2em] text-white/60 uppercase px-4 py-1.5 rounded-full border border-white/10 bg-white/[0.03]">
             ✂️ भारत का #1 बार्बर ऐप
           </span>
         </div>
 
-        <h1 className="qr-hindi qr-hero-title text-[42px] sm:text-[60px] md:text-[90px] font-black leading-[1.15] tracking-tight text-white mb-4">
-          <span className="qr-gold-red-gradient block pb-2">इंतज़ार खत्म</span>
-          <span className="text-white block pb-2">फ्रेश लुक शुरू</span>
+        <h1 className="qr-hindi qr-hero-title text-[32px] sm:text-[46px] md:text-[72px] font-black leading-[1.15] tracking-tight text-white mb-2 md:mb-3">
+          <span className="qr-gold-red-gradient block pb-1">इंतज़ार खत्म</span>
+          <span className="text-white block pb-1">फ्रेश लुक शुरू</span>
         </h1>
 
-        <p className="text-[20px] md:text-[28px] font-bold text-white/70 mb-6 tracking-tight">
+        <p className="text-[15px] sm:text-[18px] md:text-[24px] font-bold text-white/70 mb-2 md:mb-3 tracking-tight">
           Skip the Wait. Walk in Fresh.
         </p>
 
-        <p className="qr-hindi text-[18px] md:text-[22px] text-[#FFD700] mb-4 font-bold px-4">
+        <p className="qr-hindi text-[14px] sm:text-[16px] md:text-[20px] text-[#FFD700] mb-4 md:mb-6 font-bold px-4">
           बुकिंग सेकंडों में। बार्बर आपकी पसंद का।
         </p>
 
-        <p className="qr-hindi text-[15px] md:text-[18px] text-white/60 max-w-2xl mx-auto leading-relaxed mb-12 px-4">
-          अब लाइन में लगने की जरूरत नहीं। घर बैठे बुक करें,
-          <br className="hidden md:block" />
-          अपनी बारी पर पहुंचे, और फ्रेश लुक के साथ निकलें।
-        </p>
-
-        <div className="flex flex-col items-center gap-6 mb-8 px-4">
-          {/* PLAY STORE THEMED BUTTON */}
+        {/* PLAY STORE THEMED BUTTON — visible on first screen now */}
+        <div className="flex flex-col items-center gap-3 md:gap-4 mb-4 px-4">
           <PlayStoreButton onClick={onDownload} size="lg" />
 
-          <div className="flex flex-col items-center gap-1">
-            <p className="qr-hindi text-[16px] md:text-[20px] font-black text-[#FFD700] qr-bounce-down">
+          <div className="flex flex-col items-center gap-0.5">
+            <p className="qr-hindi text-[14px] md:text-[17px] font-black text-[#FFD700] qr-bounce-down">
               👇 अभी डाउनलोड करें
             </p>
-            <p className="qr-hindi text-[12px] md:text-[13px] text-white/50 font-semibold">
+            <p className="qr-hindi text-[11px] md:text-[12px] text-white/50 font-semibold">
               100% Free · कोई छिपा शुल्क नहीं
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 pt-8 border-t border-white/10 max-w-2xl mx-auto px-4">
+        {/* Description moved BELOW button so button is visible above the fold */}
+        <p className="qr-hindi text-[13px] md:text-[16px] text-white/60 max-w-2xl mx-auto leading-relaxed mb-6 md:mb-8 px-4">
+          अब लाइन में लगने की जरूरत नहीं। घर बैठे बुक करें,
+          अपनी बारी पर पहुंचे, और फ्रेश लुक के साथ निकलें।
+        </p>
+
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 pt-4 md:pt-6 border-t border-white/10 max-w-2xl mx-auto px-4">
           <div className="flex items-center gap-2">
             <div className="flex text-[#FFD700]">
               {[...Array(5)].map((_, i) => (
-                <svg key={i} className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <svg key={i} className="w-3.5 h-3.5 md:w-4 md:h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z" />
                 </svg>
               ))}
             </div>
-            <span className="text-[13px] font-bold text-white/80">4.8 Rating</span>
+            <span className="text-[12px] md:text-[13px] font-bold text-white/80">4.8 Rating</span>
           </div>
           <div className="w-px h-4 bg-white/20 hidden sm:block" />
-          <p className="qr-hindi text-[13px] font-bold text-white/80">
+          <p className="qr-hindi text-[12px] md:text-[13px] font-bold text-white/80">
             ⭐ 10,000+ लोग जुड़े हैं
           </p>
         </div>
@@ -748,7 +764,6 @@ function FinalCTASection({ onDownload, locationText }) {
           इंतज़ार को कहें अलविदा।
         </p>
 
-        {/* PLAY STORE THEMED BUTTON */}
         <PlayStoreButton onClick={onDownload} size="lg" />
 
         <p className="qr-hindi mt-8 text-[16px] md:text-[18px] font-black text-[#FFD700] qr-bounce-down">👇 अभी डाउनलोड करें · Free</p>
@@ -849,7 +864,6 @@ function GlobalStyles() {
             0 0 60px rgba(52,168,83,0.35);
         }
       }
-      /* Play Store colored corner accents (Google Blue/Red/Yellow/Green vibe) */
       .qr-ps-corner {
         position: absolute;
         width: 90px; height: 90px;
@@ -867,7 +881,6 @@ function GlobalStyles() {
         background: radial-gradient(circle, #FBBC05 0%, transparent 70%);
       }
 
-      /* Legacy red button kept for other spots if needed */
       .qr-mega-btn {
         background: linear-gradient(135deg, #E63946 0%, #B01824 100%);
         box-shadow: 0 0 0 1px rgba(255,215,0,0.3), 0 15px 50px -8px rgba(230,57,70,0.7), 0 0 80px rgba(255,215,0,0.25);
