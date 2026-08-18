@@ -5,7 +5,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft, Download, Loader2, CheckSquare, Square,
-  Filter, QrCode, Package, X, Search,
+  QrCode, Package, X, Search, RefreshCw,
 } from 'lucide-react';
 
 export default function BulkPrintPage() {
@@ -15,21 +15,64 @@ export default function BulkPrintPage() {
   const [downloading, setDownloading] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // all | active | inactive
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
 
   const load = async () => {
     setLoading(true);
+    setError(null);
     try {
+      // Build query — try multiple param formats for compatibility
       const params = new URLSearchParams({ limit: '500' });
-      if (statusFilter !== 'all') params.set('status', statusFilter.toUpperCase());
-      const res = await fetch(`/api/qr/create?${params.toString()}`);
+      if (statusFilter === 'active') params.set('status', 'ACTIVE');
+      if (statusFilter === 'inactive') params.set('status', 'INACTIVE');
+
+      // Try admin token from localStorage (common pattern)
+      const token =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('admin_token') ||
+            localStorage.getItem('token') ||
+            localStorage.getItem('authToken') ||
+            ''
+          : '';
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/qr/create?${params.toString()}`, {
+        method: 'GET',
+        headers,
+        credentials: 'include', // Include cookies for auth
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.error('[bulk load] HTTP', res.status, text);
+        throw new Error(`API returned ${res.status}: ${text.slice(0, 100)}`);
+      }
+
       const d = await res.json();
-      if (d.success) setQrs(d.codes || []);
+
+      if (!d.success) {
+        throw new Error(d.message || d.error || 'API returned failure');
+      }
+
+      // Normalize response — QR list could be under different keys
+      const codes = d.codes || d.qrs || d.data || d.qrCodes || [];
+      setQrs(codes);
+
+      if (codes.length === 0) {
+        console.warn('[bulk load] API returned 0 QRs. Response:', d);
+      }
     } catch (e) {
-      toast.error('Failed to load QRs');
+      console.error('[bulk load] failed:', e);
+      setError(e.message);
+      toast.error(e.message || 'Failed to load QRs');
+      setQrs([]);
     } finally {
       setLoading(false);
     }
@@ -39,7 +82,7 @@ export default function BulkPrintPage() {
     if (!search) return true;
     const s = search.toLowerCase();
     return (
-      q.short_code.toLowerCase().includes(s) ||
+      q.short_code?.toLowerCase().includes(s) ||
       q.batch_name?.toLowerCase().includes(s) ||
       q.activation?.shop_name?.toLowerCase().includes(s)
     );
@@ -53,7 +96,7 @@ export default function BulkPrintPage() {
   };
 
   const toggleAll = () => {
-    if (selected.size === filteredQrs.length) {
+    if (selected.size === filteredQrs.length && filteredQrs.length > 0) {
       setSelected(new Set());
     } else {
       setSelected(new Set(filteredQrs.map((q) => q.short_code)));
@@ -61,9 +104,11 @@ export default function BulkPrintPage() {
   };
 
   const selectByStatus = (status) => {
-    const matching = filteredQrs.filter((q) => q.status === status).map((q) => q.short_code);
+    const matching = filteredQrs
+      .filter((q) => q.status === status)
+      .map((q) => q.short_code);
     setSelected(new Set(matching));
-    toast.success(`Selected ${matching.length} ${status} QRs`);
+    toast.success(`Selected ${matching.length} ${status.toLowerCase()} QRs`);
   };
 
   const downloadZip = async () => {
@@ -87,8 +132,8 @@ export default function BulkPrintPage() {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || 'Bulk generation failed');
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.message || errBody.error || `HTTP ${res.status}`);
       }
 
       const blob = await res.blob();
@@ -124,7 +169,29 @@ export default function BulkPrintPage() {
             Select QRs → download as ZIP · Each poster is print-ready · Works for active & inactive
           </p>
         </div>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="p-2 bg-white/[0.05] rounded-lg hover:bg-white/[0.1]"
+          title="Refresh"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
+
+      {/* Error banner */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+          <p className="text-sm font-bold text-red-400 mb-1">⚠️ Failed to load QRs</p>
+          <p className="text-xs text-white/70 font-mono break-all">{error}</p>
+          <div className="mt-3 text-xs text-white/60 space-y-1">
+            <p>💡 <b>Debug steps:</b></p>
+            <p>1. Open this URL directly: <a href="/api/qr/create?limit=10" target="_blank" className="text-[#FFD700] underline">/api/qr/create?limit=10</a></p>
+            <p>2. Check if you see JSON with QRs, or an error</p>
+            <p>3. Open browser console (F12) for detailed error</p>
+          </div>
+        </div>
+      )}
 
       {/* Selection bar */}
       <div className="bg-gradient-to-r from-[#FFD700]/10 to-[#E63946]/10 border border-[#FFD700]/30 rounded-xl p-4 flex items-center gap-3 flex-wrap sticky top-0 z-20 backdrop-blur-md">
@@ -134,21 +201,26 @@ export default function BulkPrintPage() {
         </div>
         <button
           onClick={() => selectByStatus('INACTIVE')}
-          className="text-xs px-3 py-2 bg-white/[0.05] rounded-lg hover:bg-white/[0.1] text-white/80 font-bold"
+          disabled={filteredQrs.length === 0}
+          className="text-xs px-3 py-2 bg-white/[0.05] rounded-lg hover:bg-white/[0.1] text-white/80 font-bold disabled:opacity-40"
         >
           Select Inactive
         </button>
         <button
           onClick={() => selectByStatus('ACTIVE')}
-          className="text-xs px-3 py-2 bg-white/[0.05] rounded-lg hover:bg-white/[0.1] text-white/80 font-bold"
+          disabled={filteredQrs.length === 0}
+          className="text-xs px-3 py-2 bg-white/[0.05] rounded-lg hover:bg-white/[0.1] text-white/80 font-bold disabled:opacity-40"
         >
           Select Active
         </button>
         <button
           onClick={toggleAll}
-          className="text-xs px-3 py-2 bg-white/[0.05] rounded-lg hover:bg-white/[0.1] text-white/80 font-bold"
+          disabled={filteredQrs.length === 0}
+          className="text-xs px-3 py-2 bg-white/[0.05] rounded-lg hover:bg-white/[0.1] text-white/80 font-bold disabled:opacity-40"
         >
-          {selected.size === filteredQrs.length ? 'Deselect All' : 'Select All'}
+          {selected.size === filteredQrs.length && filteredQrs.length > 0
+            ? 'Deselect All'
+            : 'Select All'}
         </button>
         {selected.size > 0 && (
           <button
@@ -197,13 +269,28 @@ export default function BulkPrintPage() {
 
       {/* Grid */}
       {loading ? (
-        <div className="p-12 flex justify-center">
-          <Loader2 className="w-6 h-6 animate-spin text-[#FFD700]" />
+        <div className="p-12 flex flex-col items-center justify-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-[#FFD700]" />
+          <p className="text-sm text-white/60">Loading your QRs...</p>
         </div>
       ) : filteredQrs.length === 0 ? (
         <div className="p-12 text-center bg-white/[0.02] border border-white/10 rounded-xl">
           <QrCode className="w-10 h-10 text-white/20 mx-auto mb-3" />
-          <p className="text-white/60">No QRs found</p>
+          <p className="text-white/60 font-bold mb-2">
+            {qrs.length === 0 ? 'No QRs in database' : 'No QRs match filters'}
+          </p>
+          {qrs.length === 0 && !error && (
+            <p className="text-xs text-white/40 mb-4">
+              You need to generate QR codes first before you can print them.
+            </p>
+          )}
+          <Link
+            href="/dashboard/qr-codes"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#E63946] to-[#B01824] text-white text-sm font-bold rounded-lg"
+          >
+            <QrCode className="w-4 h-4" />
+            Go to QR Codes
+          </Link>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -211,7 +298,7 @@ export default function BulkPrintPage() {
             const isSelected = selected.has(q.short_code);
             return (
               <button
-                key={q._id}
+                key={q._id || q.short_code}
                 onClick={() => toggleOne(q.short_code)}
                 className={`relative p-3 rounded-xl border-2 transition text-left ${
                   isSelected
@@ -219,7 +306,6 @@ export default function BulkPrintPage() {
                     : 'border-white/10 bg-white/[0.02] hover:border-white/20'
                 }`}
               >
-                {/* Checkbox */}
                 <div className="absolute top-2 right-2">
                   {isSelected ? (
                     <CheckSquare className="w-5 h-5 text-[#FFD700]" />
@@ -227,19 +313,17 @@ export default function BulkPrintPage() {
                     <Square className="w-5 h-5 text-white/30" />
                   )}
                 </div>
-                {/* QR mini preview */}
                 <div className="w-12 h-12 bg-white rounded p-1 mb-2 mx-auto">
                   <img
                     src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`https://quttrr.com/q/${q.short_code}`)}&margin=0`}
                     alt=""
                     className="w-full h-full"
+                    onError={(e) => { e.target.style.display = 'none'; }}
                   />
                 </div>
-                {/* Code */}
                 <p className="font-mono text-[10px] text-[#FFD700] text-center font-bold mb-1">
                   {q.short_code}
                 </p>
-                {/* Status */}
                 <div className="flex justify-center mb-1">
                   {q.status === 'ACTIVE' ? (
                     <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/15 text-emerald-400 rounded font-bold">ACTIVE</span>
@@ -247,7 +331,6 @@ export default function BulkPrintPage() {
                     <span className="text-[8px] px-1.5 py-0.5 bg-red-500/15 text-red-400 rounded font-bold">INACTIVE</span>
                   )}
                 </div>
-                {/* Shop */}
                 {q.activation?.shop_name && (
                   <p className="text-[10px] text-white/70 truncate text-center">
                     {q.activation.shop_name}
