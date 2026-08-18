@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
   CheckCircle2, XCircle, Store, User, Scissors, MapPin,
-  Phone, Mail, Clock, Loader2, AlertCircle, ChevronRight,
+  Phone, Mail, Clock, Loader2, ChevronRight, Eye,
+  ExternalLink, Navigation,
 } from 'lucide-react';
 import ConfirmModal from '../../../components/ConfirmModal';
 import { approvalsService } from '../../../services/approvals';
@@ -18,6 +20,8 @@ export default function ApprovalsHub() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [detailsModal, setDetailsModal] = useState(null); // Full shop details
+  const [detailsLoading, setDetailsLoading] = useState(false);
 
   useEffect(() => {
     load();
@@ -31,6 +35,19 @@ export default function ApprovalsHub() {
       setCounts(result.counts);
     }
     setLoading(false);
+  };
+
+  const openShopDetails = async (shop) => {
+    setDetailsLoading(true);
+    setDetailsModal({ loading: true });
+    const result = await approvalsService.getShopFull(shop._id);
+    if (result.success) {
+      setDetailsModal(result);
+    } else {
+      toast.error('Failed to load shop details');
+      setDetailsModal(null);
+    }
+    setDetailsLoading(false);
   };
 
   const handleAction = async (type, action, item, reason = '') => {
@@ -75,7 +92,7 @@ export default function ApprovalsHub() {
           </span>
         </div>
         <h1 className="text-display">Approvals Hub</h1>
-        <p className="text-body mt-1">Review and approve pending items</p>
+        <p className="text-body mt-1">Review and approve pending items · Click card to see details</p>
       </div>
 
       {/* Summary Cards */}
@@ -85,9 +102,7 @@ export default function ApprovalsHub() {
             key={t.id}
             onClick={() => setTab(t.id)}
             className={`card p-5 text-left transition-all ${
-              tab === t.id
-                ? 'border-accent-500/40 shadow-glow-sm'
-                : 'hover:border-white/[0.1]'
+              tab === t.id ? 'border-accent-500/40 shadow-glow-sm' : 'hover:border-white/[0.1]'
             }`}
           >
             <div className="flex items-center justify-between mb-3">
@@ -98,9 +113,7 @@ export default function ApprovalsHub() {
               }`}>
                 <t.icon className="w-5 h-5" />
               </div>
-              {t.count > 0 && (
-                <span className="chip-accent">{t.count} pending</span>
-              )}
+              {t.count > 0 && <span className="chip-accent">{t.count} pending</span>}
             </div>
             <p className="text-sm font-semibold">{t.label}</p>
             <p className="text-2xs text-white/40 mt-0.5">
@@ -126,14 +139,20 @@ export default function ApprovalsHub() {
                 </div>
               ) : (
                 data.shops.map((shop) => (
-                  <div key={shop._id} className="card p-5">
+                  <div
+                    key={shop._id}
+                    onClick={() => openShopDetails(shop)}
+                    className="card p-5 cursor-pointer hover:border-white/[0.15] hover:shadow-elevation-3 transition-all group"
+                  >
                     <div className="flex items-start justify-between flex-wrap gap-4">
                       <div className="flex items-start gap-3 flex-1 min-w-0">
                         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center flex-shrink-0">
                           <Store className="w-5 h-5 text-white" />
                         </div>
                         <div className="min-w-0">
-                          <h3 className="font-semibold text-white truncate">{shop.name}</h3>
+                          <h3 className="font-semibold text-white truncate group-hover:text-accent-500 transition-colors">
+                            {shop.name}
+                          </h3>
                           <div className="flex items-center gap-3 mt-1 flex-wrap">
                             <span className="text-2xs text-white/50 flex items-center gap-1">
                               <MapPin className="w-3 h-3" />
@@ -154,11 +173,18 @@ export default function ApprovalsHub() {
                               <Clock className="w-3 h-3" />
                               {new Date(shop.locationSubmittedAt || shop.createdAt).toLocaleDateString('en-IN')}
                             </span>
+                            <span className="chip-neutral flex items-center gap-1 text-2xs text-accent-500">
+                              <Eye className="w-3 h-3" />
+                              Click to view details
+                            </span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div
+                        className="flex items-center gap-2 flex-shrink-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <button
                           onClick={() => setModal({ type: 'shop', action: 'reject', item: shop })}
                           className="btn-outline"
@@ -175,12 +201,6 @@ export default function ApprovalsHub() {
                         </button>
                       </div>
                     </div>
-
-                    {shop.location?.coordinates && (
-                      <div className="mt-3 pt-3 border-t border-white/[0.05] text-xs text-white/40 font-mono">
-                        📍 {shop.location.coordinates[1]?.toFixed(4)}, {shop.location.coordinates[0]?.toFixed(4)}
-                      </div>
-                    )}
                   </div>
                 ))
               )}
@@ -262,9 +282,9 @@ export default function ApprovalsHub() {
                   <div key={`${service.shopId}-${service._id || i}`} className="card p-5">
                     <div className="flex items-start justify-between flex-wrap gap-4">
                       <div className="flex items-start gap-3 flex-1 min-w-0">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center flex-shrink-0">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center flex-shrink-0 overflow-hidden">
                           {service.photo ? (
-                            <img src={service.photo} alt="" className="w-full h-full rounded-xl object-cover" />
+                            <img src={service.photo} alt="" className="w-full h-full object-cover" />
                           ) : (
                             <Scissors className="w-5 h-5 text-white" />
                           )}
@@ -308,6 +328,7 @@ export default function ApprovalsHub() {
         </>
       )}
 
+      {/* CONFIRM MODAL */}
       {modal && (
         <ConfirmModal
           isOpen={!!modal}
@@ -325,6 +346,230 @@ export default function ApprovalsHub() {
           requireReason={modal.action === 'reject'}
         />
       )}
+
+      {/* ⭐ FULL SHOP DETAILS MODAL */}
+      {detailsModal && (
+        <ShopDetailsModal
+          data={detailsModal}
+          loading={detailsLoading}
+          onClose={() => setDetailsModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════
+// SHOP DETAILS MODAL COMPONENT
+// ═══════════════════════════════════════════════════
+function ShopDetailsModal({ data, loading, onClose }) {
+  if (loading || !data || data.loading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative card p-12 flex items-center gap-3">
+          <Loader2 className="w-6 h-6 animate-spin text-accent-500" />
+          <p className="text-body">Loading shop details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const { shop, staff, recentBookings, reviews, metrics } = data;
+  const coords = shop?.location?.coordinates || [0, 0];
+  const [lng, lat] = coords;
+  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto">
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+
+      <div className="relative w-full max-w-4xl my-8 card p-6 animate-scale-in">
+        {/* Close */}
+        <button onClick={onClose} className="absolute top-4 right-4 btn-icon z-10">
+          <XCircle className="w-5 h-5" />
+        </button>
+
+        {/* Header */}
+        <div className="flex items-start gap-4 mb-6">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center flex-shrink-0">
+            <Store className="w-8 h-8 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-heading truncate">{shop.name}</h2>
+            <p className="text-body mt-1">{shop.description || 'No description'}</p>
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <span className="chip-warning">Pending Approval</span>
+              <span className="chip-info">{shop.services?.length || 0} services</span>
+              <span className="chip-neutral">{staff?.length || 0} staff</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Owner Info */}
+        <div className="card p-4 mb-6">
+          <p className="stat-label mb-3">Shop Owner</p>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-accent-500/15 flex items-center justify-center">
+              <User className="w-5 h-5 text-accent-500" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold">{shop.owner?.name}</p>
+              <div className="flex items-center gap-3 mt-1">
+                <a
+                  href={`tel:${shop.owner?.phone || shop.phone}`}
+                  className="text-xs text-white/60 hover:text-accent-500 flex items-center gap-1"
+                >
+                  <Phone className="w-3 h-3" />
+                  {shop.owner?.phone || shop.phone}
+                </a>
+                {shop.owner?.email && (
+                  <a
+                    href={`mailto:${shop.owner.email}`}
+                    className="text-xs text-white/60 hover:text-accent-500 flex items-center gap-1"
+                  >
+                    <Mail className="w-3 h-3" />
+                    {shop.owner.email}
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Location */}
+        <div className="card p-4 mb-6">
+          <p className="stat-label mb-3">Location</p>
+          <div className="flex items-start gap-3 mb-3">
+            <MapPin className="w-5 h-5 text-accent-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm">{shop.address?.fullAddress || shop.address?.area}</p>
+              <p className="text-xs text-white/40 mt-1">
+                {shop.address?.city}, {shop.address?.state} {shop.address?.pincode}
+              </p>
+              {coords[0] !== 0 && (
+                <p className="text-2xs text-white/40 font-mono mt-1">
+                  📍 {lat.toFixed(6)}, {lng.toFixed(6)}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {coords[0] !== 0 && (
+            <div className="flex gap-2 flex-wrap">
+              <a
+                href={mapUrl}
+                target="_blank"
+                rel="noopener"
+                className="btn-outline flex-1 justify-center"
+              >
+                <ExternalLink className="w-4 h-4" />
+                View on Google Maps
+              </a>
+              <a
+                href={directionsUrl}
+                target="_blank"
+                rel="noopener"
+                className="btn-outline flex-1 justify-center"
+              >
+                <Navigation className="w-4 h-4" />
+                Get Directions
+              </a>
+            </div>
+          )}
+        </div>
+
+        {/* Services */}
+        {shop.services?.length > 0 && (
+          <div className="mb-6">
+            <p className="stat-label mb-3">Services Offered ({shop.services.length})</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {shop.services.map((s, i) => (
+                <div key={i} className="card p-3 flex items-center gap-3">
+                  {s.photo ? (
+                    <img src={s.photo} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg bg-brand-500/15 flex items-center justify-center">
+                      <Scissors className="w-4 h-4 text-brand-500" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{s.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs text-accent-500 font-semibold">₹{s.price}</span>
+                      <span className="text-2xs text-white/40">{s.duration}min</span>
+                      <span className="text-2xs text-white/40 capitalize">{s.category}</span>
+                    </div>
+                  </div>
+                  <span className={
+                    s.approvalStatus === 'approved' ? 'chip-success text-2xs' :
+                    s.approvalStatus === 'rejected' ? 'chip-error text-2xs' :
+                    'chip-warning text-2xs'
+                  }>
+                    {s.approvalStatus || 'approved'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Staff */}
+        {staff?.length > 0 && (
+          <div className="mb-6">
+            <p className="stat-label mb-3">Staff Members ({staff.length})</p>
+            <div className="space-y-2">
+              {staff.map((s) => (
+                <div key={s._id} className="card p-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-accent-500/15 flex items-center justify-center overflow-hidden">
+                    {s.profilePhoto ? (
+                      <img src={s.profilePhoto} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-4 h-4 text-accent-500" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">
+                      {s.name}
+                      {s.isOwner && <span className="chip-accent text-2xs ml-2">Owner</span>}
+                    </p>
+                    <p className="text-2xs text-white/40">{s.phone} · {s.role}</p>
+                  </div>
+                  <span className={
+                    s.approvalStatus === 'approved' ? 'chip-success text-2xs' :
+                    s.approvalStatus === 'rejected' ? 'chip-error text-2xs' :
+                    'chip-warning text-2xs'
+                  }>
+                    {s.approvalStatus}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Working Hours */}
+        {shop.workingHours && Object.keys(shop.workingHours).length > 0 && (
+          <div className="mb-6">
+            <p className="stat-label mb-3">Working Hours</p>
+            <div className="card p-3 space-y-1">
+              {['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day => {
+                const h = shop.workingHours[day];
+                if (!h) return null;
+                return (
+                  <div key={day} className="flex items-center justify-between text-xs">
+                    <span className="capitalize text-white/60">{day}</span>
+                    <span className={h.isOff ? 'text-error' : 'text-white'}>
+                      {h.isOff ? 'CLOSED' : `${h.open || h.start || '09:00'} - ${h.close || h.end || '21:00'}`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
