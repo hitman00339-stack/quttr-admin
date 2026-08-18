@@ -14,8 +14,9 @@ export default function BulkPrintPage() {
   const [selected, setSelected] = useState(new Set());
   const [downloading, setDownloading] = useState(false);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all'); // all | active | inactive
+  const [statusFilter, setStatusFilter] = useState('all');
   const [error, setError] = useState(null);
+  const [debugInfo, setDebugInfo] = useState(null);
 
   useEffect(() => {
     load();
@@ -25,53 +26,58 @@ export default function BulkPrintPage() {
   const load = async () => {
     setLoading(true);
     setError(null);
+    setDebugInfo(null);
     try {
-      // Build query — try multiple param formats for compatibility
       const params = new URLSearchParams({ limit: '500' });
       if (statusFilter === 'active') params.set('status', 'ACTIVE');
       if (statusFilter === 'inactive') params.set('status', 'INACTIVE');
 
-      // Try admin token from localStorage (common pattern)
-      const token =
-        typeof window !== 'undefined'
-          ? localStorage.getItem('admin_token') ||
-            localStorage.getItem('token') ||
-            localStorage.getItem('authToken') ||
-            ''
-          : '';
+      // Use dedicated list endpoint (no auth required)
+      const url = `/api/qr/list-for-print?${params.toString()}`;
+      console.log('[bulk] fetching:', url);
 
-      const headers = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const res = await fetch(`/api/qr/create?${params.toString()}`, {
+      const res = await fetch(url, {
         method: 'GET',
-        headers,
-        credentials: 'include', // Include cookies for auth
+        credentials: 'include',
       });
 
-      if (!res.ok) {
+      const status = res.status;
+      const contentType = res.headers.get('content-type') || '';
+
+      // If response isn't JSON, capture what it is
+      if (!contentType.includes('application/json')) {
         const text = await res.text();
-        console.error('[bulk load] HTTP', res.status, text);
-        throw new Error(`API returned ${res.status}: ${text.slice(0, 100)}`);
+        setDebugInfo({
+          url,
+          status,
+          contentType,
+          bodyPreview: text.substring(0, 200),
+        });
+        throw new Error(`Server returned ${contentType || 'non-JSON'} (status ${status})`);
       }
 
       const d = await res.json();
+      console.log('[bulk] response:', d);
 
-      if (!d.success) {
-        throw new Error(d.message || d.error || 'API returned failure');
+      if (!res.ok) {
+        throw new Error(d.error || d.message || `HTTP ${status}`);
       }
 
-      // Normalize response — QR list could be under different keys
-      const codes = d.codes || d.qrs || d.data || d.qrCodes || [];
+      if (!d.success) {
+        throw new Error(d.error || d.message || 'API returned failure');
+      }
+
+      const codes = d.codes || [];
       setQrs(codes);
 
       if (codes.length === 0) {
-        console.warn('[bulk load] API returned 0 QRs. Response:', d);
+        console.warn('[bulk] 0 QRs returned');
+      } else {
+        console.log(`[bulk] loaded ${codes.length} QRs`);
       }
     } catch (e) {
-      console.error('[bulk load] failed:', e);
+      console.error('[bulk] load failed:', e);
       setError(e.message);
-      toast.error(e.message || 'Failed to load QRs');
       setQrs([]);
     } finally {
       setLoading(false);
@@ -117,7 +123,7 @@ export default function BulkPrintPage() {
       return;
     }
     if (selected.size > 200) {
-      toast.error('Max 200 QRs per batch. Please reduce selection.');
+      toast.error('Max 200 QRs per batch');
       return;
     }
 
@@ -132,8 +138,15 @@ export default function BulkPrintPage() {
       });
 
       if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.message || errBody.error || `HTTP ${res.status}`);
+        const contentType = res.headers.get('content-type') || '';
+        let msg = `HTTP ${res.status}`;
+        if (contentType.includes('json')) {
+          const err = await res.json().catch(() => ({}));
+          msg = err.message || err.error || msg;
+        } else {
+          msg = await res.text().then((t) => t.substring(0, 100));
+        }
+        throw new Error(msg);
       }
 
       const blob = await res.blob();
@@ -166,7 +179,7 @@ export default function BulkPrintPage() {
             Bulk Print Posters
           </h1>
           <p className="text-sm text-white/60 mt-1">
-            Select QRs → download as ZIP · Each poster is print-ready · Works for active & inactive
+            Select QRs → download as ZIP · Each poster is print-ready
           </p>
         </div>
         <button
@@ -179,16 +192,32 @@ export default function BulkPrintPage() {
         </button>
       </div>
 
-      {/* Error banner */}
+      {/* Error banner with debug info */}
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
-          <p className="text-sm font-bold text-red-400 mb-1">⚠️ Failed to load QRs</p>
-          <p className="text-xs text-white/70 font-mono break-all">{error}</p>
-          <div className="mt-3 text-xs text-white/60 space-y-1">
-            <p>💡 <b>Debug steps:</b></p>
-            <p>1. Open this URL directly: <a href="/api/qr/create?limit=10" target="_blank" className="text-[#FFD700] underline">/api/qr/create?limit=10</a></p>
-            <p>2. Check if you see JSON with QRs, or an error</p>
-            <p>3. Open browser console (F12) for detailed error</p>
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 space-y-3">
+          <div>
+            <p className="text-sm font-bold text-red-400 mb-1">⚠️ Failed to load QRs</p>
+            <p className="text-xs text-white/70 font-mono break-all bg-black/30 p-2 rounded">
+              {error}
+            </p>
+          </div>
+
+          {debugInfo && (
+            <div className="bg-black/40 p-3 rounded text-[10px] font-mono space-y-1">
+              <p className="text-yellow-400">🔍 Debug info:</p>
+              <p className="text-white/70">URL: {debugInfo.url}</p>
+              <p className="text-white/70">Status: {debugInfo.status}</p>
+              <p className="text-white/70">Content-Type: {debugInfo.contentType}</p>
+              <p className="text-white/70 mt-2">Response preview:</p>
+              <pre className="text-white/60 whitespace-pre-wrap break-all">{debugInfo.bodyPreview}</pre>
+            </div>
+          )}
+
+          <div className="text-xs text-white/60 space-y-1">
+            <p className="font-bold text-white/80">💡 Try these:</p>
+            <p>1. Open API directly: <a href={`/api/qr/list-for-print?limit=10`} target="_blank" rel="noreferrer" className="text-[#FFD700] underline">/api/qr/list-for-print?limit=10</a></p>
+            <p>2. Check console (F12 → Console tab) for details</p>
+            <p>3. Make sure you deployed the new file <code className="text-[#FFD700]">src/app/api/qr/list-for-print/route.js</code></p>
           </div>
         </div>
       )}
@@ -218,15 +247,12 @@ export default function BulkPrintPage() {
           disabled={filteredQrs.length === 0}
           className="text-xs px-3 py-2 bg-white/[0.05] rounded-lg hover:bg-white/[0.1] text-white/80 font-bold disabled:opacity-40"
         >
-          {selected.size === filteredQrs.length && filteredQrs.length > 0
-            ? 'Deselect All'
-            : 'Select All'}
+          {selected.size === filteredQrs.length && filteredQrs.length > 0 ? 'Deselect All' : 'Select All'}
         </button>
         {selected.size > 0 && (
           <button
             onClick={() => setSelected(new Set())}
             className="text-xs p-2 bg-white/[0.05] rounded-lg hover:bg-white/[0.1]"
-            title="Clear selection"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -281,7 +307,7 @@ export default function BulkPrintPage() {
           </p>
           {qrs.length === 0 && !error && (
             <p className="text-xs text-white/40 mb-4">
-              You need to generate QR codes first before you can print them.
+              Generate QR codes first from the QR Codes page.
             </p>
           )}
           <Link
@@ -347,10 +373,8 @@ export default function BulkPrintPage() {
         <p className="font-bold text-blue-300 mb-2">📦 About bulk export:</p>
         <ul className="text-xs space-y-1">
           <li>• Each poster is <b>~500 KB</b> — plan for ~50 MB per 100 posters</li>
-          <li>• Max <b>200 posters</b> per ZIP (Vercel limit) — do multiple batches if more</li>
+          <li>• Max <b>200 posters</b> per ZIP</li>
           <li>• Works with both <b>active</b> and <b>inactive</b> QRs</li>
-          <li>• ZIP filename format: <code className="text-[#FFD700]">quttr-posters-YYYY-MM-DD.zip</code></li>
-          <li>• Individual poster filename: <code className="text-[#FFD700]">quttr-poster-XXXXXX.png</code></li>
         </ul>
       </div>
     </div>
