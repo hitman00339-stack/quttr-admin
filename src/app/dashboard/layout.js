@@ -8,7 +8,7 @@ import {
   BarChart3, Settings, LogOut, Search, Command, Menu, X,
   Sparkles, Scissors, ChevronRight,
   AlertCircle, UserCheck, ShoppingBag,
-  QrCode, Megaphone, TrendingUp,
+  QrCode, Megaphone, Package,
 } from 'lucide-react';
 import { authService } from '../../services/auth';
 
@@ -19,10 +19,10 @@ const navigation = [
   { name: 'Staff', href: '/dashboard/staff', icon: UserCheck },
   { name: 'Users', href: '/dashboard/users', icon: Users },
   { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
-  { name: 'Shop Analytics', href: '/dashboard/shop-analytics', icon: TrendingUp, badge: 'NEW' },
   { name: 'Products', href: '/dashboard/products', icon: ShoppingBag },
   { name: 'QR Codes', href: '/dashboard/qr-codes', icon: QrCode },
   { name: 'QR Explorer', href: '/dashboard/qr-explorer', icon: Search, badge: 'NEW' },
+  { name: 'Bulk Print', href: '/dashboard/qr-print/bulk', icon: Package, badge: 'NEW' },
   { name: 'Marketing Team', href: '/dashboard/marketing', icon: Megaphone },
   { name: 'Reviews', href: '/dashboard/reviews', icon: Star },
   { name: 'Notices', href: '/dashboard/notices', icon: Bell },
