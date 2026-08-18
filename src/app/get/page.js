@@ -17,7 +17,6 @@ function makeSessionId() {
 function useInView(options = {}) {
   const ref = useRef(null);
   const [inView, setInView] = useState(false);
-
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -37,7 +36,6 @@ function useInView(options = {}) {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-
   return [ref, inView];
 }
 
@@ -65,7 +63,7 @@ function LandingContent() {
   const searchParams = useSearchParams();
   const qrId = searchParams.get('qr') || '';
   const sid = searchParams.get('sid') || '';
-  // Support all common param names for backward compatibility
+  // Accept town/city/loc/location for maximum backward-compatibility
   const rawLoc =
     searchParams.get('town') ||
     searchParams.get('city') ||
@@ -85,31 +83,21 @@ function LandingContent() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  /**
-   * LOCATION RESOLUTION STRATEGY:
-   * 1. If URL has town/city/loc param → use it directly (best case)
-   * 2. Otherwise, if qr ID present → fetch from /api/qr/location
-   *    (API should return { success: true, town: "..." } — town takes priority over shopName)
-   * 3. Fallback → "आपके शहर"
-   */
+  // Fetch location from API if not present in URL
   useEffect(() => {
     if (rawLoc) {
       setLocationText(decodeURIComponent(rawLoc));
       return;
     }
-    if (qrId) {
+    if (qrId && qrId !== 'unknown') {
       fetch(`/api/qr/location?qr=${qrId}`)
-        .then(r => r.json())
-        .then(data => {
+        .then((r) => r.json())
+        .then((data) => {
           if (!data || !data.success) return;
-          // Prefer town/city over shop name
-          const bestLocation =
-            data.town ||
-            data.city ||
-            data.location ||
-            data.shopName ||
-            '';
-          if (bestLocation) setLocationText(bestLocation);
+          // Prefer town → city → area → location (never shop_name)
+          const best =
+            data.town || data.city || data.area || data.location || '';
+          if (best) setLocationText(best);
         })
         .catch(() => {});
     }
@@ -210,7 +198,7 @@ function StickyHeader({ scrolled, onDownload }) {
             onError={(e) => { e.target.style.display = 'none'; }}
           />
           <span className="qr-hindi text-[16px] md:text-[17px] font-black tracking-tight">
-            Quttr <span className="text-[#FFD700]">.</span>
+            क्यूटर<span className="text-[#FFD700]">.</span>
           </span>
         </div>
 
@@ -231,7 +219,7 @@ function StickyHeader({ scrolled, onDownload }) {
   );
 }
 
-/* ---------- Reusable Play Store Themed Download Button ---------- */
+/* Reusable Play Store themed download button */
 function PlayStoreButton({ onClick, size = 'lg', fullWidth = true }) {
   const sizeClasses =
     size === 'lg'
@@ -284,9 +272,6 @@ function PlayStoreButton({ onClick, size = 'lg', fullWidth = true }) {
   );
 }
 
-/* ================================================================
-   HERO SECTION — COMPACT so download button is visible on 1st screen
-   ================================================================ */
 function HeroSection({ onDownload, locationText }) {
   const [ref, inView] = useInView();
 
@@ -302,7 +287,7 @@ function HeroSection({ onDownload, locationText }) {
 
       <div className={`relative z-10 max-w-5xl mx-auto text-center w-full transition-all duration-1000 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
 
-        {/* LOGO with Static Semi-circular Arc Text — smaller for mobile */}
+        {/* LOGO with static semi-circular arc text */}
         <div className="flex justify-center mb-4 md:mb-6">
           <div className="relative w-44 h-44 sm:w-52 sm:h-52 md:w-64 md:h-64 qr-logo-float">
             <svg
@@ -315,7 +300,6 @@ function HeroSection({ onDownload, locationText }) {
                 <path id="bottomArcPath" d="M 60,200 A 140,140 0 0,0 340,200" />
               </defs>
 
-              {/* TOP ARC — Quttr in gold */}
               <text
                 fill="#FFD700"
                 style={{
@@ -330,7 +314,6 @@ function HeroSection({ onDownload, locationText }) {
                 </textPath>
               </text>
 
-              {/* BOTTOM ARC — 📍 Now in [TOWN] with TOWN in white */}
               <text
                 style={{
                   fontSize: '22px',
@@ -346,7 +329,6 @@ function HeroSection({ onDownload, locationText }) {
               </text>
             </svg>
 
-            {/* Center Logo */}
             <div className="absolute inset-12 sm:inset-14 md:inset-16 flex items-center justify-center">
               <div className="relative w-full h-full">
                 <div className="absolute inset-0 bg-[#E63946]/60 blur-3xl rounded-full qr-logo-pulse" />
@@ -375,7 +357,6 @@ function HeroSection({ onDownload, locationText }) {
           </div>
         </div>
 
-        {/* Location Badge */}
         <div className="inline-flex items-center gap-2 mb-3 md:mb-4 max-w-[95%]">
           <span className="qr-hindi text-[13px] md:text-[15px] font-black tracking-wider px-4 py-2 md:px-5 md:py-2.5 rounded-full border-2 border-[#FFD700]/50 bg-gradient-to-r from-[#FFD700]/[0.15] via-[#E63946]/[0.1] to-[#FFD700]/[0.15] backdrop-blur-md shadow-[0_0_20px_rgba(255,215,0,0.2)]">
             📍 <span className="text-white/90">अब आपके शहर</span>{' '}
@@ -384,7 +365,6 @@ function HeroSection({ onDownload, locationText }) {
           </span>
         </div>
 
-        {/* Indian #1 badge — hidden on very small screens to save space */}
         <div className="hidden sm:inline-flex items-center gap-2 mb-3 md:mb-4">
           <span className="qr-hindi text-[10px] md:text-[11px] font-black tracking-[0.2em] text-white/60 uppercase px-4 py-1.5 rounded-full border border-white/10 bg-white/[0.03]">
             ✂️ भारत का #1 बार्बर ऐप
@@ -404,7 +384,6 @@ function HeroSection({ onDownload, locationText }) {
           बुकिंग सेकंडों में। बार्बर आपकी पसंद का।
         </p>
 
-        {/* PLAY STORE THEMED BUTTON — visible on first screen now */}
         <div className="flex flex-col items-center gap-3 md:gap-4 mb-4 px-4">
           <PlayStoreButton onClick={onDownload} size="lg" />
 
@@ -418,7 +397,6 @@ function HeroSection({ onDownload, locationText }) {
           </div>
         </div>
 
-        {/* Description moved BELOW button so button is visible above the fold */}
         <p className="qr-hindi text-[13px] md:text-[16px] text-white/60 max-w-2xl mx-auto leading-relaxed mb-6 md:mb-8 px-4">
           अब लाइन में लगने की जरूरत नहीं। घर बैठे बुक करें,
           अपनी बारी पर पहुंचे, और फ्रेश लुक के साथ निकलें।
@@ -453,21 +431,11 @@ function FeatureOne() {
       <div className="max-w-7xl mx-auto w-full relative">
         <div className="grid md:grid-cols-2 gap-12 md:gap-24 items-center">
           <div className={`transition-all duration-1000 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-            <p className="qr-hindi text-[12px] md:text-[13px] font-black tracking-[0.25em] text-[#FFD700] uppercase mb-6">
-              ⚡ स्पीड · SPEED
-            </p>
-            <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight mb-2 text-white">
-              सिर्फ 15 सेकंड
-            </h2>
-            <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight text-white/40 mb-6">
-              में बुकिंग
-            </h2>
-            <p className="text-[18px] md:text-[24px] font-bold text-[#FFD700] mb-4">
-              Book in seconds. Not minutes.
-            </p>
-            <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed font-medium">
-              फोन कॉल भूल जाइए। लाइन भूल जाइए। बस टैप करें, समय चुनें, और बुकिंग हो गई।
-            </p>
+            <p className="qr-hindi text-[12px] md:text-[13px] font-black tracking-[0.25em] text-[#FFD700] uppercase mb-6">⚡ स्पीड · SPEED</p>
+            <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight mb-2 text-white">सिर्फ 15 सेकंड</h2>
+            <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight text-white/40 mb-6">में बुकिंग</h2>
+            <p className="text-[18px] md:text-[24px] font-bold text-[#FFD700] mb-4">Book in seconds. Not minutes.</p>
+            <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed font-medium">फोन कॉल भूल जाइए। लाइन भूल जाइए। बस टैप करें, समय चुनें, और बुकिंग हो गई।</p>
           </div>
           <div className={`transition-all duration-1000 delay-200 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
             <div className="relative aspect-square max-w-md mx-auto">
@@ -493,15 +461,11 @@ function FeatureTwo() {
       <div className="max-w-7xl mx-auto w-full">
         <div className="grid md:grid-cols-2 gap-12 md:gap-24 items-center">
           <div className={`md:order-2 transition-all duration-1000 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-            <p className="qr-hindi text-[12px] md:text-[13px] font-black tracking-[0.25em] text-[#FFD700] uppercase mb-6">
-              💈 पसंद · CHOICE
-            </p>
+            <p className="qr-hindi text-[12px] md:text-[13px] font-black tracking-[0.25em] text-[#FFD700] uppercase mb-6">💈 पसंद · CHOICE</p>
             <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight mb-2 text-white">अपना पसंदीदा</h2>
             <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight qr-gold-red-gradient mb-6">बार्बर चुनें</h2>
             <p className="text-[18px] md:text-[24px] font-bold text-[#FFD700] mb-4">Your Barber. Your Choice.</p>
-            <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed font-medium">
-              शहर के 500 से ज्यादा बार्बर में से चुनें। रिव्यू पढ़ें, तस्वीरें देखें, बुक करें।
-            </p>
+            <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed font-medium">शहर के 500 से ज्यादा बार्बर में से चुनें। रिव्यू पढ़ें, तस्वीरें देखें, बुक करें।</p>
           </div>
           <div className={`md:order-1 transition-all duration-1000 delay-200 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
             <div className="relative aspect-square max-w-md mx-auto">
@@ -534,15 +498,11 @@ function FeatureThree() {
       <div className="max-w-7xl mx-auto w-full">
         <div className="grid md:grid-cols-2 gap-12 md:gap-24 items-center">
           <div className={`transition-all duration-1000 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-            <p className="qr-hindi text-[12px] md:text-[13px] font-black tracking-[0.25em] text-[#FFD700] uppercase mb-6">
-              📍 लाइव ट्रैकिंग · LIVE
-            </p>
+            <p className="qr-hindi text-[12px] md:text-[13px] font-black tracking-[0.25em] text-[#FFD700] uppercase mb-6">📍 लाइव ट्रैकिंग · LIVE</p>
             <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight mb-2 text-white">अपनी बारी</h2>
             <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight text-white/40 mb-6">लाइव देखें</h2>
             <p className="text-[18px] md:text-[24px] font-bold text-[#FFD700] mb-4">Track your turn in real-time.</p>
-            <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed font-medium">
-              GPS के साथ लाइव क्यू ट्रैकिंग। भीड़ में बैठने की जरूरत नहीं।
-            </p>
+            <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed font-medium">GPS के साथ लाइव क्यू ट्रैकिंग। भीड़ में बैठने की जरूरत नहीं।</p>
           </div>
           <div className={`transition-all duration-1000 delay-200 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
             <div className="relative aspect-square max-w-md mx-auto">
@@ -576,9 +536,7 @@ function FeatureFour() {
             <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight mb-2 text-white">हर विजिट पर</h2>
             <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight qr-gold-red-gradient mb-6">पॉइंट्स कमाएं</h2>
             <p className="text-[18px] md:text-[24px] font-bold text-[#FFD700] mb-4">Earn rewards every visit.</p>
-            <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed font-medium">
-              हर बुकिंग पर पॉइंट्स कमाएं। छूट और फ्री सर्विस के लिए रिडीम करें।
-            </p>
+            <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed font-medium">हर बुकिंग पर पॉइंट्स कमाएं। छूट और फ्री सर्विस के लिए रिडीम करें।</p>
           </div>
           <div className={`md:order-1 transition-all duration-1000 delay-200 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
             <div className="relative aspect-square max-w-md mx-auto">
@@ -629,9 +587,9 @@ function HowItWorks() {
 function TestimonialsSection() {
   const [ref, inView] = useInView();
   const testimonials = [
-    { quote: 'अब घंटों इंतज़ार नहीं करना पड़ता। Quttr ने काम आसान कर दिया।', name: 'राहुल शर्मा', city: 'दिल्ली' },
+    { quote: 'अब घंटों इंतज़ार नहीं करना पड़ता। क्यूटर ने काम आसान कर दिया।', name: 'राहुल शर्मा', city: 'दिल्ली' },
     { quote: 'क्यू ट्रैकिंग बहुत बढ़िया है। मैं सही समय पर पहुंचता हूं।', name: 'अमित कुमार', city: 'मुंबई' },
-    { quote: 'मेरा पसंदीदा बार्बर हमेशा Quttr पर मिलता है।', name: 'विकास सिंह', city: 'बैंगलोर' },
+    { quote: 'मेरा पसंदीदा बार्बर हमेशा क्यूटर पर मिलता है।', name: 'विकास सिंह', city: 'बैंगलोर' },
   ];
   return (
     <section ref={ref} className="px-4 py-24 md:py-32 border-t border-white/[0.06] bg-gradient-to-b from-[#0A0000] to-black">
@@ -699,9 +657,7 @@ function BarberSection({ onDownload }) {
               <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight mb-2 text-white">अपना बिज़नेस</h2>
               <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight qr-blue-gold-gradient mb-6">बढ़ाएं</h2>
               <p className="text-[18px] md:text-[24px] font-bold text-[#FFD700] mb-4">Grow Your Business.</p>
-              <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed mb-8 font-medium">
-                हज़ारों बार्बर पहले से Quttr बिज़नेस के साथ अपना बिज़नेस बढ़ा रहे हैं।
-              </p>
+              <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed mb-8 font-medium">हज़ारों बार्बर पहले से क्यूटर बिज़नेस के साथ अपना बिज़नेस बढ़ा रहे हैं।</p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <button onClick={onDownload} className="qr-mega-btn-blue group relative inline-flex items-center justify-center gap-3 text-white text-[15px] md:text-[18px] font-black px-6 py-4 md:px-8 md:py-5 rounded-full transition-all duration-300 overflow-hidden">
                   <span className="qr-btn-shine" />
@@ -709,7 +665,7 @@ function BarberSection({ onDownload }) {
                     <svg viewBox="0 0 512 512" className="w-6 h-6 md:w-8 md:h-8 flex-shrink-0">
                       <path fill="#FFD700" d="M99 8c-6 3-11 9-13 17v462c2 8 7 14 13 17l255-248L99 8z" />
                     </svg>
-                    <span className="qr-hindi">Quttr बिज़नेस डाउनलोड</span>
+                    <span className="qr-hindi">क्यूटर बिज़नेस डाउनलोड</span>
                   </div>
                 </button>
                 <a href="tel:+919519953149" className="qr-hindi inline-flex items-center justify-center gap-2 text-[15px] font-bold text-[#FFD700] hover:text-white px-6 py-4 rounded-full border-2 border-[#FFD700]/40 hover:border-[#FFD700] transition-all">
@@ -757,12 +713,8 @@ function FinalCTASection({ onDownload, locationText }) {
         <h2 className="qr-hindi text-[60px] md:text-[140px] font-black leading-[1.15] tracking-tight mb-4">
           <span className="qr-gold-red-gradient">तैयार?</span>
         </h2>
-        <p className="qr-hindi text-[20px] md:text-[28px] text-white/80 mb-4 font-bold">
-         Quttr डाउनलोड करें
-        </p>
-        <p className="qr-hindi text-[16px] md:text-[20px] text-white/50 mb-12 max-w-2xl mx-auto leading-relaxed">
-          इंतज़ार को कहें अलविदा।
-        </p>
+        <p className="qr-hindi text-[20px] md:text-[28px] text-white/80 mb-4 font-bold">क्यूटर डाउनलोड करें</p>
+        <p className="qr-hindi text-[16px] md:text-[20px] text-white/50 mb-12 max-w-2xl mx-auto leading-relaxed">इंतज़ार को कहें अलविदा।</p>
 
         <PlayStoreButton onClick={onDownload} size="lg" />
 
@@ -778,7 +730,7 @@ function FooterSection() {
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <span className="qr-hindi text-[20px] font-black">Quttr<span className="text-[#FFD700]">.</span></span>
+            <span className="qr-hindi text-[20px] font-black">क्यूटर<span className="text-[#FFD700]">.</span></span>
           </div>
           <p className="qr-hindi text-[15px] text-white/60 font-semibold mb-2">भारत का सबसे तेज़ बार्बर बुकिंग ऐप</p>
         </div>
@@ -788,7 +740,7 @@ function FooterSection() {
           <a href="https://instagram.com/quttrofficial" target="_blank" rel="noopener noreferrer" className="text-white/60 hover:text-[#FFD700] transition-colors">Instagram</a>
         </div>
         <div className="pt-8 border-t border-white/[0.06] flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-[12px] text-white/40 font-semibold">© 2025 Quttr. सर्वाधिकार सुरक्षित.</p>
+          <p className="text-[12px] text-white/40 font-semibold">© 2025 क्यूटर. सर्वाधिकार सुरक्षित.</p>
           <p className="qr-hindi text-[12px] text-white/40 font-semibold">प्यार से भारत में बनाया गया 🇮🇳</p>
         </div>
       </div>
@@ -812,8 +764,7 @@ function GlobalStyles() {
         -webkit-background-clip: text; background-clip: text;
         -webkit-text-fill-color: transparent;
         animation: qr-gradient-shift 6s ease-in-out infinite;
-        display: inline-block;
-        padding-bottom: 0.15em;
+        display: inline-block; padding-bottom: 0.15em;
       }
       .qr-blue-gold-gradient {
         background: linear-gradient(135deg, #FFD700 0%, #3949AB 50%, #FFD700 100%);
@@ -821,15 +772,13 @@ function GlobalStyles() {
         -webkit-background-clip: text; background-clip: text;
         -webkit-text-fill-color: transparent;
         animation: qr-gradient-shift 6s ease-in-out infinite;
-        display: inline-block;
-        padding-bottom: 0.15em;
+        display: inline-block; padding-bottom: 0.15em;
       }
       @keyframes qr-gradient-shift {
         0%, 100% { background-position: 0% 50%; }
         50% { background-position: 100% 50%; }
       }
 
-      /* ============ PLAY STORE THEMED DOWNLOAD BUTTON ============ */
       .qr-playstore-btn {
         background: linear-gradient(135deg, #1A73E8 0%, #0D47A1 45%, #1565C0 100%);
         box-shadow:
@@ -849,54 +798,23 @@ function GlobalStyles() {
       }
       .qr-playstore-btn:active { transform: scale(0.98); }
       @keyframes qr-playstore-pulse {
-        0%, 100% {
-          box-shadow:
-            0 0 0 1px rgba(255,255,255,0.12),
-            inset 0 1px 0 rgba(255,255,255,0.2),
-            0 12px 32px -6px rgba(26,115,232,0.55),
-            0 20px 60px -10px rgba(0,0,0,0.7);
-        }
-        50% {
-          box-shadow:
-            0 0 0 2px rgba(52,168,83,0.4),
-            inset 0 1px 0 rgba(255,255,255,0.25),
-            0 15px 40px -6px rgba(26,115,232,0.75),
-            0 0 60px rgba(52,168,83,0.35);
-        }
+        0%, 100% { box-shadow: 0 0 0 1px rgba(255,255,255,0.12), inset 0 1px 0 rgba(255,255,255,0.2), 0 12px 32px -6px rgba(26,115,232,0.55), 0 20px 60px -10px rgba(0,0,0,0.7); }
+        50% { box-shadow: 0 0 0 2px rgba(52,168,83,0.4), inset 0 1px 0 rgba(255,255,255,0.25), 0 15px 40px -6px rgba(26,115,232,0.75), 0 0 60px rgba(52,168,83,0.35); }
       }
       .qr-ps-corner {
-        position: absolute;
-        width: 90px; height: 90px;
-        border-radius: 9999px;
-        filter: blur(28px);
-        opacity: 0.55;
-        pointer-events: none;
+        position: absolute; width: 90px; height: 90px;
+        border-radius: 9999px; filter: blur(28px);
+        opacity: 0.55; pointer-events: none;
       }
-      .qr-ps-corner-tl {
-        top: -30px; left: -20px;
-        background: radial-gradient(circle, #34A853 0%, transparent 70%);
-      }
-      .qr-ps-corner-br {
-        bottom: -30px; right: -20px;
-        background: radial-gradient(circle, #FBBC05 0%, transparent 70%);
-      }
+      .qr-ps-corner-tl { top: -30px; left: -20px; background: radial-gradient(circle, #34A853 0%, transparent 70%); }
+      .qr-ps-corner-br { bottom: -30px; right: -20px; background: radial-gradient(circle, #FBBC05 0%, transparent 70%); }
 
-      .qr-mega-btn {
-        background: linear-gradient(135deg, #E63946 0%, #B01824 100%);
-        box-shadow: 0 0 0 1px rgba(255,215,0,0.3), 0 15px 50px -8px rgba(230,57,70,0.7), 0 0 80px rgba(255,215,0,0.25);
-        animation: qr-mega-pulse 2.5s ease-in-out infinite;
-      }
-      .qr-mega-btn:hover { transform: scale(1.03); }
-      .qr-mega-btn:active { transform: scale(0.98); }
       .qr-mega-btn-blue {
         background: linear-gradient(135deg, #3949AB 0%, #1A237E 100%);
         box-shadow: 0 0 0 1px rgba(255,215,0,0.3), 0 15px 50px -8px rgba(26,35,126,0.7);
       }
       .qr-mega-btn-blue:hover { transform: scale(1.03); }
-      @keyframes qr-mega-pulse {
-        0%, 100% { box-shadow: 0 0 0 1px rgba(255,215,0,0.3), 0 15px 50px -8px rgba(230,57,70,0.7), 0 0 80px rgba(255,215,0,0.25); }
-        50% { box-shadow: 0 0 0 2px rgba(255,215,0,0.6), 0 20px 60px -5px rgba(230,57,70,0.95), 0 0 120px rgba(255,215,0,0.5); }
-      }
+
       .qr-btn-shine {
         position: absolute; inset: 0;
         background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,0.35) 50%, transparent 80%);
