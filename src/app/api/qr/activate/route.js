@@ -4,6 +4,14 @@ import { getDb } from '@/lib/mongodb';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Utility: trim strings + convert empty → null
+const clean = (v) => {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== 'string') return v;
+  const trimmed = v.trim();
+  return trimmed === '' ? null : trimmed;
+};
+
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -30,69 +38,75 @@ export async function POST(request) {
     } = body;
 
     if (!short_code || !location_type) {
-      return NextResponse.json({
-        success: false,
-        message: 'QR code and location type required'
-      }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: 'QR code and location type required' },
+        { status: 400 }
+      );
     }
 
     const db = await getDb();
-    
     const qrCode = await db.collection('qr_codes').findOne({ short_code });
-    
+
     if (!qrCode) {
-      return NextResponse.json({
-        success: false,
-        message: 'QR code not found'
-      }, { status: 404 });
+      return NextResponse.json(
+        { success: false, message: 'QR code not found' },
+        { status: 404 }
+      );
     }
 
-    const existing = await db.collection('qr_activations').findOne({ qr_id: qrCode._id });
-    
+    const existing = await db
+      .collection('qr_activations')
+      .findOne({ qr_id: qrCode._id });
+
+    // Normalize location fields
+    const cleanTown = clean(town);
+    const cleanCity = clean(city);
+    const cleanArea = clean(area);
+    const cleanState = clean(state);
+
+    // 🎯 Smart fallback: guarantee `town` is never null if city/area exists.
+    // This prevents "आपके शहर" from showing on landing page when admin
+    // forgets to fill Town but did fill City.
+    const resolvedTown = cleanTown || cleanCity || cleanArea || null;
+
     const activationData = {
       qr_id: qrCode._id,
       qr_code: short_code,
       location_type,
-      shop_name: shop_name || null,
-      owner_name: owner_name || null,
-      owner_phone: owner_phone || null,
-      owner_whatsapp: owner_whatsapp || null,
-      vehicle_number: vehicle_number || null,
-      vehicle_type: vehicle_type || null,
+      shop_name: clean(shop_name),
+      owner_name: clean(owner_name),
+      owner_phone: clean(owner_phone),
+      owner_whatsapp: clean(owner_whatsapp),
+      vehicle_number: clean(vehicle_number),
+      vehicle_type: clean(vehicle_type),
       location: {
-        state: state || null,
-        city: city || null,
-        town: town || null,
-        area: area || null,
-        address: address || null,
-        landmark: landmark || null,
-        pincode: pincode || null,
+        state: cleanState,
+        city: cleanCity,
+        town: resolvedTown,
+        area: cleanArea,
+        address: clean(address),
+        landmark: clean(landmark),
+        pincode: clean(pincode),
       },
-      placement_position: placement_position || null,
+      placement_position: clean(placement_position),
       gps_location: gps_location || null,
-      notes: notes || null,
+      notes: clean(notes),
       activated_by: activated_by || 'admin',
-      activated_at: new Date(),
+      activated_at: existing ? existing.activated_at : new Date(),
       updated_at: new Date(),
     };
 
     if (existing) {
-      await db.collection('qr_activations').updateOne(
-        { qr_id: qrCode._id },
-        { $set: activationData }
-      );
+      await db
+        .collection('qr_activations')
+        .updateOne({ qr_id: qrCode._id }, { $set: activationData });
     } else {
       await db.collection('qr_activations').insertOne(activationData);
     }
 
     await db.collection('qr_codes').updateOne(
       { _id: qrCode._id },
-      { 
-        $set: { 
-          status: 'ACTIVE',
-          updated_at: new Date()
-        } 
-      }
+      { $set: { status: 'ACTIVE', updated_at: new Date() } }
     );
 
     return NextResponse.json({
@@ -100,12 +114,12 @@ export async function POST(request) {
       message: existing ? 'Activation updated!' : 'QR activated successfully!',
       activation: activationData,
     });
-
   } catch (error) {
-    return NextResponse.json({
-      success: false,
-      error: error.message,
-    }, { status: 500 });
+    console.error('[api/qr/activate POST] error:', error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }
 
@@ -115,24 +129,25 @@ export async function GET(request) {
     const short_code = searchParams.get('code');
 
     if (!short_code) {
-      return NextResponse.json({
-        success: false,
-        message: 'Code required'
-      }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: 'Code required' },
+        { status: 400 }
+      );
     }
 
     const db = await getDb();
-    
     const qrCode = await db.collection('qr_codes').findOne({ short_code });
-    
+
     if (!qrCode) {
-      return NextResponse.json({
-        success: false,
-        message: 'QR not found'
-      }, { status: 404 });
+      return NextResponse.json(
+        { success: false, message: 'QR not found' },
+        { status: 404 }
+      );
     }
 
-    const activation = await db.collection('qr_activations').findOne({ qr_id: qrCode._id });
+    const activation = await db
+      .collection('qr_activations')
+      .findOne({ qr_id: qrCode._id });
 
     return NextResponse.json({
       success: true,
@@ -145,12 +160,12 @@ export async function GET(request) {
       },
       activation: activation || null,
     });
-
   } catch (error) {
-    return NextResponse.json({
-      success: false,
-      error: error.message,
-    }, { status: 500 });
+    console.error('[api/qr/activate GET] error:', error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }
 
@@ -161,9 +176,12 @@ export async function DELETE(request) {
 
     const db = await getDb();
     const qrCode = await db.collection('qr_codes').findOne({ short_code });
-    
+
     if (!qrCode) {
-      return NextResponse.json({ success: false, message: 'QR not found' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, message: 'QR not found' },
+        { status: 404 }
+      );
     }
 
     await db.collection('qr_activations').deleteOne({ qr_id: qrCode._id });
@@ -174,6 +192,10 @@ export async function DELETE(request) {
 
     return NextResponse.json({ success: true, message: 'QR deactivated' });
   } catch (error) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error('[api/qr/activate DELETE] error:', error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }
