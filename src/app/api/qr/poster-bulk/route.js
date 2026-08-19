@@ -1,30 +1,18 @@
 import { NextResponse } from 'next/server';
 import sharp from 'sharp';
 import JSZip from 'jszip';
-import path from 'path';
-import fs from 'fs/promises';
-import { getPosterConfig, getQRPixelCoords } from '@/lib/poster-config';
+import {
+  getPoster,
+  getImageBuffer,
+  getQRPixelCoords,
+} from '@/lib/poster-config';
 import { generateQuttrQR } from '@/lib/styled-qr';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-let templateCache = null;
-let templateMetaCache = null;
-
-async function loadTemplate() {
-  if (templateCache) return { buffer: templateCache, meta: templateMetaCache };
-  const templatePath = path.join(process.cwd(), 'public', 'poster-template.png');
-  const buffer = await fs.readFile(templatePath);
-  const meta = await sharp(buffer).metadata();
-  templateCache = buffer;
-  templateMetaCache = meta;
-  return { buffer, meta };
-}
-
 async function makePoster(code, templateBuffer, qrCoords) {
-  // Use STYLED QR
   const styledQRBuffer = await generateQuttrQR(code, qrCoords.width);
   const qrResized = await sharp(styledQRBuffer)
     .resize(qrCoords.width, qrCoords.height, {
@@ -42,7 +30,8 @@ async function makePoster(code, templateBuffer, qrCoords) {
 
 export async function POST(request) {
   try {
-    const { codes } = await request.json();
+    const body = await request.json();
+    const { codes, posterId = null } = body;
 
     if (!Array.isArray(codes) || codes.length === 0) {
       return NextResponse.json(
@@ -57,11 +46,38 @@ export async function POST(request) {
       );
     }
 
-    const { buffer: templateBuffer, meta } = await loadTemplate();
-    const config = await getPosterConfig();
-    const qrCoords = getQRPixelCoords(meta.width, meta.height, config);
+    // Load poster
+    const poster = await getPoster(posterId);
+    if (!poster) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'No poster template available. Upload one at /dashboard/posters',
+        },
+        { status: 404 }
+      );
+    }
 
-    // Generate in parallel (5 at a time to avoid memory issues)
+    const templateBuffer = getImageBuffer(poster);
+    if (!templateBuffer) {
+      return NextResponse.json(
+        { success: false, message: 'Poster image data invalid' },
+        { status: 500 }
+      );
+    }
+
+    // Get dimensions
+    let posterWidth = poster.width;
+    let posterHeight = poster.height;
+    if (!posterWidth || !posterHeight) {
+      const meta = await sharp(templateBuffer).metadata();
+      posterWidth = meta.width;
+      posterHeight = meta.height;
+    }
+
+    const qrCoords = getQRPixelCoords(posterWidth, posterHeight, poster.qr_config);
+
+    // Generate all posters in parallel
     const CONCURRENCY = 5;
     const posters = [];
     for (let i = 0; i < codes.length; i += CONCURRENCY) {
@@ -80,6 +96,7 @@ export async function POST(request) {
       posters.push(...results);
     }
 
+    // Build ZIP
     const zip = new JSZip();
     let successCount = 0;
     let failCount = 0;
@@ -95,12 +112,13 @@ export async function POST(request) {
     zip.file(
       'README.txt',
       `Quttr QR Posters — Batch Export\n` +
+      `Template: ${poster.name}\n` +
       `Generated: ${new Date().toLocaleString('en-IN')}\n` +
       `Total requested: ${codes.length}\n` +
       `Successful: ${successCount}\n` +
       `Failed: ${failCount}\n\n` +
-      `Each poster is print-ready A4 PNG with styled QR (Q logo center).\n` +
-      `Print at 100% scale on 200 GSM paper for best results.\n`
+      `Each poster is print-ready A4 PNG with styled QR.\n` +
+      `Print at 100% scale on 200 GSM paper.\n`
     );
 
     const zipBuffer = await zip.generateAsync({
@@ -109,7 +127,8 @@ export async function POST(request) {
       compressionOptions: { level: 6 },
     });
 
-    const filename = `quttr-posters-${new Date().toISOString().split('T')[0]}-${successCount}.zip`;
+    const cleanName = (poster.name || 'poster').replace(/[^a-z0-9]/gi, '-');
+    const filename = `${cleanName}-${new Date().toISOString().split('T')[0]}-${successCount}.zip`;
 
     return new NextResponse(zipBuffer, {
       status: 200,
