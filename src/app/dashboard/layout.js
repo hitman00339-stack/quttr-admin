@@ -8,7 +8,7 @@ import {
   BarChart3, Settings, LogOut, Search, Command, Menu, X,
   Sparkles, Scissors, ChevronRight,
   AlertCircle, UserCheck, ShoppingBag,
-  QrCode, Megaphone, Package,
+  QrCode, Megaphone, Package, Target,
 } from 'lucide-react';
 import { authService } from '../../services/auth';
 
@@ -23,6 +23,7 @@ const navigation = [
   { name: 'QR Codes', href: '/dashboard/qr-codes', icon: QrCode },
   { name: 'QR Explorer', href: '/dashboard/qr-explorer', icon: Search, badge: 'NEW' },
   { name: 'Bulk Print', href: '/dashboard/qr-print/bulk', icon: Package, badge: 'NEW' },
+  { name: 'Calibrate Poster', href: '/dashboard/qr-print/calibrate', icon: Target, badge: 'NEW' },
   { name: 'Marketing Team', href: '/dashboard/marketing', icon: Megaphone },
   { name: 'Reviews', href: '/dashboard/reviews', icon: Star },
   { name: 'Notices', href: '/dashboard/notices', icon: Bell },
@@ -67,7 +68,6 @@ export default function DashboardLayout({ children }) {
 
   return (
     <div className="min-h-screen bg-surface-50 flex">
-      {/* Mobile overlay */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
@@ -75,14 +75,12 @@ export default function DashboardLayout({ children }) {
         />
       )}
 
-      {/* Sidebar */}
       <aside className={`
         fixed lg:sticky top-0 left-0 z-50 h-screen w-64
         bg-surface-100/80 backdrop-blur-2xl border-r border-white/[0.06]
         transition-transform duration-300 flex flex-col
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        {/* Logo */}
         <div className="h-16 flex items-center justify-between px-6 border-b border-white/[0.06] flex-shrink-0">
           <Link href="/dashboard" className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center shadow-brand">
@@ -100,7 +98,6 @@ export default function DashboardLayout({ children }) {
           </button>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto no-scrollbar">
           <p className="px-3 py-2 text-2xs font-semibold text-white/30 uppercase tracking-widest">
             Workspace
@@ -139,7 +136,6 @@ export default function DashboardLayout({ children }) {
           })}
         </nav>
 
-        {/* User */}
         <div className="p-3 border-t border-white/[0.06] flex-shrink-0">
           <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/[0.03]">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center text-surface-100 font-bold text-sm">
@@ -160,9 +156,7 @@ export default function DashboardLayout({ children }) {
         </div>
       </aside>
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
         <header className="h-16 sticky top-0 z-30 bg-surface-50/80 backdrop-blur-2xl border-b border-white/[0.06]">
           <div className="h-full flex items-center justify-between px-4 lg:px-8 gap-4">
             <button
@@ -172,7 +166,6 @@ export default function DashboardLayout({ children }) {
               <Menu className="w-5 h-5" />
             </button>
 
-            {/* Breadcrumb */}
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <Link href="/dashboard" className="text-sm text-white/40 hover:text-white transition-colors">
                 Admin
@@ -183,14 +176,12 @@ export default function DashboardLayout({ children }) {
               </span>
             </div>
 
-            {/* Search */}
             <button className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/40 hover:text-white/70 text-sm transition-colors min-w-[240px]">
               <Search className="w-3.5 h-3.5" />
               <span className="flex-1 text-left">Search...</span>
               <kbd className="text-2xs font-mono bg-white/[0.06] px-1.5 py-0.5 rounded border border-white/10">⌘K</kbd>
             </button>
 
-            {/* Actions */}
             <div className="flex items-center gap-1">
               <button className="btn-icon relative">
                 <Bell className="w-4 h-4" />
@@ -200,7 +191,6 @@ export default function DashboardLayout({ children }) {
           </div>
         </header>
 
-        {/* Page content */}
         <main className="flex-1 p-4 lg:p-8 mesh-bg">
           {children}
         </main>
