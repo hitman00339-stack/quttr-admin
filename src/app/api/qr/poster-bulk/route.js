@@ -21,9 +21,10 @@ async function makePoster(code, templateBuffer, qrCoords) {
     .toBuffer();
   return await sharp(templateBuffer)
     .composite([{ input: qrResized, left: qrCoords.x, top: qrCoords.y }])
-    .png({
-      compressionLevel: 0,
-      adaptiveFiltering: false,
+    .jpeg({
+      quality: 95,
+      chromaSubsampling: '4:4:4',
+      mozjpeg: true,
       force: true,
     })
     .toBuffer();
@@ -42,7 +43,7 @@ export async function POST(request) {
     }
     if (codes.length > 100) {
       return NextResponse.json(
-        { success: false, message: 'Max 100 posters per batch (lossless)' },
+        { success: false, message: 'Max 100 posters per batch' },
         { status: 400 }
       );
     }
@@ -63,7 +64,7 @@ export async function POST(request) {
     const meta = await sharp(templateBuffer).metadata();
     const qrCoords = getQRPixelCoords(meta.width, meta.height, poster.qr_config);
 
-    const CONCURRENCY = 3;
+    const CONCURRENCY = 5;
     const posters = [];
     for (let i = 0; i < codes.length; i += CONCURRENCY) {
       const batch = codes.slice(i, i + CONCURRENCY);
@@ -84,21 +85,25 @@ export async function POST(request) {
     let successCount = 0;
     posters.forEach((p) => {
       if (p.ok) {
-        zip.file(`quttr-poster-${p.code}.png`, p.buffer);
+        zip.file(`quttr-poster-${p.code}.jpg`, p.buffer);
         successCount++;
       }
     });
 
     zip.file(
       'README.txt',
-      `Quttr QR Posters — LOSSLESS\nPoster: ${poster.name}\nCount: ${successCount}\n` +
+      `Quttr QR Posters — JPEG (High Quality)\n` +
+      `Poster: ${poster.name}\n` +
+      `Count: ${successCount}\n` +
       `Dimensions: ${meta.width}×${meta.height}px\n` +
+      `Format: JPEG 95%\n` +
       `Generated: ${new Date().toLocaleString('en-IN')}\n`
     );
 
     const zipBuffer = await zip.generateAsync({
       type: 'nodebuffer',
-      compression: 'STORE',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 3 },
     });
 
     const cleanName = (poster.name || 'poster').replace(/[^a-z0-9]/gi, '-');
