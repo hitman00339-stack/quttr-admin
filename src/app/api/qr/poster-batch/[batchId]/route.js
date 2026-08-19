@@ -1,28 +1,17 @@
 import { NextResponse } from 'next/server';
 import sharp from 'sharp';
 import JSZip from 'jszip';
-import path from 'path';
-import fs from 'fs/promises';
 import { getDb } from '@/lib/mongodb';
-import { getPosterConfig, getQRPixelCoords } from '@/lib/poster-config';
+import {
+  getPoster,
+  getImageBuffer,
+  getQRPixelCoords,
+} from '@/lib/poster-config';
 import { generateQuttrQR } from '@/lib/styled-qr';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
-
-let templateCache = null;
-let templateMetaCache = null;
-
-async function loadTemplate() {
-  if (templateCache) return { buffer: templateCache, meta: templateMetaCache };
-  const templatePath = path.join(process.cwd(), 'public', 'poster-template.png');
-  const buffer = await fs.readFile(templatePath);
-  const meta = await sharp(buffer).metadata();
-  templateCache = buffer;
-  templateMetaCache = meta;
-  return { buffer, meta };
-}
 
 async function makePoster(code, templateBuffer, qrCoords) {
   const styledQRBuffer = await generateQuttrQR(code, qrCoords.width);
@@ -42,10 +31,10 @@ async function makePoster(code, templateBuffer, qrCoords) {
 
 /**
  * GET /api/qr/poster-batch/BATCH_XXX
- * Optional query params:
- *   ?status=INACTIVE  → only inactive
- *   ?status=ACTIVE    → only active
- *   (no status)       → all
+ * Query params:
+ *   ?status=INACTIVE  → only inactive QRs
+ *   ?status=ACTIVE    → only active QRs
+ *   ?poster=<id>      → use specific poster (else default)
  */
 export async function GET(request, { params }) {
   try {
@@ -58,7 +47,8 @@ export async function GET(request, { params }) {
     }
 
     const { searchParams } = new URL(request.url);
-    const statusFilter = searchParams.get('status'); // ACTIVE | INACTIVE | null
+    const statusFilter = searchParams.get('status');
+    const posterId = searchParams.get('poster') || null;
 
     // 1. Fetch all QRs in this batch
     const db = await getDb();
@@ -66,10 +56,7 @@ export async function GET(request, { params }) {
     if (statusFilter === 'ACTIVE') query.status = 'ACTIVE';
     if (statusFilter === 'INACTIVE') query.status = 'INACTIVE';
 
-    const qrCodes = await db
-      .collection('qr_codes')
-      .find(query)
-      .toArray();
+    const qrCodes = await db.collection('qr_codes').find(query).toArray();
 
     if (qrCodes.length === 0) {
       return NextResponse.json(
@@ -82,22 +69,49 @@ export async function GET(request, { params }) {
       return NextResponse.json(
         {
           success: false,
-          message: `Batch has ${qrCodes.length} QRs. Max 200 per download. Use /dashboard/qr-print/bulk to filter.`,
+          message: `Batch has ${qrCodes.length} QRs. Max 200 per download.`,
         },
         { status: 400 }
       );
     }
 
-    // 2. Get batch name for filename
+    // 2. Load poster
+    const poster = await getPoster(posterId);
+    if (!poster) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'No poster template available. Upload one at /dashboard/posters',
+        },
+        { status: 404 }
+      );
+    }
+
+    const templateBuffer = getImageBuffer(poster);
+    if (!templateBuffer) {
+      return NextResponse.json(
+        { success: false, message: 'Poster image data invalid' },
+        { status: 500 }
+      );
+    }
+
+    // 3. Get dimensions
+    let posterWidth = poster.width;
+    let posterHeight = poster.height;
+    if (!posterWidth || !posterHeight) {
+      const meta = await sharp(templateBuffer).metadata();
+      posterWidth = meta.width;
+      posterHeight = meta.height;
+    }
+
+    const qrCoords = getQRPixelCoords(posterWidth, posterHeight, poster.qr_config);
+
+    // 4. Get batch name
     const batchName = qrCodes[0]?.batch_name || batchId;
     const cleanBatchName = batchName.replace(/[^a-z0-9]/gi, '-');
+    const cleanPosterName = (poster.name || 'poster').replace(/[^a-z0-9]/gi, '-');
 
-    // 3. Load poster template
-    const { buffer: templateBuffer, meta } = await loadTemplate();
-    const config = await getPosterConfig();
-    const qrCoords = getQRPixelCoords(meta.width, meta.height, config);
-
-    // 4. Generate posters
+    // 5. Generate posters
     const CONCURRENCY = 5;
     const posters = [];
     for (let i = 0; i < qrCodes.length; i += CONCURRENCY) {
@@ -115,7 +129,7 @@ export async function GET(request, { params }) {
       posters.push(...results);
     }
 
-    // 5. Build ZIP
+    // 6. Build ZIP
     const zip = new JSZip();
     let successCount = 0;
     posters.forEach((p) => {
@@ -127,13 +141,13 @@ export async function GET(request, { params }) {
 
     zip.file(
       'README.txt',
-      `Quttr QR Posters — Batch: ${batchName}\n` +
-      `Batch ID: ${batchId}\n` +
+      `Quttr QR Posters\n` +
+      `Batch: ${batchName}\n` +
+      `Poster template: ${poster.name}\n` +
       `Generated: ${new Date().toLocaleString('en-IN')}\n` +
-      `Total posters: ${successCount}\n` +
-      `Filter applied: ${statusFilter || 'all statuses'}\n\n` +
-      `Each poster is print-ready A4 PNG.\n` +
-      `Print at 100% scale on 200 GSM paper.\n`
+      `Total: ${successCount}\n` +
+      `Filter: ${statusFilter || 'all'}\n\n` +
+      `Print at 100% scale on A4, 200 GSM paper.\n`
     );
 
     const zipBuffer = await zip.generateAsync({
@@ -142,7 +156,7 @@ export async function GET(request, { params }) {
       compressionOptions: { level: 6 },
     });
 
-    const filename = `${cleanBatchName}-posters-${successCount}.zip`;
+    const filename = `${cleanBatchName}-${cleanPosterName}-${successCount}.zip`;
 
     return new NextResponse(zipBuffer, {
       status: 200,
