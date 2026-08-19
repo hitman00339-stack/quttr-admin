@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { 
   QrCode, Plus, Search, TrendingUp, CheckCircle, AlertCircle, 
   Loader2, Package, Eye, Calendar, BarChart3, Layers, Camera,
-  Download, Printer,
+  Download, Printer, Move, Target,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -17,7 +17,7 @@ export default function QRCodesPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('ALL');
   const [search, setSearch] = useState('');
-  const [downloadingBatch, setDownloadingBatch] = useState(null); // tracks which batch is downloading
+  const [downloadingBatch, setDownloadingBatch] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -52,9 +52,7 @@ export default function QRCodesPage() {
     }
   };
 
-  // ============================================================
-  // 📦 Download all posters of a batch as ZIP
-  // ============================================================
+  // Download all posters of a batch as ZIP
   const downloadBatchPosters = async (batch, statusFilter = null, e) => {
     e?.preventDefault();
     e?.stopPropagation();
@@ -74,7 +72,7 @@ export default function QRCodesPage() {
     }
 
     if (count > 200) {
-      toast.error(`Batch has ${count} QRs. Max 200 per download. Use Bulk Print page for larger.`);
+      toast.error(`Batch has ${count} QRs. Max 200 per download.`);
       setDownloadingBatch(null);
       return;
     }
@@ -94,8 +92,6 @@ export default function QRCodesPage() {
       const objUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = objUrl;
-
-      // Filename from server, or fallback
       const cd = res.headers.get('content-disposition') || '';
       const match = cd.match(/filename="?([^"]+)"?/);
       const cleanName = (batch.batch_name || batch.batch_id).replace(/[^a-z0-9]/gi, '-');
@@ -131,25 +127,59 @@ export default function QRCodesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header with buttons */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-heading">QR Codes</h1>
           <p className="text-caption mt-1">Generate, scan and manage QR codes</p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <Link href="/dashboard/qr-print/bulk" className="btn-outline">
-            <Package className="w-4 h-4" />
-            Bulk Print
-          </Link>
-          <Link href="/dashboard/qr-codes/scan" className="btn-accent">
-            <Camera className="w-4 h-4" />
-            Scan QR
-          </Link>
-          <Link href="/dashboard/qr-codes/generate" className="btn-brand">
-            <Plus className="w-4 h-4" />
-            Generate New Batch
-          </Link>
+      </div>
+
+      {/* ====================================================== */}
+      {/* 🎯 NEW: Action buttons row with CALIBRATE button       */}
+      {/* ====================================================== */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        {/* CALIBRATE — most prominent, in red gradient */}
+        <Link
+          href="/dashboard/qr-print/calibrate"
+          className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-[#FFD700] to-[#B08900] text-black font-black rounded-xl hover:shadow-[0_0_20px_rgba(255,215,0,0.4)] transition text-sm"
+        >
+          <Target className="w-4 h-4" />
+          <span>Calibrate QR Position</span>
+        </Link>
+
+        <Link
+          href="/dashboard/qr-print/bulk"
+          className="flex items-center justify-center gap-2 px-4 py-3 bg-white/[0.05] border border-white/10 hover:bg-white/[0.1] text-white font-bold rounded-xl transition text-sm"
+        >
+          <Package className="w-4 h-4" />
+          Bulk Print
+        </Link>
+
+        <Link
+          href="/dashboard/qr-codes/scan"
+          className="flex items-center justify-center gap-2 px-4 py-3 bg-accent-500/10 border border-accent-500/30 hover:bg-accent-500/20 text-accent-500 font-bold rounded-xl transition text-sm"
+        >
+          <Camera className="w-4 h-4" />
+          Scan QR
+        </Link>
+
+        <Link
+          href="/dashboard/qr-codes/generate"
+          className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-[#E63946] to-[#B01824] text-white font-bold rounded-xl hover:shadow-lg transition text-sm"
+        >
+          <Plus className="w-4 h-4" />
+          Generate Batch
+        </Link>
+      </div>
+
+      {/* 💡 Info tip about calibration */}
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 flex items-start gap-2">
+        <Target className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+        <div className="text-xs text-white/80">
+          <span className="font-bold text-blue-300">First time? </span>
+          Click <b className="text-[#FFD700]">"Calibrate QR Position"</b> to adjust where the QR appears on the poster.
+          One-time setup — then all posters will be perfect!
         </div>
       </div>
 
@@ -279,7 +309,6 @@ export default function QRCodesPage() {
 
               return (
                 <div key={batch.batch_id} className="card p-6 group flex flex-col">
-                  {/* Top row: icon + date */}
                   <Link
                     href={`/dashboard/qr-codes/batch/${batch.batch_id}`}
                     className="flex items-start justify-between mb-4 hover:opacity-80"
@@ -293,7 +322,6 @@ export default function QRCodesPage() {
                     </div>
                   </Link>
                   
-                  {/* Batch name - clickable */}
                   <Link
                     href={`/dashboard/qr-codes/batch/${batch.batch_id}`}
                     className="block"
@@ -322,9 +350,7 @@ export default function QRCodesPage() {
                     </div>
                   </Link>
 
-                  {/* ==================================================== */}
-                  {/* 📥 NEW: Download Posters Section                    */}
-                  {/* ==================================================== */}
+                  {/* Download Posters Section */}
                   <div className="pt-4 border-t border-white/[0.06] space-y-2">
                     <div className="flex items-center gap-2 mb-2">
                       <Printer className="w-3.5 h-3.5 text-[#FFD700]" />
@@ -333,13 +359,12 @@ export default function QRCodesPage() {
                       </span>
                     </div>
 
-                    {/* Main download button - all posters */}
                     <button
                       onClick={(e) => downloadBatchPosters(batch, null, e)}
                       disabled={anyDownloading || batch.total === 0 || batch.total > 200}
                       title={
                         batch.total > 200
-                          ? 'Max 200 per batch download — use Bulk Print for larger'
+                          ? 'Max 200 per batch — use Bulk Print for larger'
                           : `Download all ${batch.total} posters as ZIP`
                       }
                       className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-bold rounded-lg hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed text-sm"
@@ -357,7 +382,6 @@ export default function QRCodesPage() {
                       )}
                     </button>
 
-                    {/* Split: inactive + active */}
                     {(batch.inactive > 0 || batch.active > 0) && (
                       <div className="grid grid-cols-2 gap-2">
                         <button
@@ -397,7 +421,6 @@ export default function QRCodesPage() {
                     )}
                   </div>
 
-                  {/* Scans + view */}
                   <div className="flex items-center justify-between pt-4 mt-4 border-t border-white/[0.06]">
                     <div className="flex items-center gap-2 text-sm">
                       <TrendingUp className="w-4 h-4 text-accent-500" />
