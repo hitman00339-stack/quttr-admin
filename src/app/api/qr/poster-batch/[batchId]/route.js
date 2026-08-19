@@ -9,29 +9,34 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-// Safety cap — never process more than 100 in a single request (Vercel free tier)
 const HARD_MAX = 100;
 
 async function makePoster(code, templateBuffer, qrCoords) {
-  const styledQRBuffer = await generateQuttrQR(code, qrCoords.width);
+  // Generate QR at 2x resolution for sharper downscale
+  const qrRenderSize = qrCoords.width * 2;
+  const styledQRBuffer = await generateQuttrQR(code, qrRenderSize);
+
+  // High-quality downscale
   const qrResized = await sharp(styledQRBuffer)
-    .resize(qrCoords.width, qrCoords.height, { fit: 'contain', background: '#ffffff' })
+    .resize(qrCoords.width, qrCoords.height, {
+      fit: 'contain',
+      background: '#ffffff',
+      kernel: sharp.kernel.lanczos3,
+    })
+    .png({ compressionLevel: 0 })
     .toBuffer();
+
+  // LOSSLESS composite
   return await sharp(templateBuffer)
     .composite([{ input: qrResized, left: qrCoords.x, top: qrCoords.y }])
-    .png({ quality: 100, compressionLevel: 6 })
+    .png({
+      compressionLevel: 0,      // No compression = max quality
+      adaptiveFiltering: false,
+      force: true,
+    })
     .toBuffer();
 }
 
-/**
- * GET /api/qr/poster-batch/[batchId]
- * Query params:
- *   ?status=INACTIVE | ACTIVE       → filter by status
- *   ?poster=<id>                    → which poster to use
- *   ?chunk=1                        → which chunk (1-based)
- *   ?size=50                        → posters per chunk (max 100)
- *   ?info=1                         → return chunk info JSON only (no download)
- */
 export async function GET(request, { params }) {
   try {
     const { batchId } = params;
@@ -46,7 +51,6 @@ export async function GET(request, { params }) {
     const requestedSize = parseInt(searchParams.get('size') || String(HARD_MAX));
     const infoOnly = searchParams.get('info') === '1';
 
-    // Cap chunk size at 100 for safety
     const chunkSize = Math.min(Math.max(1, requestedSize), HARD_MAX);
 
     const db = await getDb();
@@ -61,7 +65,6 @@ export async function GET(request, { params }) {
 
     const totalChunks = Math.ceil(totalCount / chunkSize);
 
-    // If just asking for info (chunk count etc), return JSON
     if (infoOnly) {
       return NextResponse.json({
         success: true,
@@ -78,7 +81,6 @@ export async function GET(request, { params }) {
       );
     }
 
-    // Fetch this chunk of QRs
     const skip = (chunk - 1) * chunkSize;
     const qrCodes = await db
       .collection('qr_codes')
@@ -88,7 +90,6 @@ export async function GET(request, { params }) {
       .limit(chunkSize)
       .toArray();
 
-    // Load poster template
     const poster = await getPoster(posterId);
     if (!poster) {
       return NextResponse.json(
@@ -102,13 +103,10 @@ export async function GET(request, { params }) {
       return NextResponse.json({ success: false, message: 'Poster image data invalid' }, { status: 500 });
     }
 
-    let posterWidth = poster.width;
-    let posterHeight = poster.height;
-    if (!posterWidth || !posterHeight) {
-      const meta = await sharp(templateBuffer).metadata();
-      posterWidth = meta.width;
-      posterHeight = meta.height;
-    }
+    // Get exact dimensions from actual buffer
+    const meta = await sharp(templateBuffer).metadata();
+    const posterWidth = meta.width;
+    const posterHeight = meta.height;
 
     const qrCoords = getQRPixelCoords(posterWidth, posterHeight, poster.qr_config);
 
@@ -116,8 +114,8 @@ export async function GET(request, { params }) {
     const cleanBatchName = batchName.replace(/[^a-z0-9]/gi, '-');
     const cleanPosterName = (poster.name || 'poster').replace(/[^a-z0-9]/gi, '-');
 
-    // Generate posters in parallel (concurrency 5 for memory)
-    const CONCURRENCY = 5;
+    // Concurrency 3 (lower because lossless PNG uses more memory)
+    const CONCURRENCY = 3;
     const posters = [];
     for (let i = 0; i < qrCodes.length; i += CONCURRENCY) {
       const batch = qrCodes.slice(i, i + CONCURRENCY);
@@ -134,46 +132,38 @@ export async function GET(request, { params }) {
       posters.push(...results);
     }
 
-    // Build ZIP
+    // Build ZIP — use STORE (no compression) since PNGs are already optimized
     const zip = new JSZip();
     let successCount = 0;
-    let failCount = 0;
     posters.forEach((p) => {
       if (p.ok) {
         zip.file(`quttr-poster-${p.code}.png`, p.buffer);
         successCount++;
-      } else {
-        failCount++;
       }
     });
 
     zip.file(
       'README.txt',
-      `Quttr QR Posters\n` +
+      `Quttr QR Posters — LOSSLESS QUALITY\n` +
       `═══════════════════════════════════\n` +
       `Batch:         ${batchName}\n` +
       `Poster:        ${poster.name}\n` +
-      `Filter:        ${statusFilter || 'all statuses'}\n` +
-      `This ZIP:      Part ${chunk} of ${totalChunks}\n` +
+      `Dimensions:    ${posterWidth}×${posterHeight}px\n` +
+      `Chunk:         ${chunk} of ${totalChunks}\n` +
       `Posters here:  ${successCount}\n` +
-      `Failed:        ${failCount}\n` +
-      `Batch total:   ${totalCount}\n` +
       `Generated:     ${new Date().toLocaleString('en-IN')}\n` +
       `═══════════════════════════════════\n\n` +
-      (totalChunks > 1
-        ? `⚠️  MULTI-PART DOWNLOAD\n` +
-          `This is part ${chunk} of ${totalChunks}. Make sure to download all parts.\n\n`
-        : '') +
       `📄 Print settings:\n` +
-      `   - Paper: A4\n` +
-      `   - Scale: 100%\n` +
-      `   - Recommended: 200 GSM paper + lamination\n`
+      `   - Paper: A4 (210×297mm)\n` +
+      `   - Scale: 100% (no scaling)\n` +
+      `   - Resolution: Original quality preserved\n` +
+      `   - Recommended: 200 GSM matte paper + lamination\n`
     );
 
+    // STORE compression (no re-compression) — preserves PNG quality
     const zipBuffer = await zip.generateAsync({
       type: 'nodebuffer',
-      compression: 'DEFLATE',
-      compressionOptions: { level: 6 },
+      compression: 'STORE',
     });
 
     const filename = totalChunks > 1
@@ -189,7 +179,6 @@ export async function GET(request, { params }) {
         'X-Total-Chunks': String(totalChunks),
         'X-Current-Chunk': String(chunk),
         'X-Total-Posters': String(totalCount),
-        'X-Chunk-Success': String(successCount),
       },
     });
   } catch (error) {
