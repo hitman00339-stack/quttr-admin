@@ -1,25 +1,14 @@
 import { NextResponse } from 'next/server';
 import sharp from 'sharp';
-import path from 'path';
-import fs from 'fs/promises';
-import { getPosterConfig, getQRPixelCoords } from '@/lib/poster-config';
+import {
+  getPoster,
+  getImageBuffer,
+  getQRPixelCoords,
+} from '@/lib/poster-config';
 import { generateQuttrQR } from '@/lib/styled-qr';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-let templateCache = null;
-let templateMetaCache = null;
-
-async function loadTemplate() {
-  if (templateCache) return { buffer: templateCache, meta: templateMetaCache };
-  const templatePath = path.join(process.cwd(), 'public', 'poster-template.png');
-  const buffer = await fs.readFile(templatePath);
-  const meta = await sharp(buffer).metadata();
-  templateCache = buffer;
-  templateMetaCache = meta;
-  return { buffer, meta };
-}
 
 export async function GET(request, { params }) {
   try {
@@ -30,20 +19,47 @@ export async function GET(request, { params }) {
 
     const { searchParams } = new URL(request.url);
     const download = searchParams.get('download') === '1';
+    const posterId = searchParams.get('poster') || null; // Optional: specific poster
 
-    // 1. Load poster template
-    const { buffer: templateBuffer, meta } = await loadTemplate();
-    const posterWidth = meta.width;
-    const posterHeight = meta.height;
+    // 1. Load poster (specific or default)
+    const poster = await getPoster(posterId);
+    if (!poster) {
+      return NextResponse.json(
+        {
+          error: 'No poster template available. Upload one at /dashboard/posters',
+        },
+        { status: 404 }
+      );
+    }
 
-    // 2. Get calibrated QR position
-    const config = await getPosterConfig();
-    const qrCoords = getQRPixelCoords(posterWidth, posterHeight, config);
+    const templateBuffer = getImageBuffer(poster);
+    if (!templateBuffer) {
+      return NextResponse.json(
+        { error: 'Poster image data invalid' },
+        { status: 500 }
+      );
+    }
 
-    // 3. Generate STYLED QR (with red circle + scissors logo)
+    // 2. Get poster dimensions
+    let posterWidth = poster.width;
+    let posterHeight = poster.height;
+    if (!posterWidth || !posterHeight) {
+      const meta = await sharp(templateBuffer).metadata();
+      posterWidth = meta.width;
+      posterHeight = meta.height;
+    }
+
+    // 3. Calculate QR pixel coordinates using this poster's calibration
+    const qrCoords = getQRPixelCoords(
+      posterWidth,
+      posterHeight,
+      poster.qr_config
+    );
+
+    // 4. Generate styled QR (with logo)
     const styledQRBuffer = await generateQuttrQR(code, qrCoords.width);
 
-    // 4. Ensure exact dimensions
+    // 5. Ensure exact dimensions
     const qrResized = await sharp(styledQRBuffer)
       .resize(qrCoords.width, qrCoords.height, {
         fit: 'contain',
@@ -51,7 +67,7 @@ export async function GET(request, { params }) {
       })
       .toBuffer();
 
-    // 5. Composite onto poster
+    // 6. Composite QR onto poster
     const finalBuffer = await sharp(templateBuffer)
       .composite([
         { input: qrResized, left: qrCoords.x, top: qrCoords.y },
