@@ -7,7 +7,7 @@ import { generateQuttrQR } from '@/lib/styled-qr';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export 
+export const maxDuration = 60;
 
 // SAFE limits to avoid memory issues on Vercel free tier
 const HARD_MAX = 50;              // Max posters per single request
