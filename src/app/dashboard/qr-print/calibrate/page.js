@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Save, RotateCcw, MousePointer2, Loader2 } from 'lucide-react';
+import {
+  ArrowLeft, Save, RotateCcw, MousePointer2, Loader2,
+  AlertCircle, CheckCircle2,
+} from 'lucide-react';
 
 export default function CalibratePage() {
   const [config, setConfig] = useState({
@@ -14,21 +17,35 @@ export default function CalibratePage() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [dragging, setDragging] = useState(null); // 'move' | 'resize'
+  const [dragging, setDragging] = useState(null);
+  const [saveStatus, setSaveStatus] = useState(null); // 'success' | 'error' | null
+  const [errorDetails, setErrorDetails] = useState(null);
   const containerRef = useRef(null);
   const startRef = useRef(null);
 
   useEffect(() => {
-    fetch('/api/qr/poster-config')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success) setConfig(d.config);
-      })
-      .finally(() => setLoading(false));
+    loadConfig();
   }, []);
+
+  const loadConfig = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/qr/poster-config');
+      const d = await res.json();
+      if (d.success && d.config) {
+        setConfig(d.config);
+      }
+    } catch (e) {
+      console.error('Load config failed:', e);
+      // Keep defaults
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const startDrag = (e, mode) => {
     e.preventDefault();
+    e.stopPropagation();
     const container = containerRef.current;
     if (!container) return;
     const rect = container.getBoundingClientRect();
@@ -65,10 +82,11 @@ export default function CalibratePage() {
         }
         if (dragging === 'resize') {
           const newWidth = Math.max(5, Math.min(80, s.config.widthPercent + dx));
+          const newHeight = Math.max(5, Math.min(80, s.config.heightPercent + dy));
           return {
             ...prev,
             widthPercent: newWidth,
-            heightPercent: newWidth * (s.rect.width / s.rect.height), // keep visual square
+            heightPercent: newHeight,
           };
         }
         return prev;
@@ -82,7 +100,7 @@ export default function CalibratePage() {
 
     document.addEventListener('mousemove', move);
     document.addEventListener('mouseup', end);
-    document.addEventListener('touchmove', move);
+    document.addEventListener('touchmove', move, { passive: false });
     document.addEventListener('touchend', end);
     return () => {
       document.removeEventListener('mousemove', move);
@@ -94,24 +112,64 @@ export default function CalibratePage() {
 
   const save = async () => {
     setSaving(true);
+    setSaveStatus(null);
+    setErrorDetails(null);
+
     try {
       const res = await fetch('/api/qr/poster-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
       });
+
+      // Check response type
+      const contentType = res.headers.get('content-type') || '';
+
+      if (!contentType.includes('application/json')) {
+        const text = await res.text();
+        setErrorDetails({
+          status: res.status,
+          contentType,
+          bodyPreview: text.substring(0, 300),
+          url: '/api/qr/poster-config',
+        });
+        throw new Error(`Server returned ${contentType || 'non-JSON'} (status ${res.status})`);
+      }
+
       const d = await res.json();
-      if (d.success) toast.success('QR position saved! All posters will use this from now on.');
-      else toast.error(d.message || 'Save failed');
+
+      if (!res.ok || !d.success) {
+        setErrorDetails({
+          status: res.status,
+          response: d,
+        });
+        throw new Error(d.message || d.error || `HTTP ${res.status}`);
+      }
+
+      toast.success('✅ QR position saved! All posters will use this from now on.', {
+        duration: 4000,
+      });
+      setSaveStatus('success');
+
+      // Auto-hide success after 5 seconds
+      setTimeout(() => setSaveStatus(null), 5000);
     } catch (e) {
-      toast.error('Network error');
+      console.error('Save failed:', e);
+      toast.error(e.message || 'Save failed');
+      setSaveStatus('error');
     } finally {
       setSaving(false);
     }
   };
 
   const reset = () => {
-    setConfig({ xPercent: 4.5, yPercent: 61.5, widthPercent: 34, heightPercent: 22.5 });
+    setConfig({
+      xPercent: 4.5,
+      yPercent: 61.5,
+      widthPercent: 34,
+      heightPercent: 22.5,
+    });
+    toast.success('Reset to default position');
   };
 
   if (loading) {
@@ -148,6 +206,66 @@ export default function CalibratePage() {
         <p>💾 Click <b>Save</b> when it's perfectly placed over the empty QR area</p>
       </div>
 
+      {/* Success banner */}
+      {saveStatus === 'success' && (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-center gap-3">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-bold text-emerald-300">✅ Position saved successfully!</p>
+            <p className="text-xs text-white/60 mt-1">
+              All future posters (single + bulk) will use this exact position.
+              Go to <Link href="/dashboard/qr-codes" className="text-[#FFD700] underline">QR Codes</Link> to test print.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Error banner with debug info */}
+      {saveStatus === 'error' && errorDetails && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-red-400">⚠️ Save failed</p>
+              <p className="text-xs text-white/70 mt-1">
+                The calibration values were valid but the server couldn't save them.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-black/40 p-3 rounded text-[10px] font-mono space-y-1">
+            <p className="text-yellow-400">🔍 Debug info:</p>
+            {errorDetails.url && <p className="text-white/70">URL: {errorDetails.url}</p>}
+            {errorDetails.status && <p className="text-white/70">Status: {errorDetails.status}</p>}
+            {errorDetails.contentType && (
+              <p className="text-white/70">Content-Type: {errorDetails.contentType}</p>
+            )}
+            {errorDetails.bodyPreview && (
+              <>
+                <p className="text-white/70 mt-2">Response preview:</p>
+                <pre className="text-white/60 whitespace-pre-wrap break-all">{errorDetails.bodyPreview}</pre>
+              </>
+            )}
+            {errorDetails.response && (
+              <>
+                <p className="text-white/70 mt-2">Response:</p>
+                <pre className="text-white/60 whitespace-pre-wrap break-all">
+                  {JSON.stringify(errorDetails.response, null, 2)}
+                </pre>
+              </>
+            )}
+          </div>
+
+          <div className="text-xs text-white/70 space-y-1">
+            <p className="font-bold text-white/90">💡 Common causes & fixes:</p>
+            <p>1. API file missing — check <code className="text-[#FFD700]">src/app/api/qr/poster-config/route.js</code> exists on GitHub</p>
+            <p>2. Deployment failed — check Vercel dashboard for green ✅ Ready</p>
+            <p>3. MongoDB env var missing — check Vercel Settings → Environment Variables → MONGODB_URI</p>
+            <p>4. Test API: <a href="/api/qr/poster-config" target="_blank" rel="noreferrer" className="text-[#FFD700] underline">/api/qr/poster-config</a></p>
+          </div>
+        </div>
+      )}
+
       {/* Position values */}
       <div className="bg-white/[0.02] border border-white/10 rounded-xl p-4">
         <div className="grid grid-cols-4 gap-3 text-center">
@@ -162,14 +280,14 @@ export default function CalibratePage() {
       <div className="bg-black rounded-xl p-4">
         <div
           ref={containerRef}
-          className="relative w-full mx-auto select-none"
+          className="relative w-full mx-auto select-none touch-none"
           style={{ maxWidth: '500px' }}
         >
           {/* Poster */}
           <img
             src="/poster-template.png"
             alt="Poster template"
-            className="w-full h-auto block rounded-lg"
+            className="w-full h-auto block rounded-lg pointer-events-none"
             draggable={false}
             onError={(e) => {
               e.target.style.display = 'none';
@@ -187,13 +305,13 @@ export default function CalibratePage() {
 
           {/* Draggable QR box */}
           <div
-            className="absolute cursor-move border-4 border-[#FFD700] bg-[#FFD700]/20 rounded-md"
+            className="absolute cursor-move border-4 border-[#FFD700] bg-[#FFD700]/25 rounded-md touch-none"
             style={{
               left: `${config.xPercent}%`,
               top: `${config.yPercent}%`,
               width: `${config.widthPercent}%`,
               height: `${config.heightPercent}%`,
-              boxShadow: '0 0 0 2px rgba(0,0,0,0.5), 0 0 30px rgba(255,215,0,0.5)',
+              boxShadow: '0 0 0 2px rgba(0,0,0,0.5), 0 0 30px rgba(255,215,0,0.6)',
             }}
             onMouseDown={(e) => startDrag(e, 'move')}
             onTouchStart={(e) => startDrag(e, 'move')}
@@ -207,15 +325,9 @@ export default function CalibratePage() {
 
             {/* Resize handle bottom-right */}
             <div
-              className="absolute bottom-0 right-0 w-6 h-6 bg-[#FFD700] rounded-tl-lg cursor-se-resize border-l-2 border-t-2 border-black"
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                startDrag(e, 'resize');
-              }}
-              onTouchStart={(e) => {
-                e.stopPropagation();
-                startDrag(e, 'resize');
-              }}
+              className="absolute bottom-0 right-0 w-8 h-8 bg-[#FFD700] rounded-tl-lg cursor-se-resize border-l-2 border-t-2 border-black touch-none"
+              onMouseDown={(e) => startDrag(e, 'resize')}
+              onTouchStart={(e) => startDrag(e, 'resize')}
               title="Drag to resize"
             />
           </div>
@@ -227,24 +339,35 @@ export default function CalibratePage() {
         <button
           onClick={save}
           disabled={saving}
-          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-bold rounded-lg hover:shadow-lg transition disabled:opacity-50"
+          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-bold rounded-lg hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition disabled:opacity-50 text-sm"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          Save Position
+          {saving ? 'Saving...' : 'Save Position'}
         </button>
         <button
           onClick={reset}
-          className="flex items-center gap-2 px-4 py-2.5 bg-white/[0.05] border border-white/10 rounded-lg hover:bg-white/[0.1] text-sm"
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-3 bg-white/[0.05] border border-white/10 rounded-lg hover:bg-white/[0.1] text-sm disabled:opacity-50"
         >
           <RotateCcw className="w-4 h-4" />
           Reset to Default
         </button>
-        <Link
-          href="/dashboard/qr-print/calibrate/preview"
-          className="ml-auto text-sm text-[#FFD700] hover:underline"
-        >
-          Preview with sample QR →
-        </Link>
+        <div className="ml-auto flex items-center gap-3">
+          <a
+            href="/api/qr/poster-config"
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-white/40 hover:text-white/70"
+          >
+            Test API
+          </a>
+          <Link
+            href="/dashboard/qr-codes"
+            className="text-sm text-[#FFD700] hover:underline"
+          >
+            ← Back to QR Codes
+          </Link>
+        </div>
       </div>
     </div>
   );
