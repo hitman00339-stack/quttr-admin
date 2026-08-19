@@ -9,8 +9,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-// Safe limit for Vercel Free tier (60s timeout)
-const MAX_POSTERS_PER_REQUEST = 50;
+// Safety cap — never process more than 100 in a single request (Vercel free tier)
+const HARD_MAX = 100;
 
 async function makePoster(code, templateBuffer, qrCoords) {
   const styledQRBuffer = await generateQuttrQR(code, qrCoords.width);
@@ -23,6 +23,15 @@ async function makePoster(code, templateBuffer, qrCoords) {
     .toBuffer();
 }
 
+/**
+ * GET /api/qr/poster-batch/[batchId]
+ * Query params:
+ *   ?status=INACTIVE | ACTIVE       → filter by status
+ *   ?poster=<id>                    → which poster to use
+ *   ?chunk=1                        → which chunk (1-based)
+ *   ?size=50                        → posters per chunk (max 100)
+ *   ?info=1                         → return chunk info JSON only (no download)
+ */
 export async function GET(request, { params }) {
   try {
     const { batchId } = params;
@@ -33,8 +42,12 @@ export async function GET(request, { params }) {
     const { searchParams } = new URL(request.url);
     const statusFilter = searchParams.get('status');
     const posterId = searchParams.get('poster') || null;
-    const chunk = parseInt(searchParams.get('chunk') || '1');   // Which chunk (1, 2, 3...)
-    const chunkSize = parseInt(searchParams.get('size') || String(MAX_POSTERS_PER_REQUEST));
+    const chunk = Math.max(1, parseInt(searchParams.get('chunk') || '1'));
+    const requestedSize = parseInt(searchParams.get('size') || String(HARD_MAX));
+    const infoOnly = searchParams.get('info') === '1';
+
+    // Cap chunk size at 100 for safety
+    const chunkSize = Math.min(Math.max(1, requestedSize), HARD_MAX);
 
     const db = await getDb();
     const query = { batch_id: batchId };
@@ -46,29 +59,40 @@ export async function GET(request, { params }) {
       return NextResponse.json({ success: false, message: `No QRs found in batch ${batchId}` }, { status: 404 });
     }
 
-    // Calculate chunk boundaries
-    const safeChunkSize = Math.min(chunkSize, MAX_POSTERS_PER_REQUEST);
-    const totalChunks = Math.ceil(totalCount / safeChunkSize);
-    const skip = (chunk - 1) * safeChunkSize;
+    const totalChunks = Math.ceil(totalCount / chunkSize);
 
-    if (chunk > totalChunks || chunk < 1) {
+    // If just asking for info (chunk count etc), return JSON
+    if (infoOnly) {
+      return NextResponse.json({
+        success: true,
+        total: totalCount,
+        chunkSize,
+        totalChunks,
+      });
+    }
+
+    if (chunk > totalChunks) {
       return NextResponse.json(
         { success: false, message: `Invalid chunk ${chunk}. Total chunks: ${totalChunks}` },
         { status: 400 }
       );
     }
 
-    // Fetch this chunk only
-    const qrCodes = await db.collection('qr_codes')
+    // Fetch this chunk of QRs
+    const skip = (chunk - 1) * chunkSize;
+    const qrCodes = await db
+      .collection('qr_codes')
       .find(query)
+      .sort({ created_at: 1 })
       .skip(skip)
-      .limit(safeChunkSize)
+      .limit(chunkSize)
       .toArray();
 
+    // Load poster template
     const poster = await getPoster(posterId);
     if (!poster) {
       return NextResponse.json(
-        { success: false, message: 'No poster template available. Upload one at /dashboard/posters' },
+        { success: false, message: 'No poster template available. Upload at /dashboard/posters' },
         { status: 404 }
       );
     }
@@ -87,10 +111,12 @@ export async function GET(request, { params }) {
     }
 
     const qrCoords = getQRPixelCoords(posterWidth, posterHeight, poster.qr_config);
+
     const batchName = qrCodes[0]?.batch_name || batchId;
     const cleanBatchName = batchName.replace(/[^a-z0-9]/gi, '-');
     const cleanPosterName = (poster.name || 'poster').replace(/[^a-z0-9]/gi, '-');
 
+    // Generate posters in parallel (concurrency 5 for memory)
     const CONCURRENCY = 5;
     const posters = [];
     for (let i = 0; i < qrCodes.length; i += CONCURRENCY) {
@@ -108,21 +134,40 @@ export async function GET(request, { params }) {
       posters.push(...results);
     }
 
+    // Build ZIP
     const zip = new JSZip();
     let successCount = 0;
+    let failCount = 0;
     posters.forEach((p) => {
       if (p.ok) {
         zip.file(`quttr-poster-${p.code}.png`, p.buffer);
         successCount++;
+      } else {
+        failCount++;
       }
     });
 
     zip.file(
       'README.txt',
-      `Quttr QR Posters\nBatch: ${batchName}\nPoster: ${poster.name}\n` +
-      `Chunk: ${chunk} of ${totalChunks}\nCount in this ZIP: ${successCount}\n` +
-      `Total posters in batch: ${totalCount}\nGenerated: ${new Date().toLocaleString('en-IN')}\n\n` +
-      (totalChunks > 1 ? `⚠️ This is PART ${chunk} of ${totalChunks}. Download remaining chunks separately.\n` : '')
+      `Quttr QR Posters\n` +
+      `═══════════════════════════════════\n` +
+      `Batch:         ${batchName}\n` +
+      `Poster:        ${poster.name}\n` +
+      `Filter:        ${statusFilter || 'all statuses'}\n` +
+      `This ZIP:      Part ${chunk} of ${totalChunks}\n` +
+      `Posters here:  ${successCount}\n` +
+      `Failed:        ${failCount}\n` +
+      `Batch total:   ${totalCount}\n` +
+      `Generated:     ${new Date().toLocaleString('en-IN')}\n` +
+      `═══════════════════════════════════\n\n` +
+      (totalChunks > 1
+        ? `⚠️  MULTI-PART DOWNLOAD\n` +
+          `This is part ${chunk} of ${totalChunks}. Make sure to download all parts.\n\n`
+        : '') +
+      `📄 Print settings:\n` +
+      `   - Paper: A4\n` +
+      `   - Scale: 100%\n` +
+      `   - Recommended: 200 GSM paper + lamination\n`
     );
 
     const zipBuffer = await zip.generateAsync({
@@ -144,6 +189,7 @@ export async function GET(request, { params }) {
         'X-Total-Chunks': String(totalChunks),
         'X-Current-Chunk': String(chunk),
         'X-Total-Posters': String(totalCount),
+        'X-Chunk-Success': String(successCount),
       },
     });
   } catch (error) {
