@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { 
   QrCode, Plus, Search, TrendingUp, CheckCircle, AlertCircle, 
   Loader2, Package, Eye, Calendar, BarChart3, Layers, Camera,
-  Download, Printer, Move, Target,
+  Download, Printer, Image as ImageIcon, Star, X,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -18,6 +18,7 @@ export default function QRCodesPage() {
   const [filter, setFilter] = useState('ALL');
   const [search, setSearch] = useState('');
   const [downloadingBatch, setDownloadingBatch] = useState(null);
+  const [pickerBatch, setPickerBatch] = useState(null); // { batch, statusFilter }
 
   useEffect(() => {
     loadData();
@@ -26,25 +27,16 @@ export default function QRCodesPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const promises = [
-        fetch('/api/qr/stats').then(r => r.json()),
-      ];
-      
+      const promises = [fetch('/api/qr/stats').then(r => r.json())];
       if (tab === 'batches') {
         promises.push(fetch('/api/qr/batches').then(r => r.json()));
       } else {
         promises.push(fetch(`/api/qr/generate?status=${filter}&limit=100`).then(r => r.json()));
       }
-      
       const [statsRes, dataRes] = await Promise.all(promises);
-      
       if (statsRes.success) setStats(statsRes.stats);
-      
-      if (tab === 'batches' && dataRes.success) {
-        setBatches(dataRes.batches || []);
-      } else if (dataRes.success) {
-        setCodes(dataRes.codes || []);
-      }
+      if (tab === 'batches' && dataRes.success) setBatches(dataRes.batches || []);
+      else if (dataRes.success) setCodes(dataRes.codes || []);
     } catch (error) {
       toast.error('Failed to load data');
     } finally {
@@ -52,13 +44,9 @@ export default function QRCodesPage() {
     }
   };
 
-  // Download all posters of a batch as ZIP
-  const downloadBatchPosters = async (batch, statusFilter = null, e) => {
+  const openPicker = (batch, statusFilter = null, e) => {
     e?.preventDefault();
     e?.stopPropagation();
-
-    const key = `${batch.batch_id}-${statusFilter || 'all'}`;
-    setDownloadingBatch(key);
 
     const count =
       statusFilter === 'ACTIVE' ? batch.active :
@@ -67,22 +55,30 @@ export default function QRCodesPage() {
 
     if (count === 0) {
       toast.error('No QRs to download');
-      setDownloadingBatch(null);
+      return;
+    }
+    if (count > 200) {
+      toast.error(`Batch has ${count} QRs. Max 200 per download.`);
       return;
     }
 
-    if (count > 200) {
-      toast.error(`Batch has ${count} QRs. Max 200 per download.`);
-      setDownloadingBatch(null);
-      return;
-    }
+    setPickerBatch({ batch, statusFilter, count });
+  };
+
+  const doDownload = async (batch, statusFilter, posterId, count) => {
+    const key = `${batch.batch_id}-${statusFilter || 'all'}`;
+    setDownloadingBatch(key);
+    setPickerBatch(null);
 
     toast.loading(`Generating ${count} posters... (~${Math.ceil(count / 3)}s)`, { id: 'batch-dl' });
 
     try {
-      const url = `/api/qr/poster-batch/${batch.batch_id}${statusFilter ? `?status=${statusFilter}` : ''}`;
-      const res = await fetch(url);
+      const params = new URLSearchParams();
+      if (statusFilter) params.set('status', statusFilter);
+      if (posterId) params.set('poster', posterId);
+      const url = `/api/qr/poster-batch/${batch.batch_id}?${params.toString()}`;
 
+      const res = await fetch(url);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || `HTTP ${res.status}`);
@@ -119,9 +115,7 @@ export default function QRCodesPage() {
   const formatDate = (date) => {
     if (!date) return 'N/A';
     return new Date(date).toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
+      day: 'numeric', month: 'short', year: 'numeric',
     });
   };
 
@@ -135,27 +129,15 @@ export default function QRCodesPage() {
         </div>
       </div>
 
-      {/* ====================================================== */}
-      {/* 🎯 NEW: Action buttons row with CALIBRATE button       */}
-      {/* ====================================================== */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        {/* CALIBRATE — most prominent, in red gradient */}
+      {/* Action buttons */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
         <Link
-          href="/dashboard/qr-print/calibrate"
-          className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-[#FFD700] to-[#B08900] text-black font-black rounded-xl hover:shadow-[0_0_20px_rgba(255,215,0,0.4)] transition text-sm"
+          href="/dashboard/posters"
+          className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-[#FFD700] to-[#B08900] text-black font-bold rounded-xl hover:shadow-[0_0_20px_rgba(255,215,0,0.4)] transition text-sm"
         >
-          <Target className="w-4 h-4" />
-          <span>Calibrate QR Position</span>
+          <ImageIcon className="w-4 h-4" />
+          Manage Posters
         </Link>
-
-        <Link
-          href="/dashboard/qr-print/bulk"
-          className="flex items-center justify-center gap-2 px-4 py-3 bg-white/[0.05] border border-white/10 hover:bg-white/[0.1] text-white font-bold rounded-xl transition text-sm"
-        >
-          <Package className="w-4 h-4" />
-          Bulk Print
-        </Link>
-
         <Link
           href="/dashboard/qr-codes/scan"
           className="flex items-center justify-center gap-2 px-4 py-3 bg-accent-500/10 border border-accent-500/30 hover:bg-accent-500/20 text-accent-500 font-bold rounded-xl transition text-sm"
@@ -163,7 +145,6 @@ export default function QRCodesPage() {
           <Camera className="w-4 h-4" />
           Scan QR
         </Link>
-
         <Link
           href="/dashboard/qr-codes/generate"
           className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-[#E63946] to-[#B01824] text-white font-bold rounded-xl hover:shadow-lg transition text-sm"
@@ -173,13 +154,13 @@ export default function QRCodesPage() {
         </Link>
       </div>
 
-      {/* 💡 Info tip about calibration */}
+      {/* Info tip */}
       <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 flex items-start gap-2">
-        <Target className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+        <ImageIcon className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
         <div className="text-xs text-white/80">
-          <span className="font-bold text-blue-300">First time? </span>
-          Click <b className="text-[#FFD700]">"Calibrate QR Position"</b> to adjust where the QR appears on the poster.
-          One-time setup — then all posters will be perfect!
+          <span className="font-bold text-blue-300">Tip: </span>
+          Upload posters at <Link href="/dashboard/posters" className="text-[#FFD700] underline">Manage Posters</Link> first.
+          Then when downloading a batch, you'll pick which poster design to use.
         </div>
       </div>
 
@@ -196,7 +177,6 @@ export default function QRCodesPage() {
             </div>
           </div>
         </div>
-
         <div className="stat-card">
           <div className="flex items-center justify-between">
             <div>
@@ -208,7 +188,6 @@ export default function QRCodesPage() {
             </div>
           </div>
         </div>
-
         <div className="stat-card">
           <div className="flex items-center justify-between">
             <div>
@@ -220,7 +199,6 @@ export default function QRCodesPage() {
             </div>
           </div>
         </div>
-
         <div className="stat-card">
           <div className="flex items-center justify-between">
             <div>
@@ -254,7 +232,6 @@ export default function QRCodesPage() {
               All QR Codes
             </button>
           </div>
-          
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
             <input
@@ -265,7 +242,6 @@ export default function QRCodesPage() {
               className="input pl-10"
             />
           </div>
-          
           {tab === 'all' && (
             <div className="flex gap-2 flex-wrap">
               {['ALL', 'ACTIVE', 'INACTIVE', 'PAUSED'].map(s => (
@@ -273,9 +249,7 @@ export default function QRCodesPage() {
                   key={s}
                   onClick={() => setFilter(s)}
                   className={`btn ${filter === s ? 'btn-accent' : 'btn-outline'}`}
-                >
-                  {s}
-                </button>
+                >{s}</button>
               ))}
             </div>
           )}
@@ -294,8 +268,7 @@ export default function QRCodesPage() {
             <div className="col-span-full card p-12 text-center">
               <Package className="w-16 h-16 text-white/20 mx-auto mb-4" />
               <p className="text-body mb-2">No batches yet</p>
-              <p className="text-caption mb-6">Generate your first batch to get started</p>
-              <Link href="/dashboard/qr-codes/generate" className="btn-brand inline-flex">
+              <Link href="/dashboard/qr-codes/generate" className="btn-brand inline-flex mt-4">
                 <Plus className="w-4 h-4" />
                 Generate First Batch
               </Link>
@@ -321,19 +294,14 @@ export default function QRCodesPage() {
                       {formatDate(batch.created_at)}
                     </div>
                   </Link>
-                  
-                  <Link
-                    href={`/dashboard/qr-codes/batch/${batch.batch_id}`}
-                    className="block"
-                  >
+
+                  <Link href={`/dashboard/qr-codes/batch/${batch.batch_id}`} className="block">
                     <h3 className="text-title mb-2 group-hover:text-accent-500 transition-colors">
                       {batch.batch_name}
                     </h3>
-                    
                     {batch.notes && (
                       <p className="text-xs text-white/50 mb-4 line-clamp-2">{batch.notes}</p>
                     )}
-                    
                     <div className="grid grid-cols-3 gap-2 mb-4">
                       <div className="text-center p-2 rounded-lg bg-white/[0.03]">
                         <div className="text-lg font-bold text-white">{batch.total}</div>
@@ -350,7 +318,7 @@ export default function QRCodesPage() {
                     </div>
                   </Link>
 
-                  {/* Download Posters Section */}
+                  {/* Download section */}
                   <div className="pt-4 border-t border-white/[0.06] space-y-2">
                     <div className="flex items-center gap-2 mb-2">
                       <Printer className="w-3.5 h-3.5 text-[#FFD700]" />
@@ -360,32 +328,26 @@ export default function QRCodesPage() {
                     </div>
 
                     <button
-                      onClick={(e) => downloadBatchPosters(batch, null, e)}
+                      onClick={(e) => openPicker(batch, null, e)}
                       disabled={anyDownloading || batch.total === 0 || batch.total > 200}
                       title={
                         batch.total > 200
-                          ? 'Max 200 per batch — use Bulk Print for larger'
-                          : `Download all ${batch.total} posters as ZIP`
+                          ? 'Max 200 per batch download'
+                          : `Choose poster & download all ${batch.total}`
                       }
                       className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-bold rounded-lg hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed text-sm"
                     >
                       {isDownloadingAll ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Generating...
-                        </>
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>
                       ) : (
-                        <>
-                          <Download className="w-4 h-4" />
-                          Download ALL ({batch.total})
-                        </>
+                        <><Download className="w-4 h-4" /> Download ALL ({batch.total})</>
                       )}
                     </button>
 
                     {(batch.inactive > 0 || batch.active > 0) && (
                       <div className="grid grid-cols-2 gap-2">
                         <button
-                          onClick={(e) => downloadBatchPosters(batch, 'INACTIVE', e)}
+                          onClick={(e) => openPicker(batch, 'INACTIVE', e)}
                           disabled={anyDownloading || batch.inactive === 0}
                           className="flex items-center justify-center gap-1 px-2 py-2 bg-warning/10 text-warning border border-warning/30 hover:bg-warning/20 rounded-lg text-xs font-bold disabled:opacity-40"
                         >
@@ -397,7 +359,7 @@ export default function QRCodesPage() {
                           Pending ({batch.inactive})
                         </button>
                         <button
-                          onClick={(e) => downloadBatchPosters(batch, 'ACTIVE', e)}
+                          onClick={(e) => openPicker(batch, 'ACTIVE', e)}
                           disabled={anyDownloading || batch.active === 0}
                           className="flex items-center justify-center gap-1 px-2 py-2 bg-success/10 text-success border border-success/30 hover:bg-success/20 rounded-lg text-xs font-bold disabled:opacity-40"
                         >
@@ -410,15 +372,6 @@ export default function QRCodesPage() {
                         </button>
                       </div>
                     )}
-
-                    {batch.total > 200 && (
-                      <p className="text-2xs text-warning text-center">
-                        ⚠️ Over 200 QRs — use{' '}
-                        <Link href="/dashboard/qr-print/bulk" className="underline">
-                          Bulk Print
-                        </Link>
-                      </p>
-                    )}
                   </div>
 
                   <div className="flex items-center justify-between pt-4 mt-4 border-t border-white/[0.06]">
@@ -430,9 +383,7 @@ export default function QRCodesPage() {
                     <Link
                       href={`/dashboard/qr-codes/batch/${batch.batch_id}`}
                       className="text-xs text-accent-500 hover:translate-x-1 transition-transform"
-                    >
-                      View →
-                    </Link>
+                    >View →</Link>
                   </div>
                 </div>
               );
@@ -495,21 +446,10 @@ export default function QRCodesPage() {
                         <span className="text-xs text-white/50">{code.batch_name}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <Link 
-                            href={`/dashboard/qr-codes/${code.short_code}`}
-                            className="text-sm text-accent-500 hover:text-accent-400"
-                          >
-                            View
-                          </Link>
-                          <Link 
-                            href={`/dashboard/qr-print/${code.short_code}`}
-                            className="p-1 hover:bg-white/[0.05] rounded"
-                            title="Print poster"
-                          >
-                            <Printer className="w-3.5 h-3.5 text-[#FFD700]" />
-                          </Link>
-                        </div>
+                        <Link 
+                          href={`/dashboard/qr-codes/${code.short_code}`}
+                          className="text-sm text-accent-500 hover:text-accent-400"
+                        >View</Link>
                       </td>
                     </tr>
                   ))}
@@ -519,6 +459,165 @@ export default function QRCodesPage() {
           )}
         </div>
       )}
+
+      {/* Poster picker modal */}
+      {pickerBatch && (
+        <PosterPickerModal
+          batch={pickerBatch.batch}
+          statusFilter={pickerBatch.statusFilter}
+          count={pickerBatch.count}
+          onClose={() => setPickerBatch(null)}
+          onPick={(posterId) => doDownload(pickerBatch.batch, pickerBatch.statusFilter, posterId, pickerBatch.count)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// POSTER PICKER MODAL
+// ============================================================
+function PosterPickerModal({ batch, statusFilter, count, onClose, onPick }) {
+  const [posters, setPosters] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/posters');
+        const d = await res.json();
+        if (d.success) {
+          setPosters(d.posters);
+          // Auto-select default
+          const def = d.posters.find(p => p.is_default);
+          if (def) setSelectedId(def._id);
+          else if (d.posters.length > 0) setSelectedId(d.posters[0]._id);
+        }
+      } catch (e) {
+        toast.error('Failed to load posters');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const confirm = () => {
+    if (!selectedId) {
+      toast.error('Select a poster');
+      return;
+    }
+    onPick(selectedId);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="p-5 border-b border-white/[0.06] flex items-center justify-between sticky top-0 bg-neutral-900 z-10">
+          <div>
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              <ImageIcon className="w-5 h-5 text-[#FFD700]" />
+              Choose Poster Design
+            </h2>
+            <p className="text-xs text-white/60 mt-1">
+              Batch: <b>{batch.batch_name}</b> · Downloading <b>{count}</b> posters
+              {statusFilter && ` (${statusFilter.toLowerCase()} only)`}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-white/[0.05] rounded-lg flex-shrink-0"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        {loading ? (
+          <div className="p-12 flex justify-center">
+            <Loader2 className="w-8 h-8 text-[#FFD700] animate-spin" />
+          </div>
+        ) : posters.length === 0 ? (
+          <div className="p-12 text-center">
+            <ImageIcon className="w-16 h-16 text-white/20 mx-auto mb-3" />
+            <p className="text-white/60 font-bold mb-2">No posters uploaded</p>
+            <p className="text-xs text-white/40 mb-4">
+              Upload a poster template first
+            </p>
+            <Link
+              href="/dashboard/posters"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#E63946] to-[#B01824] text-white text-sm font-bold rounded-lg"
+            >
+              <ImageIcon className="w-4 h-4" />
+              Go to Posters
+            </Link>
+          </div>
+        ) : (
+          <div className="p-5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {posters.map((p) => {
+                const isSelected = selectedId === p._id;
+                return (
+                  <button
+                    key={p._id}
+                    onClick={() => setSelectedId(p._id)}
+                    className={`relative rounded-xl overflow-hidden border-2 transition text-left ${
+                      isSelected
+                        ? 'border-[#FFD700] shadow-[0_0_20px_rgba(255,215,0,0.4)]'
+                        : 'border-white/10 hover:border-white/30'
+                    }`}
+                  >
+                    <div className="aspect-[3/4] bg-black overflow-hidden">
+                      <img
+                        src={`/api/posters/${p._id}/image`}
+                        alt={p.name}
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <div className="p-2 bg-white/[0.03]">
+                      <div className="flex items-center gap-1 mb-1">
+                        {p.is_default && (
+                          <Star className="w-3 h-3 fill-[#FFD700] text-[#FFD700] flex-shrink-0" />
+                        )}
+                        <p className="text-xs font-bold text-white truncate">{p.name}</p>
+                      </div>
+                      <p className="text-[10px] text-white/40">
+                        {p.width}×{p.height}
+                      </p>
+                    </div>
+                    {isSelected && (
+                      <div className="absolute top-2 right-2 w-7 h-7 rounded-full bg-[#FFD700] flex items-center justify-center shadow-lg">
+                        <CheckCircle className="w-5 h-5 text-black" strokeWidth={3} />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        {!loading && posters.length > 0 && (
+          <div className="p-5 border-t border-white/[0.06] flex gap-2 sticky bottom-0 bg-neutral-900">
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 bg-white/[0.05] border border-white/10 rounded-lg text-white/70 hover:bg-white/[0.08]"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirm}
+              disabled={!selectedId}
+              className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-bold rounded-lg flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+              Download ({count})
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
