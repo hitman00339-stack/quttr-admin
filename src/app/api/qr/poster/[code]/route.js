@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server';
 import sharp from 'sharp';
-import QRCode from 'qrcode';
 import path from 'path';
 import fs from 'fs/promises';
 import { getPosterConfig, getQRPixelCoords } from '@/lib/poster-config';
+import { generateQuttrQR } from '@/lib/styled-qr';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Cache the template image buffer in memory
 let templateCache = null;
 let templateMetaCache = null;
 
@@ -20,21 +19,6 @@ async function loadTemplate() {
   templateCache = buffer;
   templateMetaCache = meta;
   return { buffer, meta };
-}
-
-async function generateQRBuffer(code, size) {
-  // Generate QR locally using qrcode library (no external API)
-  const url = `https://quttrr.com/q/${code}`;
-  return await QRCode.toBuffer(url, {
-    type: 'png',
-    width: size,
-    margin: 0,
-    errorCorrectionLevel: 'H', // High — survives 30% damage
-    color: {
-      dark: '#000000',
-      light: '#FFFFFF',
-    },
-  });
 }
 
 export async function GET(request, { params }) {
@@ -52,29 +36,25 @@ export async function GET(request, { params }) {
     const posterWidth = meta.width;
     const posterHeight = meta.height;
 
-    // 2. Get calibrated QR position from DB (or defaults)
+    // 2. Get calibrated QR position
     const config = await getPosterConfig();
     const qrCoords = getQRPixelCoords(posterWidth, posterHeight, config);
 
-    // 3. Generate QR locally at exact needed size
-    const qrBuffer = await generateQRBuffer(code, qrCoords.width);
+    // 3. Generate STYLED QR (with red circle + scissors logo)
+    const styledQRBuffer = await generateQuttrQR(code, qrCoords.width);
 
-    // 4. Ensure QR is exact dimensions with white background
-    const qrResized = await sharp(qrBuffer)
+    // 4. Ensure exact dimensions
+    const qrResized = await sharp(styledQRBuffer)
       .resize(qrCoords.width, qrCoords.height, {
         fit: 'contain',
         background: '#ffffff',
       })
       .toBuffer();
 
-    // 5. Composite QR onto poster at exact coordinates
+    // 5. Composite onto poster
     const finalBuffer = await sharp(templateBuffer)
       .composite([
-        {
-          input: qrResized,
-          left: qrCoords.x,
-          top: qrCoords.y,
-        },
+        { input: qrResized, left: qrCoords.x, top: qrCoords.y },
       ])
       .png({ quality: 100, compressionLevel: 6 })
       .toBuffer();
