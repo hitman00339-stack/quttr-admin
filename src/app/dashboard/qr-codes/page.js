@@ -9,7 +9,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { generatePostersZip, downloadZip } from '@/lib/client-poster-generator';
+import { generatePostersZip, downloadZip } from '@/lib/clien
 
 export default function QRCodesPage() {
   const [tab, setTab] = useState('batches');
