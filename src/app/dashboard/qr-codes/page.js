@@ -5,9 +5,17 @@ import Link from 'next/link';
 import { 
   QrCode, Plus, Search, TrendingUp, CheckCircle, AlertCircle, 
   Loader2, Package, Eye, Calendar, BarChart3, Layers, Camera,
-  Download, Printer, Image as ImageIcon, Star, X,
+  Download, Printer, Image as ImageIcon, Star, X, Clock, Info,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+
+// Chunk size options user can pick
+const CHUNK_OPTIONS = [
+  { size: 10, label: '10 per ZIP', desc: '⚡ Fastest · Most files', color: 'blue' },
+  { size: 25, label: '25 per ZIP', desc: '🚀 Fast · Balanced', color: 'cyan' },
+  { size: 50, label: '50 per ZIP', desc: '⭐ Recommended', color: 'yellow' },
+  { size: 100, label: '100 per ZIP', desc: '📦 Fewer files', color: 'orange' },
+];
 
 export default function QRCodesPage() {
   const [tab, setTab] = useState('batches');
@@ -52,19 +60,23 @@ export default function QRCodesPage() {
       statusFilter === 'INACTIVE' ? batch.inactive :
       batch.total;
     if (count === 0) { toast.error('No QRs to download'); return; }
-    if (count > 200) { toast.error(`Batch has ${count} QRs. Max 200 per download.`); return; }
     setPickerBatch({ batch, statusFilter, count });
   };
 
-  const doDownload = async (batch, statusFilter, posterId, count) => {
+  const doDownload = async (batch, statusFilter, posterId, chunkSize, count) => {
     const key = `${batch.batch_id}-${statusFilter || 'all'}`;
     setDownloadingBatch(key);
     setPickerBatch(null);
-    toast.loading(`Generating ${count} posters...`, { id: 'batch-dl' });
-    try {
+
+    const totalChunks = Math.ceil(count / chunkSize);
+
+    const downloadChunk = async (chunkNum) => {
       const params = new URLSearchParams();
       if (statusFilter) params.set('status', statusFilter);
       if (posterId) params.set('poster', posterId);
+      params.set('chunk', String(chunkNum));
+      params.set('size', String(chunkSize));
+
       const res = await fetch(`/api/qr/poster-batch/${batch.batch_id}?${params.toString()}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -77,11 +89,31 @@ export default function QRCodesPage() {
       const cd = res.headers.get('content-disposition') || '';
       const match = cd.match(/filename="?([^"]+)"?/);
       const cleanName = (batch.batch_name || batch.batch_id).replace(/[^a-z0-9]/gi, '-');
-      a.download = match ? match[1] : `${cleanName}-posters.zip`;
+      a.download = match ? match[1] : `${cleanName}-part${chunkNum}.zip`;
       a.click();
       URL.revokeObjectURL(objUrl);
-      toast.success(`Downloaded ${count} posters!`, { id: 'batch-dl' });
+    };
+
+    try {
+      if (totalChunks === 1) {
+        // Single ZIP
+        toast.loading(`Generating ${count} posters...`, { id: 'batch-dl' });
+        await downloadChunk(1);
+        toast.success(`✅ Downloaded ${count} posters!`, { id: 'batch-dl' });
+      } else {
+        // Multi-chunk sequential download
+        for (let chunkNum = 1; chunkNum <= totalChunks; chunkNum++) {
+          toast.loading(`Generating part ${chunkNum} of ${totalChunks}...`, { id: 'batch-dl' });
+          await downloadChunk(chunkNum);
+          // Small delay between downloads so browser handles them properly
+          if (chunkNum < totalChunks) {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+          }
+        }
+        toast.success(`✅ Downloaded all ${totalChunks} parts (${count} posters)!`, { id: 'batch-dl' });
+      }
     } catch (err) {
+      console.error('Download error:', err);
       toast.error(err.message || 'Download failed', { id: 'batch-dl' });
     } finally {
       setDownloadingBatch(null);
@@ -109,7 +141,6 @@ export default function QRCodesPage() {
         </div>
       </div>
 
-      {/* NEW 3-BUTTON LAYOUT (NO CALIBRATE, NO BULK PRINT) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <Link
           href="/dashboard/posters"
@@ -138,8 +169,7 @@ export default function QRCodesPage() {
         <ImageIcon className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
         <div className="text-xs text-white/80">
           <span className="font-bold text-blue-300">Tip: </span>
-          Upload posters at <Link href="/dashboard/posters" className="text-[#FFD700] underline">Manage Posters</Link>.
-          When downloading, you'll pick which poster to use.
+          Large batches auto-split into smaller ZIPs to avoid timeouts. You choose the chunk size when downloading.
         </div>
       </div>
 
@@ -272,7 +302,7 @@ export default function QRCodesPage() {
 
                     <button
                       onClick={(e) => openPicker(batch, null, e)}
-                      disabled={anyDownloading || batch.total === 0 || batch.total > 200}
+                      disabled={anyDownloading || batch.total === 0}
                       className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-bold rounded-lg hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed text-sm"
                     >
                       {isDownloadingAll ? (
@@ -362,22 +392,26 @@ export default function QRCodesPage() {
       )}
 
       {pickerBatch && (
-        <PosterPickerModal
+        <DownloadPickerModal
           batch={pickerBatch.batch}
           statusFilter={pickerBatch.statusFilter}
           count={pickerBatch.count}
           onClose={() => setPickerBatch(null)}
-          onPick={(posterId) => doDownload(pickerBatch.batch, pickerBatch.statusFilter, posterId, pickerBatch.count)}
+          onConfirm={(posterId, chunkSize) => doDownload(pickerBatch.batch, pickerBatch.statusFilter, posterId, chunkSize, pickerBatch.count)}
         />
       )}
     </div>
   );
 }
 
-function PosterPickerModal({ batch, statusFilter, count, onClose, onPick }) {
+// ============================================================
+// DOWNLOAD PICKER MODAL — Poster + Chunk Size selector
+// ============================================================
+function DownloadPickerModal({ batch, statusFilter, count, onClose, onConfirm }) {
   const [posters, setPosters] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedPosterId, setSelectedPosterId] = useState(null);
+  const [selectedChunkSize, setSelectedChunkSize] = useState(50);
 
   useEffect(() => {
     (async () => {
@@ -387,8 +421,8 @@ function PosterPickerModal({ batch, statusFilter, count, onClose, onPick }) {
         if (d.success) {
           setPosters(d.posters);
           const def = d.posters.find(p => p.is_default);
-          if (def) setSelectedId(def._id);
-          else if (d.posters.length > 0) setSelectedId(d.posters[0]._id);
+          if (def) setSelectedPosterId(def._id);
+          else if (d.posters.length > 0) setSelectedPosterId(d.posters[0]._id);
         }
       } catch (e) {
         toast.error('Failed to load posters');
@@ -398,9 +432,22 @@ function PosterPickerModal({ batch, statusFilter, count, onClose, onPick }) {
     })();
   }, []);
 
+  // Auto-suggest chunk size based on total count
+  useEffect(() => {
+    if (count <= 10) setSelectedChunkSize(10);
+    else if (count <= 25) setSelectedChunkSize(25);
+    else if (count <= 100) setSelectedChunkSize(50);
+    else setSelectedChunkSize(50); // For larger, still recommend 50
+  }, [count]);
+
+  const totalChunks = Math.ceil(count / selectedChunkSize);
+  const estimatedTime = totalChunks * (selectedChunkSize * 0.5); // ~500ms per poster
+  const showAllInOne = count <= selectedChunkSize;
+
   const confirm = () => {
-    if (!selectedId) { toast.error('Select a poster'); return; }
-    onPick(selectedId);
+    if (!selectedPosterId) { toast.error('Select a poster'); return; }
+    if (!selectedChunkSize) { toast.error('Select chunk size'); return; }
+    onConfirm(selectedPosterId, selectedChunkSize);
   };
 
   return (
@@ -409,11 +456,11 @@ function PosterPickerModal({ batch, statusFilter, count, onClose, onPick }) {
         <div className="p-5 border-b border-white/[0.06] flex items-center justify-between sticky top-0 bg-neutral-900 z-10">
           <div>
             <h2 className="text-lg font-bold flex items-center gap-2">
-              <ImageIcon className="w-5 h-5 text-[#FFD700]" />
-              Choose Poster Design
+              <Download className="w-5 h-5 text-[#FFD700]" />
+              Download Posters
             </h2>
             <p className="text-xs text-white/60 mt-1">
-              Batch: <b>{batch.batch_name}</b> · Downloading <b>{count}</b> posters
+              Batch: <b>{batch.batch_name}</b> · <b>{count}</b> posters
               {statusFilter && ` (${statusFilter.toLowerCase()} only)`}
             </p>
           </div>
@@ -423,7 +470,9 @@ function PosterPickerModal({ batch, statusFilter, count, onClose, onPick }) {
         </div>
 
         {loading ? (
-          <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 text-[#FFD700] animate-spin" /></div>
+          <div className="p-12 flex justify-center">
+            <Loader2 className="w-8 h-8 text-[#FFD700] animate-spin" />
+          </div>
         ) : posters.length === 0 ? (
           <div className="p-12 text-center">
             <ImageIcon className="w-16 h-16 text-white/20 mx-auto mb-3" />
@@ -433,34 +482,125 @@ function PosterPickerModal({ batch, statusFilter, count, onClose, onPick }) {
             </Link>
           </div>
         ) : (
-          <div className="p-5">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {posters.map((p) => {
-                const isSelected = selectedId === p._id;
-                return (
-                  <button key={p._id} onClick={() => setSelectedId(p._id)}
-                    className={`relative rounded-xl overflow-hidden border-2 transition text-left ${
-                      isSelected ? 'border-[#FFD700] shadow-[0_0_20px_rgba(255,215,0,0.4)]' : 'border-white/10 hover:border-white/30'
-                    }`}
-                  >
-                    <div className="aspect-[3/4] bg-black overflow-hidden">
-                      <img src={`/api/posters/${p._id}/image`} alt={p.name} className="w-full h-full object-contain" />
-                    </div>
-                    <div className="p-2 bg-white/[0.03]">
-                      <div className="flex items-center gap-1 mb-1">
-                        {p.is_default && <Star className="w-3 h-3 fill-[#FFD700] text-[#FFD700] flex-shrink-0" />}
-                        <p className="text-xs font-bold text-white truncate">{p.name}</p>
+          <div className="p-5 space-y-6">
+            {/* ==================================================== */}
+            {/* STEP 1: Choose Poster                               */}
+            {/* ==================================================== */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-6 h-6 rounded-full bg-[#FFD700] text-black font-black text-xs flex items-center justify-center">1</span>
+                <h3 className="text-sm font-bold text-white">Choose Poster Design</h3>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {posters.map((p) => {
+                  const isSelected = selectedPosterId === p._id;
+                  return (
+                    <button key={p._id} onClick={() => setSelectedPosterId(p._id)}
+                      className={`relative rounded-xl overflow-hidden border-2 transition text-left ${
+                        isSelected ? 'border-[#FFD700] shadow-[0_0_20px_rgba(255,215,0,0.4)]' : 'border-white/10 hover:border-white/30'
+                      }`}
+                    >
+                      <div className="aspect-[3/4] bg-black overflow-hidden">
+                        <img src={`/api/posters/${p._id}/image`} alt={p.name} className="w-full h-full object-contain" />
                       </div>
-                      <p className="text-[10px] text-white/40">{p.width}×{p.height}</p>
-                    </div>
-                    {isSelected && (
-                      <div className="absolute top-2 right-2 w-7 h-7 rounded-full bg-[#FFD700] flex items-center justify-center shadow-lg">
-                        <CheckCircle className="w-5 h-5 text-black" strokeWidth={3} />
+                      <div className="p-2 bg-white/[0.03]">
+                        <div className="flex items-center gap-1 mb-1">
+                          {p.is_default && <Star className="w-3 h-3 fill-[#FFD700] text-[#FFD700] flex-shrink-0" />}
+                          <p className="text-xs font-bold text-white truncate">{p.name}</p>
+                        </div>
                       </div>
-                    )}
-                  </button>
-                );
-              })}
+                      {isSelected && (
+                        <div className="absolute top-2 right-2 w-7 h-7 rounded-full bg-[#FFD700] flex items-center justify-center shadow-lg">
+                          <CheckCircle className="w-5 h-5 text-black" strokeWidth={3} />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ==================================================== */}
+            {/* STEP 2: Choose Chunk Size                            */}
+            {/* ==================================================== */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-6 h-6 rounded-full bg-[#FFD700] text-black font-black text-xs flex items-center justify-center">2</span>
+                <h3 className="text-sm font-bold text-white">Choose Download Size</h3>
+              </div>
+              <p className="text-xs text-white/50 mb-3">
+                How many posters per ZIP file? Smaller chunks = faster + safer from timeouts.
+              </p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {CHUNK_OPTIONS.map((opt) => {
+                  const isSelected = selectedChunkSize === opt.size;
+                  const chunksNeeded = Math.ceil(count / opt.size);
+                  return (
+                    <button
+                      key={opt.size}
+                      onClick={() => setSelectedChunkSize(opt.size)}
+                      className={`p-3 rounded-xl border-2 text-left transition ${
+                        isSelected
+                          ? 'border-[#FFD700] bg-[#FFD700]/10 shadow-[0_0_15px_rgba(255,215,0,0.3)]'
+                          : 'border-white/10 bg-white/[0.02] hover:border-white/30'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-lg font-black text-white">{opt.size}</span>
+                        {isSelected && <CheckCircle className="w-4 h-4 text-[#FFD700]" />}
+                      </div>
+                      <p className="text-[10px] font-bold text-white/80">{opt.label}</p>
+                      <p className="text-[9px] text-white/50 mt-1">{opt.desc}</p>
+                      {count > opt.size && (
+                        <p className="text-[9px] text-[#FFD700] mt-1 font-bold">
+                          = {chunksNeeded} ZIP files
+                        </p>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ==================================================== */}
+            {/* SUMMARY                                             */}
+            {/* ==================================================== */}
+            <div className="bg-gradient-to-br from-[#FFD700]/10 to-[#E63946]/10 border border-[#FFD700]/30 rounded-xl p-4 space-y-2">
+              <div className="flex items-center gap-2 mb-2">
+                <Info className="w-4 h-4 text-[#FFD700]" />
+                <p className="text-sm font-bold text-[#FFD700]">Download Summary</p>
+              </div>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-white/60">Total posters:</span>
+                  <span className="font-bold text-white">{count}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/60">ZIP size:</span>
+                  <span className="font-bold text-white">{selectedChunkSize} posters per ZIP</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/60">ZIP files:</span>
+                  <span className="font-bold text-emerald-400">{totalChunks} file{totalChunks > 1 ? 's' : ''}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/60 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    Estimated time:
+                  </span>
+                  <span className="font-bold text-white">~{Math.ceil(estimatedTime)}s</span>
+                </div>
+              </div>
+
+              {totalChunks > 1 && (
+                <div className="mt-3 p-2 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <p className="text-[11px] text-blue-300 leading-relaxed">
+                    💡 <b>Multi-part download:</b> Browser will download <b>{totalChunks} separate ZIP files</b> one after another.
+                    You may need to allow multiple downloads in browser popup.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -470,10 +610,10 @@ function PosterPickerModal({ batch, statusFilter, count, onClose, onPick }) {
             <button onClick={onClose} className="flex-1 py-2.5 bg-white/[0.05] border border-white/10 rounded-lg text-white/70 hover:bg-white/[0.08]">
               Cancel
             </button>
-            <button onClick={confirm} disabled={!selectedId}
-              className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-bold rounded-lg flex items-center justify-center gap-2 disabled:opacity-50">
+            <button onClick={confirm} disabled={!selectedPosterId}
+              className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-bold rounded-lg flex items-center justify-center gap-2 disabled:opacity-50">
               <Download className="w-4 h-4" />
-              Download ({count})
+              {totalChunks === 1 ? `Download ZIP (${count})` : `Download ${totalChunks} ZIPs`}
             </button>
           </div>
         )}
