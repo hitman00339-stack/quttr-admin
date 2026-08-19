@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import sharp from 'sharp';
 import JSZip from 'jszip';
-import QRCode from 'qrcode';
 import path from 'path';
 import fs from 'fs/promises';
 import { getPosterConfig, getQRPixelCoords } from '@/lib/poster-config';
+import { generateQuttrQR } from '@/lib/styled-qr';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,20 +23,10 @@ async function loadTemplate() {
   return { buffer, meta };
 }
 
-async function generateQRBuffer(code, size) {
-  const url = `https://quttrr.com/q/${code}`;
-  return await QRCode.toBuffer(url, {
-    type: 'png',
-    width: size,
-    margin: 0,
-    errorCorrectionLevel: 'H',
-    color: { dark: '#000000', light: '#FFFFFF' },
-  });
-}
-
 async function makePoster(code, templateBuffer, qrCoords) {
-  const qrBuffer = await generateQRBuffer(code, qrCoords.width);
-  const qrResized = await sharp(qrBuffer)
+  // Use STYLED QR
+  const styledQRBuffer = await generateQuttrQR(code, qrCoords.width);
+  const qrResized = await sharp(styledQRBuffer)
     .resize(qrCoords.width, qrCoords.height, {
       fit: 'contain',
       background: '#ffffff',
@@ -60,7 +50,6 @@ export async function POST(request) {
         { status: 400 }
       );
     }
-
     if (codes.length > 200) {
       return NextResponse.json(
         { success: false, message: 'Max 200 posters per batch' },
@@ -68,13 +57,12 @@ export async function POST(request) {
       );
     }
 
-    // Load template once
     const { buffer: templateBuffer, meta } = await loadTemplate();
     const config = await getPosterConfig();
     const qrCoords = getQRPixelCoords(meta.width, meta.height, config);
 
-    // Generate posters in parallel (concurrency limit for stability)
-    const CONCURRENCY = 8; // Higher since local QR generation is fast
+    // Generate in parallel (5 at a time to avoid memory issues)
+    const CONCURRENCY = 5;
     const posters = [];
     for (let i = 0; i < codes.length; i += CONCURRENCY) {
       const batch = codes.slice(i, i + CONCURRENCY);
@@ -92,7 +80,6 @@ export async function POST(request) {
       posters.push(...results);
     }
 
-    // Build ZIP
     const zip = new JSZip();
     let successCount = 0;
     let failCount = 0;
@@ -112,9 +99,8 @@ export async function POST(request) {
       `Total requested: ${codes.length}\n` +
       `Successful: ${successCount}\n` +
       `Failed: ${failCount}\n\n` +
-      `Each poster is a print-ready PNG (A4 portrait).\n` +
-      `Print at 100% scale on A4 paper.\n` +
-      `Recommended: 200 GSM paper + lamination for outdoor use.\n`
+      `Each poster is print-ready A4 PNG with styled QR (Q logo center).\n` +
+      `Print at 100% scale on 200 GSM paper for best results.\n`
     );
 
     const zipBuffer = await zip.generateAsync({
