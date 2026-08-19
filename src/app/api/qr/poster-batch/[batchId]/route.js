@@ -9,33 +9,39 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const HARD_MAX = 100;
+// SAFE limits to avoid memory issues on Vercel free tier
+const HARD_MAX = 50;              // Max posters per single request
+const CONCURRENCY = 2;             // Process 2 QR generations in parallel (safer)
 
 async function makePoster(code, templateBuffer, qrCoords) {
-  // Generate QR at 2x resolution for sharper downscale
-  const qrRenderSize = qrCoords.width * 2;
-  const styledQRBuffer = await generateQuttrQR(code, qrRenderSize);
+  try {
+    // Generate QR at 1.5x resolution (balance between quality & memory)
+    const qrRenderSize = Math.round(qrCoords.width * 1.5);
+    const styledQRBuffer = await generateQuttrQR(code, qrRenderSize);
 
-  // High-quality downscale
-  const qrResized = await sharp(styledQRBuffer)
-    .resize(qrCoords.width, qrCoords.height, {
-      fit: 'contain',
-      background: '#ffffff',
-      kernel: sharp.kernel.lanczos3,
-    })
-    .png({ compressionLevel: 0 })
-    .toBuffer();
+    const qrResized = await sharp(styledQRBuffer)
+      .resize(qrCoords.width, qrCoords.height, {
+        fit: 'contain',
+        background: '#ffffff',
+        kernel: sharp.kernel.lanczos3,
+      })
+      .png({ compressionLevel: 0 })
+      .toBuffer();
 
-  // Composite + JPEG output
-  return await sharp(templateBuffer)
-    .composite([{ input: qrResized, left: qrCoords.x, top: qrCoords.y }])
-    .jpeg({
-      quality: 95,               // 95 = visually lossless, smaller than PNG
-      chromaSubsampling: '4:4:4', // Best color quality
-      mozjpeg: true,             // Better compression
-      force: true,
-    })
-    .toBuffer();
+    // Composite + JPEG output
+    return await sharp(templateBuffer)
+      .composite([{ input: qrResized, left: qrCoords.x, top: qrCoords.y }])
+      .jpeg({
+        quality: 92,               // Slightly lower for smaller files (still print-ready)
+        chromaSubsampling: '4:4:4',
+        mozjpeg: true,
+        force: true,
+      })
+      .toBuffer();
+  } catch (err) {
+    console.error(`makePoster failed for ${code}:`, err.message);
+    throw err;
+  }
 }
 
 export async function GET(request, { params }) {
@@ -114,7 +120,7 @@ export async function GET(request, { params }) {
     const cleanBatchName = batchName.replace(/[^a-z0-9]/gi, '-');
     const cleanPosterName = (poster.name || 'poster').replace(/[^a-z0-9]/gi, '-');
 
-    const CONCURRENCY = 5;
+    // Process in SMALL sequential batches to avoid memory issues
     const posters = [];
     for (let i = 0; i < qrCodes.length; i += CONCURRENCY) {
       const batch = qrCodes.slice(i, i + CONCURRENCY);
@@ -124,14 +130,19 @@ export async function GET(request, { params }) {
             const buffer = await makePoster(qr.short_code, templateBuffer, qrCoords);
             return { code: qr.short_code, buffer, ok: true };
           } catch (err) {
+            console.error(`Failed for ${qr.short_code}:`, err.message);
             return { code: qr.short_code, ok: false, error: err.message };
           }
         })
       );
       posters.push(...results);
+
+      // Small delay between batches to prevent memory buildup
+      if (i + CONCURRENCY < qrCodes.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
     }
 
-    // Build ZIP with JPEG files
     const zip = new JSZip();
     let successCount = 0;
     let failCount = 0;
@@ -146,34 +157,24 @@ export async function GET(request, { params }) {
 
     zip.file(
       'README.txt',
-      `Quttr QR Posters — JPEG (High Quality)\n` +
+      `Quttr QR Posters — JPEG Print Quality\n` +
       `═══════════════════════════════════\n` +
       `Batch:         ${batchName}\n` +
       `Poster:        ${poster.name}\n` +
       `Dimensions:    ${posterWidth}×${posterHeight}px\n` +
-      `Format:        JPEG (95% quality)\n` +
-      `Filter:        ${statusFilter || 'all statuses'}\n` +
+      `Format:        JPEG (92% quality)\n` +
       `This ZIP:      Part ${chunk} of ${totalChunks}\n` +
       `Posters here:  ${successCount}\n` +
       `Failed:        ${failCount}\n` +
-      `Batch total:   ${totalCount}\n` +
       `Generated:     ${new Date().toLocaleString('en-IN')}\n` +
       `═══════════════════════════════════\n\n` +
-      (totalChunks > 1
-        ? `⚠️  MULTI-PART DOWNLOAD\n` +
-          `This is part ${chunk} of ${totalChunks}. Download all parts.\n\n`
-        : '') +
-      `📄 Print settings:\n` +
-      `   - Paper: A4 (210×297mm)\n` +
-      `   - Scale: 100% (no scaling)\n` +
-      `   - Recommended: 200 GSM matte paper + lamination\n`
+      `Print at 100% scale on A4, 200 GSM paper.\n`
     );
 
-    // Use DEFLATE compression since JPEGs are already compressed
     const zipBuffer = await zip.generateAsync({
       type: 'nodebuffer',
       compression: 'DEFLATE',
-      compressionOptions: { level: 3 }, // Light compression (JPEGs don't compress much)
+      compressionOptions: { level: 3 },
     });
 
     const filename = totalChunks > 1
@@ -189,6 +190,8 @@ export async function GET(request, { params }) {
         'X-Total-Chunks': String(totalChunks),
         'X-Current-Chunk': String(chunk),
         'X-Total-Posters': String(totalCount),
+        'X-Chunk-Success': String(successCount),
+        'X-Chunk-Failed': String(failCount),
       },
     });
   } catch (error) {
