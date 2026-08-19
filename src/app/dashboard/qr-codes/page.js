@@ -9,12 +9,12 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-// Chunk size options user can pick
+// SAFE chunk sizes for JPEG downloads
 const CHUNK_OPTIONS = [
-  { size: 10, label: '10 per ZIP', desc: '⚡ Fastest · Most files', color: 'blue' },
-  { size: 25, label: '25 per ZIP', desc: '🚀 Fast · Balanced', color: 'cyan' },
-  { size: 50, label: '50 per ZIP', desc: '⭐ Recommended', color: 'yellow' },
-  { size: 100, label: '100 per ZIP', desc: '📦 Fewer files', color: 'orange' },
+  { size: 5,  label: '5 per ZIP',  desc: '⚡ Safest · Most files',  color: 'green' },
+  { size: 10, label: '10 per ZIP', desc: '🚀 Fast · Reliable',      color: 'blue' },
+  { size: 25, label: '25 per ZIP', desc: '⭐ Recommended',           color: 'yellow' },
+  { size: 50, label: '50 per ZIP', desc: '📦 Fewest files',         color: 'orange' },
 ];
 
 export default function QRCodesPage() {
@@ -27,6 +27,7 @@ export default function QRCodesPage() {
   const [search, setSearch] = useState('');
   const [downloadingBatch, setDownloadingBatch] = useState(null);
   const [pickerBatch, setPickerBatch] = useState(null);
+  const [downloadProgress, setDownloadProgress] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -63,26 +64,38 @@ export default function QRCodesPage() {
     setPickerBatch({ batch, statusFilter, count });
   };
 
-  const doDownload = async (batch, statusFilter, posterId, chunkSize, count) => {
-    const key = `${batch.batch_id}-${statusFilter || 'all'}`;
-    setDownloadingBatch(key);
-    setPickerBatch(null);
-
-    const totalChunks = Math.ceil(count / chunkSize);
-
-    const downloadChunk = async (chunkNum) => {
+  // Download single chunk with retry logic
+  const downloadChunk = async (batch, statusFilter, posterId, chunkNum, chunkSize, retryCount = 0) => {
+    const MAX_RETRIES = 3;
+    
+    try {
       const params = new URLSearchParams();
       if (statusFilter) params.set('status', statusFilter);
       if (posterId) params.set('poster', posterId);
       params.set('chunk', String(chunkNum));
       params.set('size', String(chunkSize));
 
-      const res = await fetch(`/api/qr/poster-batch/${batch.batch_id}?${params.toString()}`);
+      // Add timeout controller (55 sec, slightly less than server's 60s)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 55000);
+
+      const res = await fetch(`/api/qr/poster-batch/${batch.batch_id}?${params.toString()}`, {
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+        const err = await res.json().catch(() => ({ message: `HTTP ${res.status}` }));
         throw new Error(err.message || `HTTP ${res.status}`);
       }
+
       const blob = await res.blob();
+      
+      if (blob.size === 0) {
+        throw new Error('Empty ZIP file returned');
+      }
+
       const objUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = objUrl;
@@ -90,33 +103,92 @@ export default function QRCodesPage() {
       const match = cd.match(/filename="?([^"]+)"?/);
       const cleanName = (batch.batch_name || batch.batch_id).replace(/[^a-z0-9]/gi, '-');
       a.download = match ? match[1] : `${cleanName}-part${chunkNum}.zip`;
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(objUrl);
-    };
+      document.body.removeChild(a);
+      
+      // Wait a moment before revoking URL so download can start
+      setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
+
+      return { success: true, chunk: chunkNum };
+    } catch (err) {
+      // Retry on network errors (Failed to fetch, timeout, etc.)
+      if (retryCount < MAX_RETRIES) {
+        console.log(`Retry ${retryCount + 1}/${MAX_RETRIES} for chunk ${chunkNum}`);
+        toast.loading(`Retrying part ${chunkNum} (attempt ${retryCount + 2}/${MAX_RETRIES + 1})...`, { id: 'batch-dl' });
+        
+        // Wait longer between retries
+        await new Promise(resolve => setTimeout(resolve, 3000 * (retryCount + 1)));
+        return downloadChunk(batch, statusFilter, posterId, chunkNum, chunkSize, retryCount + 1);
+      }
+      
+      throw err;
+    }
+  };
+
+  const doDownload = async (batch, statusFilter, posterId, chunkSize, count) => {
+    const key = `${batch.batch_id}-${statusFilter || 'all'}`;
+    setDownloadingBatch(key);
+    setPickerBatch(null);
+
+    const totalChunks = Math.ceil(count / chunkSize);
+    setDownloadProgress({ current: 0, total: totalChunks });
 
     try {
       if (totalChunks === 1) {
-        // Single ZIP
         toast.loading(`Generating ${count} posters...`, { id: 'batch-dl' });
-        await downloadChunk(1);
+        await downloadChunk(batch, statusFilter, posterId, 1, chunkSize);
         toast.success(`✅ Downloaded ${count} posters!`, { id: 'batch-dl' });
       } else {
-        // Multi-chunk sequential download
+        // Sequential download with LONGER delays between files
+        let successChunks = 0;
+        const failedChunks = [];
+
         for (let chunkNum = 1; chunkNum <= totalChunks; chunkNum++) {
-          toast.loading(`Generating part ${chunkNum} of ${totalChunks}...`, { id: 'batch-dl' });
-          await downloadChunk(chunkNum);
-          // Small delay between downloads so browser handles them properly
-          if (chunkNum < totalChunks) {
-            await new Promise(resolve => setTimeout(resolve, 1500));
+          setDownloadProgress({ current: chunkNum, total: totalChunks });
+          toast.loading(
+            `Part ${chunkNum} of ${totalChunks}... (${successChunks} done)`,
+            { id: 'batch-dl' }
+          );
+          
+          try {
+            await downloadChunk(batch, statusFilter, posterId, chunkNum, chunkSize);
+            successChunks++;
+            
+            // LONG delay between downloads (5 seconds)
+            // Browsers block rapid sequential downloads for security
+            if (chunkNum < totalChunks) {
+              toast.loading(
+                `Downloaded ${successChunks}/${totalChunks}. Waiting 5s before next...`,
+                { id: 'batch-dl' }
+              );
+              await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+          } catch (err) {
+            console.error(`Chunk ${chunkNum} failed:`, err);
+            failedChunks.push(chunkNum);
+            
+            // Continue with next chunk instead of stopping
+            toast.error(`Part ${chunkNum} failed. Continuing...`, { duration: 3000 });
+            await new Promise(resolve => setTimeout(resolve, 3000));
           }
         }
-        toast.success(`✅ Downloaded all ${totalChunks} parts (${count} posters)!`, { id: 'batch-dl' });
+
+        if (failedChunks.length === 0) {
+          toast.success(`✅ All ${totalChunks} parts downloaded (${count} posters)!`, { id: 'batch-dl', duration: 5000 });
+        } else {
+          toast.error(
+            `Downloaded ${successChunks}/${totalChunks} parts. Failed: ${failedChunks.join(', ')}. Try again for failed parts.`,
+            { id: 'batch-dl', duration: 10000 }
+          );
+        }
       }
     } catch (err) {
       console.error('Download error:', err);
       toast.error(err.message || 'Download failed', { id: 'batch-dl' });
     } finally {
       setDownloadingBatch(null);
+      setDownloadProgress(null);
     }
   };
 
@@ -142,34 +214,49 @@ export default function QRCodesPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <Link
-          href="/dashboard/posters"
-          className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-[#FFD700] to-[#B08900] text-black font-bold rounded-xl hover:shadow-[0_0_20px_rgba(255,215,0,0.4)] transition text-sm"
-        >
+        <Link href="/dashboard/posters" className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-[#FFD700] to-[#B08900] text-black font-bold rounded-xl hover:shadow-[0_0_20px_rgba(255,215,0,0.4)] transition text-sm">
           <ImageIcon className="w-4 h-4" />
           Manage Posters
         </Link>
-        <Link
-          href="/dashboard/qr-codes/scan"
-          className="flex items-center justify-center gap-2 px-4 py-3 bg-accent-500/10 border border-accent-500/30 hover:bg-accent-500/20 text-accent-500 font-bold rounded-xl transition text-sm"
-        >
+        <Link href="/dashboard/qr-codes/scan" className="flex items-center justify-center gap-2 px-4 py-3 bg-accent-500/10 border border-accent-500/30 hover:bg-accent-500/20 text-accent-500 font-bold rounded-xl transition text-sm">
           <Camera className="w-4 h-4" />
           Scan QR
         </Link>
-        <Link
-          href="/dashboard/qr-codes/generate"
-          className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-[#E63946] to-[#B01824] text-white font-bold rounded-xl hover:shadow-lg transition text-sm"
-        >
+        <Link href="/dashboard/qr-codes/generate" className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-[#E63946] to-[#B01824] text-white font-bold rounded-xl hover:shadow-lg transition text-sm">
           <Plus className="w-4 h-4" />
           Generate Batch
         </Link>
       </div>
 
+      {/* Download progress banner */}
+      {downloadProgress && downloadProgress.total > 1 && (
+        <div className="bg-gradient-to-r from-emerald-500/20 to-blue-500/20 border border-emerald-500/40 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-bold text-emerald-300 flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Downloading Part {downloadProgress.current} of {downloadProgress.total}
+            </p>
+            <span className="text-xs text-white/60">
+              {Math.round((downloadProgress.current / downloadProgress.total) * 100)}%
+            </span>
+          </div>
+          <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 transition-all"
+              style={{ width: `${(downloadProgress.current / downloadProgress.total) * 100}%` }}
+            />
+          </div>
+          <p className="text-[10px] text-white/60 mt-2">
+            ⏳ Waits 5 seconds between downloads to prevent browser blocking
+          </p>
+        </div>
+      )}
+
       <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 flex items-start gap-2">
-        <ImageIcon className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+        <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
         <div className="text-xs text-white/80">
           <span className="font-bold text-blue-300">Tip: </span>
-          Large batches auto-split into smaller ZIPs to avoid timeouts. You choose the chunk size when downloading.
+          Multi-part downloads have 5-second delays between files. Browser may ask to "Allow multiple downloads" — click Allow.
         </div>
       </div>
 
@@ -244,7 +331,6 @@ export default function QRCodesPage() {
         </div>
       </div>
 
-      {/* Content */}
       {loading ? (
         <div className="card p-12 text-center"><Loader2 className="w-8 h-8 text-accent-500 animate-spin mx-auto" /></div>
       ) : tab === 'batches' ? (
@@ -306,7 +392,7 @@ export default function QRCodesPage() {
                       className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-bold rounded-lg hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed text-sm"
                     >
                       {isDownloadingAll ? (
-                        <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Downloading...</>
                       ) : (
                         <><Download className="w-4 h-4" /> Download ALL ({batch.total})</>
                       )}
@@ -404,14 +490,11 @@ export default function QRCodesPage() {
   );
 }
 
-// ============================================================
-// DOWNLOAD PICKER MODAL — Poster + Chunk Size selector
-// ============================================================
 function DownloadPickerModal({ batch, statusFilter, count, onClose, onConfirm }) {
   const [posters, setPosters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPosterId, setSelectedPosterId] = useState(null);
-  const [selectedChunkSize, setSelectedChunkSize] = useState(50);
+  const [selectedChunkSize, setSelectedChunkSize] = useState(10);
 
   useEffect(() => {
     (async () => {
@@ -432,17 +515,18 @@ function DownloadPickerModal({ batch, statusFilter, count, onClose, onConfirm })
     })();
   }, []);
 
-  // Auto-suggest chunk size based on total count
+  // Auto-suggest SAFER chunk sizes
   useEffect(() => {
-    if (count <= 10) setSelectedChunkSize(10);
-    else if (count <= 25) setSelectedChunkSize(25);
-    else if (count <= 100) setSelectedChunkSize(50);
-    else setSelectedChunkSize(50); // For larger, still recommend 50
+    if (count <= 5) setSelectedChunkSize(5);
+    else if (count <= 10) setSelectedChunkSize(10);
+    else if (count <= 50) setSelectedChunkSize(10);  // Safer default
+    else setSelectedChunkSize(25);
   }, [count]);
 
   const totalChunks = Math.ceil(count / selectedChunkSize);
-  const estimatedTime = totalChunks * (selectedChunkSize * 0.5); // ~500ms per poster
-  const showAllInOne = count <= selectedChunkSize;
+  const generationTime = totalChunks * (selectedChunkSize * 0.8); // ~800ms per poster
+  const delayTime = (totalChunks - 1) * 5; // 5s delay between chunks
+  const totalTime = generationTime + delayTime;
 
   const confirm = () => {
     if (!selectedPosterId) { toast.error('Select a poster'); return; }
@@ -483,9 +567,6 @@ function DownloadPickerModal({ batch, statusFilter, count, onClose, onConfirm })
           </div>
         ) : (
           <div className="p-5 space-y-6">
-            {/* ==================================================== */}
-            {/* STEP 1: Choose Poster                               */}
-            {/* ==================================================== */}
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-6 h-6 rounded-full bg-[#FFD700] text-black font-black text-xs flex items-center justify-center">1</span>
@@ -520,16 +601,13 @@ function DownloadPickerModal({ batch, statusFilter, count, onClose, onConfirm })
               </div>
             </div>
 
-            {/* ==================================================== */}
-            {/* STEP 2: Choose Chunk Size                            */}
-            {/* ==================================================== */}
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-6 h-6 rounded-full bg-[#FFD700] text-black font-black text-xs flex items-center justify-center">2</span>
-                <h3 className="text-sm font-bold text-white">Choose Download Size</h3>
+                <h3 className="text-sm font-bold text-white">Choose Chunk Size</h3>
               </div>
               <p className="text-xs text-white/50 mb-3">
-                How many posters per ZIP file? Smaller chunks = faster + safer from timeouts.
+                Smaller = safer (fewer failures). Recommended: <b className="text-[#FFD700]">10 per ZIP</b>
               </p>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -563,9 +641,6 @@ function DownloadPickerModal({ batch, statusFilter, count, onClose, onConfirm })
               </div>
             </div>
 
-            {/* ==================================================== */}
-            {/* SUMMARY                                             */}
-            {/* ==================================================== */}
             <div className="bg-gradient-to-br from-[#FFD700]/10 to-[#E63946]/10 border border-[#FFD700]/30 rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-2 mb-2">
                 <Info className="w-4 h-4 text-[#FFD700]" />
@@ -577,27 +652,29 @@ function DownloadPickerModal({ batch, statusFilter, count, onClose, onConfirm })
                   <span className="font-bold text-white">{count}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-white/60">ZIP size:</span>
-                  <span className="font-bold text-white">{selectedChunkSize} posters per ZIP</span>
-                </div>
-                <div className="flex justify-between">
                   <span className="text-white/60">ZIP files:</span>
                   <span className="font-bold text-emerald-400">{totalChunks} file{totalChunks > 1 ? 's' : ''}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-white/60 flex items-center gap-1">
                     <Clock className="w-3 h-3" />
-                    Estimated time:
+                    Total time:
                   </span>
-                  <span className="font-bold text-white">~{Math.ceil(estimatedTime)}s</span>
+                  <span className="font-bold text-white">
+                    ~{Math.ceil(totalTime)}s 
+                    {totalChunks > 1 && ` (${Math.ceil(generationTime)}s gen + ${delayTime}s delays)`}
+                  </span>
                 </div>
               </div>
 
               {totalChunks > 1 && (
-                <div className="mt-3 p-2 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                  <p className="text-[11px] text-blue-300 leading-relaxed">
-                    💡 <b>Multi-part download:</b> Browser will download <b>{totalChunks} separate ZIP files</b> one after another.
-                    You may need to allow multiple downloads in browser popup.
+                <div className="mt-3 p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
+                  <p className="text-[11px] text-orange-300 leading-relaxed">
+                    ⚠️ <b>Multi-part download:</b> Browser will download <b>{totalChunks} ZIP files</b> with <b>5-second delays</b> between each.
+                    Auto-retries on failures.
+                  </p>
+                  <p className="text-[11px] text-orange-300/80 mt-2">
+                    💡 <b>Tip:</b> If browser blocks multiple downloads, click "Allow" in the popup.
                   </p>
                 </div>
               )}
