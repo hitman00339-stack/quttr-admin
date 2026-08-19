@@ -1,23 +1,23 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/mongodb';
-import { DEFAULT_QR_POSITION } from '@/lib/poster-config';
+import { DEFAULT_QR_POSITION, invalidatePosterCache } from '@/lib/poster-config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Max 8MB uploads
+// Max 8 MB uploads (safe for A4 posters)
 const MAX_SIZE = 8 * 1024 * 1024;
 
-/**
- * GET /api/posters
- * Returns list of all poster templates (metadata only, no image data)
- */
+// ============================================================
+// GET /api/posters
+// Returns list of all poster templates (metadata only)
+// ============================================================
 export async function GET() {
   try {
     const db = await getDb();
     const posters = await db
       .collection('posters')
-      .find({}, { projection: { image_data: 0 } }) // exclude image data
+      .find({}, { projection: { image_data: 0 } }) // exclude heavy image data
       .sort({ is_default: -1, created_at: -1 })
       .toArray();
 
@@ -47,11 +47,11 @@ export async function GET() {
   }
 }
 
-/**
- * POST /api/posters
- * Upload a new poster
- * FormData: { name, description?, image (File), is_default? }
- */
+// ============================================================
+// POST /api/posters
+// Upload a new poster template
+// FormData: { name, description?, image (File), is_default? }
+// ============================================================
 export async function POST(request) {
   try {
     const formData = await request.formData();
@@ -60,13 +60,15 @@ export async function POST(request) {
     const isDefault = formData.get('is_default') === 'true';
     const file = formData.get('image');
 
-    if (!name || typeof name !== 'string') {
+    // Validate name
+    if (!name || typeof name !== 'string' || !name.trim()) {
       return NextResponse.json(
-        { success: false, message: 'Name is required' },
+        { success: false, message: 'Poster name is required' },
         { status: 400 }
       );
     }
 
+    // Validate file
     if (!file || typeof file === 'string') {
       return NextResponse.json(
         { success: false, message: 'Image file is required' },
@@ -74,18 +76,19 @@ export async function POST(request) {
       );
     }
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
+    if (!file.type || !file.type.startsWith('image/')) {
       return NextResponse.json(
-        { success: false, message: 'Only image files allowed' },
+        { success: false, message: 'Only image files allowed (PNG, JPG)' },
         { status: 400 }
       );
     }
 
-    // Validate size
     if (file.size > MAX_SIZE) {
       return NextResponse.json(
-        { success: false, message: `File too large. Max ${MAX_SIZE / 1024 / 1024}MB` },
+        {
+          success: false,
+          message: `File too large. Max ${MAX_SIZE / 1024 / 1024} MB`,
+        },
         { status: 400 }
       );
     }
@@ -94,36 +97,36 @@ export async function POST(request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Get image dimensions using sharp
-    let width, height;
+    // Get image dimensions using sharp (for QR positioning calculations)
+    let width = null;
+    let height = null;
     try {
       const sharp = (await import('sharp')).default;
       const meta = await sharp(buffer).metadata();
       width = meta.width;
       height = meta.height;
     } catch (e) {
-      console.error('sharp dimension detect failed:', e);
-      width = null;
-      height = null;
+      console.error('[POST /api/posters] sharp dimension detect failed:', e.message);
+      // Continue without dimensions — can be added later
     }
 
     const db = await getDb();
 
-    // If setting as default, unset current default
-    if (isDefault) {
+    // Check if this is the first poster (auto-set as default)
+    const existingCount = await db.collection('posters').countDocuments({});
+    const shouldBeDefault = isDefault || existingCount === 0;
+
+    // If setting as default, unset current default first
+    if (shouldBeDefault) {
       await db.collection('posters').updateMany(
         { is_default: true },
         { $set: { is_default: false } }
       );
     }
 
-    // Check if this is first poster (auto-set as default)
-    const existingCount = await db.collection('posters').countDocuments({});
-    const shouldBeDefault = isDefault || existingCount === 0;
-
     const doc = {
       name: name.trim(),
-      description: description ? description.trim() : null,
+      description: description ? String(description).trim() : null,
       is_default: shouldBeDefault,
       image_data: buffer,
       image_type: file.type,
@@ -137,17 +140,23 @@ export async function POST(request) {
 
     const result = await db.collection('posters').insertOne(doc);
 
+    // Clear cache so new poster is picked up
+    invalidatePosterCache();
+
     return NextResponse.json({
       success: true,
       message: 'Poster uploaded successfully',
       poster: {
         _id: result.insertedId.toString(),
         name: doc.name,
+        description: doc.description,
         is_default: doc.is_default,
         image_type: doc.image_type,
         image_size: doc.image_size,
         width: doc.width,
         height: doc.height,
+        qr_config: doc.qr_config,
+        created_at: doc.created_at,
       },
     });
   } catch (error) {
