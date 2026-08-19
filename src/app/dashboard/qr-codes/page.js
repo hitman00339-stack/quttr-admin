@@ -97,9 +97,7 @@ export default function QRCodesPage() {
 
   const formatDate = (date) => {
     if (!date) return 'N/A';
-    return new Date(date).toLocaleDateString('en-IN', {
-      day: 'numeric', month: 'short', year: 'numeric',
-    });
+    return new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   return (
@@ -111,7 +109,7 @@ export default function QRCodesPage() {
         </div>
       </div>
 
-      {/* Clean action buttons */}
+      {/* NEW 3-BUTTON LAYOUT (NO CALIBRATE, NO BULK PRINT) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <Link
           href="/dashboard/posters"
@@ -149,10 +147,7 @@ export default function QRCodesPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="stat-card">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="stat-label">Total QRs</p>
-              <p className="stat-value">{stats?.total_qr || 0}</p>
-            </div>
+            <div><p className="stat-label">Total QRs</p><p className="stat-value">{stats?.total_qr || 0}</p></div>
             <div className="w-12 h-12 rounded-xl bg-brand-500/10 flex items-center justify-center">
               <QrCode className="w-6 h-6 text-brand-500" />
             </div>
@@ -160,10 +155,7 @@ export default function QRCodesPage() {
         </div>
         <div className="stat-card">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="stat-label">Active</p>
-              <p className="stat-value text-success">{stats?.active_qr || 0}</p>
-            </div>
+            <div><p className="stat-label">Active</p><p className="stat-value text-success">{stats?.active_qr || 0}</p></div>
             <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
               <CheckCircle className="w-6 h-6 text-success" />
             </div>
@@ -171,10 +163,7 @@ export default function QRCodesPage() {
         </div>
         <div className="stat-card">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="stat-label">Pending</p>
-              <p className="stat-value text-warning">{stats?.inactive_qr || 0}</p>
-            </div>
+            <div><p className="stat-label">Pending</p><p className="stat-value text-warning">{stats?.inactive_qr || 0}</p></div>
             <div className="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center">
               <AlertCircle className="w-6 h-6 text-warning" />
             </div>
@@ -218,9 +207,7 @@ export default function QRCodesPage() {
           {tab === 'all' && (
             <div className="flex gap-2 flex-wrap">
               {['ALL', 'ACTIVE', 'INACTIVE', 'PAUSED'].map(s => (
-                <button key={s} onClick={() => setFilter(s)} className={`btn ${filter === s ? 'btn-accent' : 'btn-outline'}`}>
-                  {s}
-                </button>
+                <button key={s} onClick={() => setFilter(s)} className={`btn ${filter === s ? 'btn-accent' : 'btn-outline'}`}>{s}</button>
               ))}
             </div>
           )}
@@ -229,9 +216,7 @@ export default function QRCodesPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="card p-12 text-center">
-          <Loader2 className="w-8 h-8 text-accent-500 animate-spin mx-auto" />
-        </div>
+        <div className="card p-12 text-center"><Loader2 className="w-8 h-8 text-accent-500 animate-spin mx-auto" /></div>
       ) : tab === 'batches' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredBatches.length === 0 ? (
@@ -256,8 +241,7 @@ export default function QRCodesPage() {
                       <Package className="w-6 h-6 text-accent-500" />
                     </div>
                     <div className="flex items-center gap-1 text-xs text-white/40">
-                      <Calendar className="w-3 h-3" />
-                      {formatDate(batch.created_at)}
+                      <Calendar className="w-3 h-3" />{formatDate(batch.created_at)}
                     </div>
                   </Link>
 
@@ -439,15 +423,12 @@ function PosterPickerModal({ batch, statusFilter, count, onClose, onPick }) {
         </div>
 
         {loading ? (
-          <div className="p-12 flex justify-center">
-            <Loader2 className="w-8 h-8 text-[#FFD700] animate-spin" />
-          </div>
+          <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 text-[#FFD700] animate-spin" /></div>
         ) : posters.length === 0 ? (
           <div className="p-12 text-center">
             <ImageIcon className="w-16 h-16 text-white/20 mx-auto mb-3" />
             <p className="text-white/60 font-bold mb-2">No posters uploaded</p>
-            <p className="text-xs text-white/40 mb-4">Upload a poster template first</p>
-            <Link href="/dashboard/posters" className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#E63946] to-[#B01824] text-white text-sm font-bold rounded-lg">
+            <Link href="/dashboard/posters" className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#E63946] to-[#B01824] text-white text-sm font-bold rounded-lg mt-2">
               <ImageIcon className="w-4 h-4" /> Go to Posters
             </Link>
           </div>
