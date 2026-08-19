@@ -9,8 +9,6 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const HARD_MAX = 100;
-
 async function makePoster(code, templateBuffer, qrCoords) {
   // Generate QR at 2x resolution for sharper downscale
   const qrRenderSize = qrCoords.width * 2;
