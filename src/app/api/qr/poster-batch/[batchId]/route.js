@@ -9,6 +9,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
+// Safe limit for Vercel Free tier (60s timeout)
+const MAX_POSTERS_PER_REQUEST = 50;
+
 async function makePoster(code, templateBuffer, qrCoords) {
   const styledQRBuffer = await generateQuttrQR(code, qrCoords.width);
   const qrResized = await sharp(styledQRBuffer)
@@ -30,19 +33,37 @@ export async function GET(request, { params }) {
     const { searchParams } = new URL(request.url);
     const statusFilter = searchParams.get('status');
     const posterId = searchParams.get('poster') || null;
+    const chunk = parseInt(searchParams.get('chunk') || '1');   // Which chunk (1, 2, 3...)
+    const chunkSize = parseInt(searchParams.get('size') || String(MAX_POSTERS_PER_REQUEST));
 
     const db = await getDb();
     const query = { batch_id: batchId };
     if (statusFilter === 'ACTIVE') query.status = 'ACTIVE';
     if (statusFilter === 'INACTIVE') query.status = 'INACTIVE';
 
-    const qrCodes = await db.collection('qr_codes').find(query).toArray();
-    if (qrCodes.length === 0) {
+    const totalCount = await db.collection('qr_codes').countDocuments(query);
+    if (totalCount === 0) {
       return NextResponse.json({ success: false, message: `No QRs found in batch ${batchId}` }, { status: 404 });
     }
-    if (qrCodes.length > 200) {
-      return NextResponse.json({ success: false, message: `Batch has ${qrCodes.length} QRs. Max 200 per download.` }, { status: 400 });
+
+    // Calculate chunk boundaries
+    const safeChunkSize = Math.min(chunkSize, MAX_POSTERS_PER_REQUEST);
+    const totalChunks = Math.ceil(totalCount / safeChunkSize);
+    const skip = (chunk - 1) * safeChunkSize;
+
+    if (chunk > totalChunks || chunk < 1) {
+      return NextResponse.json(
+        { success: false, message: `Invalid chunk ${chunk}. Total chunks: ${totalChunks}` },
+        { status: 400 }
+      );
     }
+
+    // Fetch this chunk only
+    const qrCodes = await db.collection('qr_codes')
+      .find(query)
+      .skip(skip)
+      .limit(safeChunkSize)
+      .toArray();
 
     const poster = await getPoster(posterId);
     if (!poster) {
@@ -66,7 +87,6 @@ export async function GET(request, { params }) {
     }
 
     const qrCoords = getQRPixelCoords(posterWidth, posterHeight, poster.qr_config);
-
     const batchName = qrCodes[0]?.batch_name || batchId;
     const cleanBatchName = batchName.replace(/[^a-z0-9]/gi, '-');
     const cleanPosterName = (poster.name || 'poster').replace(/[^a-z0-9]/gi, '-');
@@ -99,7 +119,10 @@ export async function GET(request, { params }) {
 
     zip.file(
       'README.txt',
-      `Quttr QR Posters\nBatch: ${batchName}\nPoster: ${poster.name}\nTotal: ${successCount}\nGenerated: ${new Date().toLocaleString('en-IN')}\n`
+      `Quttr QR Posters\nBatch: ${batchName}\nPoster: ${poster.name}\n` +
+      `Chunk: ${chunk} of ${totalChunks}\nCount in this ZIP: ${successCount}\n` +
+      `Total posters in batch: ${totalCount}\nGenerated: ${new Date().toLocaleString('en-IN')}\n\n` +
+      (totalChunks > 1 ? `⚠️ This is PART ${chunk} of ${totalChunks}. Download remaining chunks separately.\n` : '')
     );
 
     const zipBuffer = await zip.generateAsync({
@@ -108,7 +131,9 @@ export async function GET(request, { params }) {
       compressionOptions: { level: 6 },
     });
 
-    const filename = `${cleanBatchName}-${cleanPosterName}-${successCount}.zip`;
+    const filename = totalChunks > 1
+      ? `${cleanBatchName}-${cleanPosterName}-part${chunk}of${totalChunks}-${successCount}.zip`
+      : `${cleanBatchName}-${cleanPosterName}-${successCount}.zip`;
 
     return new NextResponse(zipBuffer, {
       status: 200,
@@ -116,6 +141,9 @@ export async function GET(request, { params }) {
         'Content-Type': 'application/zip',
         'Content-Disposition': `attachment; filename="${filename}"`,
         'Cache-Control': 'no-store',
+        'X-Total-Chunks': String(totalChunks),
+        'X-Current-Chunk': String(chunk),
+        'X-Total-Posters': String(totalCount),
       },
     });
   } catch (error) {
