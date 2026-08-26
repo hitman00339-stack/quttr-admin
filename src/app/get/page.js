@@ -7,9 +7,9 @@ import { useSearchParams } from 'next/navigation';
 const CUSTOMER_PKG = 'com.quttr.quttr_app';
 const BUSINESS_PKG = 'com.quttr.business';
 
-// PRODUCTION VERIFIED PLAY STORE URLS
-const CUSTOMER_APP_URL = `https://play.google.com/store/apps/details?id=${CUSTOMER_PKG}&pcampaignid=web_share`;
-const BUSINESS_APP_URL = `https://play.google.com/store/apps/details?id=${BUSINESS_PKG}&pcampaignid=web_share`;
+// PRODUCTION VERIFIED FALLBACK WEB PLAY STORE URLS
+const CUSTOMER_WEB_URL = `https://play.google.com/store/apps/details?id=${CUSTOMER_PKG}&pcampaignid=web_share`;
+const BUSINESS_WEB_URL = `https://play.google.com/store/apps/details?id=${BUSINESS_PKG}&pcampaignid=web_share`;
 
 function makeSessionId() {
   if (typeof window === 'undefined') return '';
@@ -80,10 +80,23 @@ function LandingContent() {
   const [locationText, setLocationText] = useState('आपके शहर');
   const trackedPageView = useRef(false);
 
+  // Dynamic Routing URLs (Native App Protocol vs Standard Web Link)
+  const [customerUrl, setCustomerUrl] = useState(CUSTOMER_WEB_URL);
+  const [businessUrl, setBusinessUrl] = useState(BUSINESS_WEB_URL);
+
   useEffect(() => {
     setSessionId(sid || makeSessionId());
     const onScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', onScroll, { passive: true });
+
+    // Dynamic OS Redirect Routing
+    const ua = window.navigator.userAgent.toLowerCase();
+    if (ua.includes('android')) {
+      // Force Android devices to open the native Google Play Store app directly
+      setCustomerUrl(`market://details?id=${CUSTOMER_PKG}`);
+      setBusinessUrl(`market://details?id=${BUSINESS_PKG}`);
+    }
+
     return () => window.removeEventListener('scroll', onScroll);
   }, [sid]);
 
@@ -138,18 +151,18 @@ function LandingContent() {
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+Devanagari:wght@400;500;600;700;800;900&display=swap"
       />
 
-      <StickyHeader scrolled={scrolled} onDownload={trackCustomerDownload} />
+      <StickyHeader scrolled={scrolled} downloadUrl={customerUrl} onDownload={trackCustomerDownload} />
 
       <main className="bg-black text-white antialiased overflow-x-hidden">
-        <HeroSection onDownload={trackCustomerDownload} locationText={locationText} />
+        <HeroSection downloadUrl={customerUrl} onDownload={trackCustomerDownload} locationText={locationText} />
         <FeatureOne />
         <FeatureTwo />
         <FeatureThree />
         <FeatureFour />
         <HowItWorks />
         <TestimonialsSection />
-        <BarberSection onDownload={trackBusinessDownload} />
-        <FinalCTASection onDownload={trackCustomerDownload} locationText={locationText} />
+        <BarberSection downloadUrl={businessUrl} onDownload={trackBusinessDownload} />
+        <FinalCTASection downloadUrl={customerUrl} onDownload={trackCustomerDownload} locationText={locationText} />
         <FooterSection />
       </main>
 
@@ -158,7 +171,7 @@ function LandingContent() {
   );
 }
 
-function StickyHeader({ scrolled, onDownload }) {
+function StickyHeader({ scrolled, downloadUrl, onDownload }) {
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
@@ -185,10 +198,8 @@ function StickyHeader({ scrolled, onDownload }) {
         </nav>
 
         <a
-          href={CUSTOMER_APP_URL}
+          href={downloadUrl}
           onClick={onDownload}
-          target="_blank"
-          rel="noopener noreferrer"
           className="qr-hindi text-[12px] md:text-[13px] font-bold bg-gradient-to-r from-[#E63946] to-[#B01824] text-white px-4 md:px-5 py-2 md:py-2.5 rounded-full hover:shadow-[0_0_20px_rgba(230,57,70,0.6)] transition-all inline-block"
         >
           डाउनलोड
@@ -209,8 +220,6 @@ function PlayStoreButton({ href, onClick, size = 'lg', fullWidth = true }) {
     <a
       href={href}
       onClick={onClick}
-      target="_blank"
-      rel="noopener noreferrer"
       className={`qr-playstore-btn group relative inline-flex items-center gap-3 text-white font-black rounded-full transition-all duration-300 overflow-hidden ${sizeClasses} ${fullWidth ? 'w-full max-w-md' : ''}`}
     >
       <span className="qr-btn-shine" />
@@ -254,7 +263,7 @@ function PlayStoreButton({ href, onClick, size = 'lg', fullWidth = true }) {
   );
 }
 
-function HeroSection({ onDownload, locationText }) {
+function HeroSection({ downloadUrl, onDownload, locationText }) {
   const [ref, inView] = useInView();
 
   return (
@@ -367,7 +376,7 @@ function HeroSection({ onDownload, locationText }) {
         </p>
 
         <div className="flex flex-col items-center gap-3 md:gap-4 mb-4 px-4">
-          <PlayStoreButton href={CUSTOMER_APP_URL} onClick={onDownload} size="lg" />
+          <PlayStoreButton href={downloadUrl} onClick={onDownload} size="lg" />
 
           <div className="flex flex-col items-center gap-0.5">
             <p className="qr-hindi text-[14px] md:text-[17px] font-black text-[#FFD700] qr-bounce-down">
@@ -611,7 +620,7 @@ function TestimonialsSection() {
   );
 }
 
-function BarberSection({ onDownload }) {
+function BarberSection({ downloadUrl, onDownload }) {
   const [ref, inView] = useInView();
   const benefits = [
     { hi: 'डिजिटल बुकिंग मैनेजमेंट', en: 'Digital appointment management' },
@@ -642,7 +651,7 @@ function BarberSection({ onDownload }) {
               <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed mb-8 font-medium">हज़ारों बार्बर पहले से Quttr बिज़नेस के साथ अपना बिज़नेस बढ़ा रहे हैं।</p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <a
-                  href={BUSINESS_APP_URL}
+                  href={downloadUrl}
                   onClick={onDownload}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -685,7 +694,7 @@ function BarberSection({ onDownload }) {
   );
 }
 
-function FinalCTASection({ onDownload, locationText }) {
+function FinalCTASection({ downloadUrl, onDownload, locationText }) {
   const [ref, inView] = useInView();
   return (
     <section ref={ref} id="download" className="relative px-4 py-32 md:py-48 border-t border-white/[0.06] overflow-hidden">
@@ -704,7 +713,7 @@ function FinalCTASection({ onDownload, locationText }) {
         <p className="qr-hindi text-[20px] md:text-[28px] text-white/80 mb-4 font-bold">Quttr डाउनलोड करें</p>
         <p className="qr-hindi text-[16px] md:text-[20px] text-white/50 mb-12 max-w-2xl mx-auto leading-relaxed">इंतज़ार को कहें अलविदा।</p>
 
-        <PlayStoreButton href={CUSTOMER_APP_URL} onClick={onDownload} size="lg" />
+        <PlayStoreButton href={downloadUrl} onClick={onDownload} size="lg" />
 
         <p className="qr-hindi mt-8 text-[16px] md:text-[18px] font-black text-[#FFD700] qr-bounce-down">👇 अभी डाउनलोड करें · Free</p>
       </div>
