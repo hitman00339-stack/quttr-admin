@@ -193,7 +193,7 @@ function StickyHeader({ scrolled, downloadUrl, onDownload }) {
 
         <nav className="hidden md:flex items-center gap-8 text-[13px] text-white/70 font-semibold">
           <a href="#features" className="qr-hindi hover:text-[#FFD700] transition-colors">फीचर्स</a>
-          <a href="#barbers" className="qr-hindi hover:text-[#FFD700] transition-colors">बार्बर</a>
+          <a href="#barbers" className="qr-hindi hover:text-[#FFD700] transition-colors">Barber</a>
           <a href="#download" className="qr-hindi hover:text-[#FFD700] transition-colors">डाउनलोड</a>
         </nav>
 
