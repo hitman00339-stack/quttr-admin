@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-const CUSTOMER_PKG = 'com.quttr.customer';
+const CUSTOMER_PKG = 'com.quttr.quttr_app';
 const BUSINESS_PKG = 'com.quttr.business';
 
 function makeSessionId() {
