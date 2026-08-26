@@ -3,8 +3,9 @@
 import { Suspense, useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-const CUSTOMER_PKG = 'com.quttr.quttr_app';
-const BUSINESS_PKG = 'com.quttr.business';
+// ACTUAL PLAY STORE LINKS
+const CUSTOMER_APP_URL = 'https://play.google.com/store/apps/details?id=com.quttr.quttr_app&pcampaignid=web_share';
+const BUSINESS_APP_URL = 'https://play.google.com/store/apps/details?id=com.quttr.business&pcampaignid=web_share';
 
 function makeSessionId() {
   if (typeof window === 'undefined') return '';
@@ -115,35 +116,8 @@ function LandingContent() {
     trackEvent('page_view');
   }, [sessionId, trackEvent]);
 
-  const openStore = useCallback(
-    (pkg, eventName) => {
-      trackEvent(eventName);
-      const marketUrl = `market://details?id=${pkg}`;
-      const webUrl = `https://play.google.com/store/apps/details?id=${pkg}`;
-      const start = Date.now();
-      let didHide = false;
-      const onHide = () => { didHide = true; };
-      document.addEventListener('visibilitychange', onHide, { once: true });
-      window.location.href = marketUrl;
-      setTimeout(() => {
-        document.removeEventListener('visibilitychange', onHide);
-        if (!didHide && Date.now() - start < 2000) {
-          window.location.href = webUrl;
-        }
-      }, 900);
-    },
-    [trackEvent]
-  );
-
-  const customerPkg =
-    (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_CUSTOMER_APP_PACKAGE) ||
-    CUSTOMER_PKG;
-  const businessPkg =
-    (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_BUSINESS_APP_PACKAGE) ||
-    BUSINESS_PKG;
-
-  const downloadCustomer = () => openStore(customerPkg, 'customer_download_click');
-  const downloadBusiness = () => openStore(businessPkg, 'business_download_click');
+  const trackCustomerDownload = () => trackEvent('customer_download_click');
+  const trackBusinessDownload = () => trackEvent('business_download_click');
 
   return (
     <>
@@ -154,18 +128,18 @@ function LandingContent() {
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+Devanagari:wght@400;500;600;700;800;900&display=swap"
       />
 
-      <StickyHeader scrolled={scrolled} onDownload={downloadCustomer} />
+      <StickyHeader scrolled={scrolled} onDownload={trackCustomerDownload} />
 
       <main className="bg-black text-white antialiased overflow-x-hidden">
-        <HeroSection onDownload={downloadCustomer} locationText={locationText} />
+        <HeroSection onDownload={trackCustomerDownload} locationText={locationText} />
         <FeatureOne />
         <FeatureTwo />
         <FeatureThree />
         <FeatureFour />
         <HowItWorks />
         <TestimonialsSection />
-        <BarberSection onDownload={downloadBusiness} />
-        <FinalCTASection onDownload={downloadCustomer} locationText={locationText} />
+        <BarberSection onDownload={trackBusinessDownload} />
+        <FinalCTASection onDownload={trackCustomerDownload} locationText={locationText} />
         <FooterSection />
       </main>
 
@@ -201,18 +175,21 @@ function StickyHeader({ scrolled, onDownload }) {
           <a href="#download" className="hover:text-[#FFD700] transition-colors">डाउनलोड</a>
         </nav>
 
-        <button
+        <a
+          href={CUSTOMER_APP_URL}
           onClick={onDownload}
-          className="qr-hindi text-[13px] font-bold bg-gradient-to-r from-[#E63946] to-[#B01824] text-white px-5 py-2.5 rounded-full hover:shadow-[0_0_20px_rgba(230,57,70,0.6)] transition-all"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="qr-hindi text-[13px] font-bold bg-gradient-to-r from-[#E63946] to-[#B01824] text-white px-5 py-2.5 rounded-full hover:shadow-[0_0_20px_rgba(230,57,70,0.6)] transition-all inline-block"
         >
           डाउनलोड
-        </button>
+        </a>
       </div>
     </header>
   );
 }
 
-/* HERO SECTION - Fixed */
+/* HERO SECTION */
 function HeroSection({ onDownload, locationText }) {
   const [ref, inView] = useInView();
 
@@ -265,7 +242,7 @@ function HeroSection({ onDownload, locationText }) {
           </span>
         </div>
 
-        {/* FIXED Headlines - Proper Hindi */}
+        {/* Headlines */}
         <h1 className="qr-hindi qr-hero-title text-[42px] sm:text-[60px] md:text-[90px] font-black leading-[1.15] tracking-tight text-white mb-4">
           <span className="qr-gold-red-gradient block pb-2">इंतज़ार खत्म</span>
           <span className="text-white block pb-2">फ्रेश लुक शुरू</span>
@@ -285,10 +262,13 @@ function HeroSection({ onDownload, locationText }) {
           अपनी बारी पर पहुंचे, और फ्रेश लुक के साथ निकलें।
         </p>
 
-        {/* MEGA DOWNLOAD BUTTON */}
+        {/* MEGA DOWNLOAD LINK */}
         <div className="flex flex-col items-center gap-6 mb-8 px-4">
-          <button
+          <a
+            href={CUSTOMER_APP_URL}
             onClick={onDownload}
+            target="_blank"
+            rel="noopener noreferrer"
             className="qr-mega-btn group relative inline-flex items-center gap-3 text-white text-[16px] sm:text-[20px] md:text-[24px] font-black px-6 sm:px-10 md:px-14 py-5 md:py-6 rounded-full transition-all duration-300 overflow-hidden w-full max-w-md"
           >
             <span className="qr-btn-shine" />
@@ -308,7 +288,7 @@ function HeroSection({ onDownload, locationText }) {
                 </span>
               </div>
             </div>
-          </button>
+          </a>
 
           <div className="flex flex-col items-center gap-1">
             <p className="qr-hindi text-[16px] md:text-[20px] font-black text-[#FFD700] qr-bounce-down">
@@ -716,8 +696,11 @@ function BarberSection({ onDownload }) {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4">
-                <button
+                <a
+                  href={BUSINESS_APP_URL}
                   onClick={onDownload}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="qr-mega-btn-blue group relative inline-flex items-center justify-center gap-3 text-white text-[15px] md:text-[18px] font-black px-6 py-4 md:px-8 md:py-5 rounded-full transition-all duration-300 overflow-hidden"
                 >
                   <span className="qr-btn-shine" />
@@ -730,7 +713,7 @@ function BarberSection({ onDownload }) {
                     </svg>
                     <span className="qr-hindi">Quttr Business डाउनलोड</span>
                   </div>
-                </button>
+                </a>
 
                 <a
                   href="tel:+919519953149"
@@ -790,8 +773,11 @@ function FinalCTASection({ onDownload, locationText }) {
           इंतज़ार को कहें अलविदा।
         </p>
 
-        <button
+        <a
+          href={CUSTOMER_APP_URL}
           onClick={onDownload}
+          target="_blank"
+          rel="noopener noreferrer"
           className="qr-mega-btn group relative inline-flex items-center gap-3 text-white text-[18px] md:text-[26px] font-black px-8 md:px-16 py-6 md:py-7 rounded-full transition-all duration-300 overflow-hidden w-full max-w-md"
         >
           <span className="qr-btn-shine" />
@@ -811,7 +797,7 @@ function FinalCTASection({ onDownload, locationText }) {
               </span>
             </div>
           </div>
-        </button>
+        </a>
 
         <p className="qr-hindi mt-8 text-[16px] md:text-[18px] font-black text-[#FFD700] qr-bounce-down">
           👇 अभी डाउनलोड करें · Free
