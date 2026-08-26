@@ -3,8 +3,13 @@
 import { Suspense, useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-const CUSTOMER_PKG = 'com.quttr.customer';
+// CORRECTED PUBLISHED PACKAGE NAMES
+const CUSTOMER_PKG = 'com.quttr.quttr_app';
 const BUSINESS_PKG = 'com.quttr.business';
+
+// PRODUCTION VERIFIED PLAY STORE URLS
+const CUSTOMER_APP_URL = `https://play.google.com/store/apps/details?id=${CUSTOMER_PKG}&pcampaignid=web_share`;
+const BUSINESS_APP_URL = `https://play.google.com/store/apps/details?id=${BUSINESS_PKG}&pcampaignid=web_share`;
 
 function makeSessionId() {
   if (typeof window === 'undefined') return '';
@@ -63,7 +68,6 @@ function LandingContent() {
   const searchParams = useSearchParams();
   const qrId = searchParams.get('qr') || '';
   const sid = searchParams.get('sid') || '';
-  // Accept town/city/loc/location for maximum backward-compatibility
   const rawLoc =
     searchParams.get('town') ||
     searchParams.get('city') ||
@@ -81,7 +85,7 @@ function LandingContent() {
     const onScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  }, [sid]);
 
   // Fetch location from API if not present in URL
   useEffect(() => {
@@ -94,7 +98,6 @@ function LandingContent() {
         .then((r) => r.json())
         .then((data) => {
           if (!data || !data.success) return;
-          // Prefer town → city → area → location (never shop_name)
           const best =
             data.town || data.city || data.area || data.location || '';
           if (best) setLocationText(best);
@@ -123,35 +126,8 @@ function LandingContent() {
     trackEvent('page_view');
   }, [sessionId, trackEvent]);
 
-  const openStore = useCallback(
-    (pkg, eventName) => {
-      trackEvent(eventName);
-      const marketUrl = `market://details?id=${pkg}`;
-      const webUrl = `https://play.google.com/store/apps/details?id=${pkg}`;
-      const start = Date.now();
-      let didHide = false;
-      const onHide = () => { didHide = true; };
-      document.addEventListener('visibilitychange', onHide, { once: true });
-      window.location.href = marketUrl;
-      setTimeout(() => {
-        document.removeEventListener('visibilitychange', onHide);
-        if (!didHide && Date.now() - start < 2000) {
-          window.location.href = webUrl;
-        }
-      }, 900);
-    },
-    [trackEvent]
-  );
-
-  const customerPkg =
-    (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_CUSTOMER_APP_PACKAGE) ||
-    CUSTOMER_PKG;
-  const businessPkg =
-    (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_BUSINESS_APP_PACKAGE) ||
-    BUSINESS_PKG;
-
-  const downloadCustomer = () => openStore(customerPkg, 'customer_download_click');
-  const downloadBusiness = () => openStore(businessPkg, 'business_download_click');
+  const trackCustomerDownload = () => trackEvent('customer_download_click');
+  const trackBusinessDownload = () => trackEvent('business_download_click');
 
   return (
     <>
@@ -162,18 +138,18 @@ function LandingContent() {
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+Devanagari:wght@400;500;600;700;800;900&display=swap"
       />
 
-      <StickyHeader scrolled={scrolled} onDownload={downloadCustomer} />
+      <StickyHeader scrolled={scrolled} onDownload={trackCustomerDownload} />
 
       <main className="bg-black text-white antialiased overflow-x-hidden">
-        <HeroSection onDownload={downloadCustomer} locationText={locationText} />
+        <HeroSection onDownload={trackCustomerDownload} locationText={locationText} />
         <FeatureOne />
         <FeatureTwo />
         <FeatureThree />
         <FeatureFour />
         <HowItWorks />
         <TestimonialsSection />
-        <BarberSection onDownload={downloadBusiness} />
-        <FinalCTASection onDownload={downloadCustomer} locationText={locationText} />
+        <BarberSection onDownload={trackBusinessDownload} />
+        <FinalCTASection onDownload={trackCustomerDownload} locationText={locationText} />
         <FooterSection />
       </main>
 
@@ -208,27 +184,33 @@ function StickyHeader({ scrolled, onDownload }) {
           <a href="#download" className="qr-hindi hover:text-[#FFD700] transition-colors">डाउनलोड</a>
         </nav>
 
-        <button
+        <a
+          href={CUSTOMER_APP_URL}
           onClick={onDownload}
-          className="qr-hindi text-[12px] md:text-[13px] font-bold bg-gradient-to-r from-[#E63946] to-[#B01824] text-white px-4 md:px-5 py-2 md:py-2.5 rounded-full hover:shadow-[0_0_20px_rgba(230,57,70,0.6)] transition-all"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="qr-hindi text-[12px] md:text-[13px] font-bold bg-gradient-to-r from-[#E63946] to-[#B01824] text-white px-4 md:px-5 py-2 md:py-2.5 rounded-full hover:shadow-[0_0_20px_rgba(230,57,70,0.6)] transition-all inline-block"
         >
           डाउनलोड
-        </button>
+        </a>
       </div>
     </header>
   );
 }
 
-/* Reusable Play Store themed download button */
-function PlayStoreButton({ onClick, size = 'lg', fullWidth = true }) {
+/* Reusable Play Store themed anchor link button */
+function PlayStoreButton({ href, onClick, size = 'lg', fullWidth = true }) {
   const sizeClasses =
     size === 'lg'
       ? 'text-[15px] sm:text-[18px] md:text-[22px] px-6 sm:px-8 md:px-12 py-4 md:py-5'
       : 'text-[14px] md:text-[16px] px-5 py-3 md:px-7 md:py-4';
 
   return (
-    <button
+    <a
+      href={href}
       onClick={onClick}
+      target="_blank"
+      rel="noopener noreferrer"
       className={`qr-playstore-btn group relative inline-flex items-center gap-3 text-white font-black rounded-full transition-all duration-300 overflow-hidden ${sizeClasses} ${fullWidth ? 'w-full max-w-md' : ''}`}
     >
       <span className="qr-btn-shine" />
@@ -268,7 +250,7 @@ function PlayStoreButton({ onClick, size = 'lg', fullWidth = true }) {
           </span>
         </div>
       </div>
-    </button>
+    </a>
   );
 }
 
@@ -385,7 +367,7 @@ function HeroSection({ onDownload, locationText }) {
         </p>
 
         <div className="flex flex-col items-center gap-3 md:gap-4 mb-4 px-4">
-          <PlayStoreButton onClick={onDownload} size="lg" />
+          <PlayStoreButton href={CUSTOMER_APP_URL} onClick={onDownload} size="lg" />
 
           <div className="flex flex-col items-center gap-0.5">
             <p className="qr-hindi text-[14px] md:text-[17px] font-black text-[#FFD700] qr-bounce-down">
@@ -659,7 +641,13 @@ function BarberSection({ onDownload }) {
               <p className="text-[18px] md:text-[24px] font-bold text-[#FFD700] mb-4">Grow Your Business.</p>
               <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed mb-8 font-medium">हज़ारों बार्बर पहले से क्यूटर बिज़नेस के साथ अपना बिज़नेस बढ़ा रहे हैं।</p>
               <div className="flex flex-col sm:flex-row gap-4">
-                <button onClick={onDownload} className="qr-mega-btn-blue group relative inline-flex items-center justify-center gap-3 text-white text-[15px] md:text-[18px] font-black px-6 py-4 md:px-8 md:py-5 rounded-full transition-all duration-300 overflow-hidden">
+                <a
+                  href={BUSINESS_APP_URL}
+                  onClick={onDownload}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="qr-mega-btn-blue group relative inline-flex items-center justify-center gap-3 text-white text-[15px] md:text-[18px] font-black px-6 py-4 md:px-8 md:py-5 rounded-full transition-all duration-300 overflow-hidden text-center"
+                >
                   <span className="qr-btn-shine" />
                   <div className="relative z-10 flex items-center gap-3">
                     <svg viewBox="0 0 512 512" className="w-6 h-6 md:w-8 md:h-8 flex-shrink-0">
@@ -667,7 +655,7 @@ function BarberSection({ onDownload }) {
                     </svg>
                     <span className="qr-hindi">क्यूटर बिज़नेस डाउनलोड</span>
                   </div>
-                </button>
+                </a>
                 <a href="tel:+919519953149" className="qr-hindi inline-flex items-center justify-center gap-2 text-[15px] font-bold text-[#FFD700] hover:text-white px-6 py-4 rounded-full border-2 border-[#FFD700]/40 hover:border-[#FFD700] transition-all">
                   📞 कॉल करें
                 </a>
@@ -716,7 +704,7 @@ function FinalCTASection({ onDownload, locationText }) {
         <p className="qr-hindi text-[20px] md:text-[28px] text-white/80 mb-4 font-bold">क्यूटर डाउनलोड करें</p>
         <p className="qr-hindi text-[16px] md:text-[20px] text-white/50 mb-12 max-w-2xl mx-auto leading-relaxed">इंतज़ार को कहें अलविदा।</p>
 
-        <PlayStoreButton onClick={onDownload} size="lg" />
+        <PlayStoreButton href={CUSTOMER_APP_URL} onClick={onDownload} size="lg" />
 
         <p className="qr-hindi mt-8 text-[16px] md:text-[18px] font-black text-[#FFD700] qr-bounce-down">👇 अभी डाउनलोड करें · Free</p>
       </div>
@@ -787,6 +775,7 @@ function GlobalStyles() {
           0 12px 32px -6px rgba(26,115,232,0.55),
           0 20px 60px -10px rgba(0,0,0,0.7);
         animation: qr-playstore-pulse 3s ease-in-out infinite;
+        display: inline-block;
       }
       .qr-playstore-btn:hover {
         transform: scale(1.03) translateY(-2px);
@@ -812,6 +801,7 @@ function GlobalStyles() {
       .qr-mega-btn-blue {
         background: linear-gradient(135deg, #3949AB 0%, #1A237E 100%);
         box-shadow: 0 0 0 1px rgba(255,215,0,0.3), 0 15px 50px -8px rgba(26,35,126,0.7);
+        display: inline-block;
       }
       .qr-mega-btn-blue:hover { transform: scale(1.03); }
 
