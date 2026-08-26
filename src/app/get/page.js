@@ -358,7 +358,7 @@ function HeroSection({ downloadUrl, onDownload, locationText }) {
 
         <div className="hidden sm:inline-flex items-center gap-2 mb-3 md:mb-4">
           <span className="qr-hindi text-[10px] md:text-[11px] font-black tracking-[0.2em] text-white/60 uppercase px-4 py-1.5 rounded-full border border-white/10 bg-white/[0.03]">
-            ✂️ भारत का #1 बार्बर ऐप
+            ✂️ भारत का #1 Barber ऐप
           </span>
         </div>
 
@@ -372,7 +372,7 @@ function HeroSection({ downloadUrl, onDownload, locationText }) {
         </p>
 
         <p className="qr-hindi text-[14px] sm:text-[16px] md:text-[20px] text-[#FFD700] mb-4 md:mb-6 font-bold px-4">
-          बुकिंग सेकंडों में। बार्बर आपकी पसंद का।
+          बुकिंग सेकंडों में। Barber आपकी पसंद का।
         </p>
 
         <div className="flex flex-col items-center gap-3 md:gap-4 mb-4 px-4">
@@ -454,9 +454,9 @@ function FeatureTwo() {
           <div className={`md:order-2 transition-all duration-1000 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
             <p className="qr-hindi text-[12px] md:text-[13px] font-black tracking-[0.25em] text-[#FFD700] uppercase mb-6">💈 पसंद · CHOICE</p>
             <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight mb-2 text-white">अपना पसंदीदा</h2>
-            <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight qr-gold-red-gradient mb-6">बार्बर चुनें</h2>
+            <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight qr-gold-red-gradient mb-6">Barber चुनें</h2>
             <p className="text-[18px] md:text-[24px] font-bold text-[#FFD700] mb-4">Your Barber. Your Choice.</p>
-            <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed font-medium">शहर के 500 से ज्यादा बार्बर में से चुनें। रिव्यू पढ़ें, तस्वीरें देखें, बुक करें।</p>
+            <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed font-medium">शहर के 500 से ज्यादा Barber में से चुनें। रिव्यू पढ़ें, तस्वीरें देखें, बुक करें।</p>
           </div>
           <div className={`md:order-1 transition-all duration-1000 delay-200 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
             <div className="relative aspect-square max-w-md mx-auto">
@@ -547,7 +547,7 @@ function FeatureFour() {
 function HowItWorks() {
   const [ref, inView] = useInView();
   const steps = [
-    { num: '01', hi: 'बार्बर चुनें', en: 'Choose Barber', desc: 'पास के वेरिफाइड बार्बर देखें' },
+    { num: '01', hi: 'Barber चुनें', en: 'Choose Barber', desc: 'पास के वेरिफाइड Barber देखें' },
     { num: '02', hi: 'स्लॉट बुक करें', en: 'Book Your Slot', desc: 'अपनी सुविधा का समय चुनें' },
     { num: '03', hi: 'फ्रेश निकलें', en: 'Walk in Fresh', desc: 'सही समय पर पहुंचे, बिना इंतज़ार' },
   ];
@@ -580,7 +580,7 @@ function TestimonialsSection() {
   const testimonials = [
     { quote: 'अब घंटों इंतज़ार नहीं करना पड़ता। Quttr ने काम आसान कर दिया।', name: 'राहुल शर्मा', city: 'दिल्ली' },
     { quote: 'क्यू ट्रैकिंग बहुत बढ़िया है। मैं सही समय पर पहुंचता हूं।', name: 'अमित कुमार', city: 'मुंबई' },
-    { quote: 'मेरा पसंदीदा बार्बर हमेशा Quttr पर मिलता है।', name: 'विकास सिंह', city: 'बैंगलोर' },
+    { quote: 'मेरा पसंदीदा Barber हमेशा Quttr पर मिलता है।', name: 'विकास सिंह', city: 'बैंगलोर' },
   ];
   return (
     <section ref={ref} className="px-4 py-24 md:py-32 border-t border-white/[0.06] bg-gradient-to-b from-[#0A0000] to-black">
@@ -641,14 +641,14 @@ function BarberSection({ downloadUrl, onDownload }) {
                 <div className="hidden w-full h-full items-center justify-center"><span className="text-5xl">💼</span></div>
               </div>
             </div>
-            <p className="qr-hindi text-[12px] md:text-[13px] font-black tracking-wider text-[#FFD700] uppercase px-4 py-2 rounded-full border border-[#FFD700]/40 bg-[#FFD700]/[0.08]">💼 बार्बर के लिए</p>
+            <p className="qr-hindi text-[12px] md:text-[13px] font-black tracking-wider text-[#FFD700] uppercase px-4 py-2 rounded-full border border-[#FFD700]/40 bg-[#FFD700]/[0.08]">💼 Barber के लिए</p>
           </div>
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
               <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight mb-2 text-white">अपना बिज़नेस</h2>
               <h2 className="qr-hindi text-[38px] sm:text-[52px] md:text-[72px] font-black leading-[1.15] tracking-tight qr-blue-gold-gradient mb-6">बढ़ाएं</h2>
               <p className="text-[18px] md:text-[24px] font-bold text-[#FFD700] mb-4">Grow Your Business.</p>
-              <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed mb-8 font-medium">हज़ारों बार्बर पहले से Quttr बिज़नेस के साथ अपना बिज़नेस बढ़ा रहे हैं।</p>
+              <p className="qr-hindi text-[16px] md:text-[19px] text-white/70 leading-relaxed mb-8 font-medium">हज़ारों Barber पहले से Quttr बिज़नेस के साथ अपना बिज़नेस बढ़ा रहे हैं।</p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <a
                   href={downloadUrl}
@@ -729,7 +729,7 @@ function FooterSection() {
           <div className="flex items-center justify-center gap-2 mb-4">
             <span className="qr-hindi text-[20px] font-black">Quttr<span className="text-[#FFD700]">.</span></span>
           </div>
-          <p className="qr-hindi text-[15px] text-white/60 font-semibold mb-2">भारत का सबसे तेज़ बार्बर बुकिंग ऐप</p>
+          <p className="qr-hindi text-[15px] text-white/60 font-semibold mb-2">भारत का सबसे तेज़ Barber बुकिंग ऐप</p>
         </div>
         <div className="flex flex-wrap justify-center gap-6 mb-12 text-[13px] font-semibold">
           <a href="mailto:support@quttrr.com" className="text-white/60 hover:text-[#FFD700] transition-colors">support@quttrr.com</a>
