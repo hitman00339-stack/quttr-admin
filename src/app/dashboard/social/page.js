@@ -9,11 +9,22 @@ import {
 import { authService } from '../../../services/auth';
 
 // ============================================
-// ✅ API URL — matches Render backend /api/v1/social
+// ✅ FIX: avoid /api/v1/api/v1 double path
 // ============================================
-const API_BASE = process.env.NEXT_PUBLIC_API_URL
-  ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1/social`
-  : 'https://quttr-backend.onrender.com/api/v1/social';
+const getApiBase = () => {
+  const raw = process.env.NEXT_PUBLIC_API_URL || 'https://quttr-backend.onrender.com';
+  let base = raw.replace(/\/$/, ''); // remove trailing slash
+
+  // If env already ends with /api/v1 → just append /social
+  if (base.endsWith('/api/v1')) {
+    return `${base}/social`;
+  }
+
+  // If env is only domain → append full /api/v1/social
+  return `${base}/api/v1/social`;
+};
+
+const API_BASE = getApiBase();
 
 // ============================================
 // API HELPER — Uses quttr_admin_token
@@ -863,9 +874,9 @@ export default function SocialMediaPage() {
                   </div>
                 ))}
                 <div className="mt-4 p-3 rounded-xl bg-accent-500/10 border border-accent-500/20">
-                  <p className="text-xs text-accent-400 font-semibold mb-1">💡 Quick Start</p>
-                  <p className="text-[10px] text-white/50 leading-relaxed">
-                    API: <code className="text-accent-400">{API_BASE}</code>
+                  <p className="text-xs text-accent-400 font-semibold mb-1">💡 API URL</p>
+                  <p className="text-[10px] text-white/50 leading-relaxed break-all">
+                    <code className="text-accent-400">{API_BASE}</code>
                   </p>
                 </div>
               </div>
