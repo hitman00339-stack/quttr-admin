@@ -3,13 +3,92 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import {
-  Search, Download, MoreVertical, Calendar, Clock,
-  CheckCircle2, XCircle, User, Store, Scissors,
+  Search, MoreVertical, Store,
   Trash2, RefreshCw, Activity,
 } from 'lucide-react';
 import DataTable from '../../../components/DataTable';
 import ConfirmModal from '../../../components/ConfirmModal';
 import { bookingsService } from '../../../services/bookings';
+
+// ─── Normalize whatever shape the API returns ───
+function getCustomer(b) {
+  // Walk-in first
+  if (b.isWalkIn || b.walkIn || b.type === 'walk-in') {
+    const w = b.walkInCustomer || b.walkIn || {};
+    return {
+      name: w.name || b.customerName || b.walkInName || 'Walk-in Customer',
+      phone: w.phone || b.customerPhone || b.walkInPhone || '',
+      isWalkIn: true,
+    };
+  }
+
+  // Populated customer / user object
+  const c =
+    (b.customer && typeof b.customer === 'object' ? b.customer : null) ||
+    (b.user && typeof b.user === 'object' ? b.user : null) ||
+    (b.customerId && typeof b.customerId === 'object' ? b.customerId : null) ||
+    (b.userId && typeof b.userId === 'object' ? b.userId : null) ||
+    {};
+
+  return {
+    name:
+      c.name ||
+      c.fullName ||
+      c.username ||
+      b.customerName ||
+      b.userName ||
+      'Unknown',
+    phone:
+      c.phone ||
+      c.mobile ||
+      c.phoneNumber ||
+      b.customerPhone ||
+      b.userPhone ||
+      '',
+    isWalkIn: false,
+  };
+}
+
+function getShop(b) {
+  const s =
+    (b.shop && typeof b.shop === 'object' ? b.shop : null) ||
+    (b.shopId && typeof b.shopId === 'object' ? b.shopId : null) ||
+    (b.store && typeof b.store === 'object' ? b.store : null) ||
+    {};
+
+  return {
+    name:
+      s.name ||
+      s.shopName ||
+      s.title ||
+      b.shopName ||
+      b.storeName ||
+      'Unknown',
+  };
+}
+
+function getService(b) {
+  const svc =
+    (b.service && typeof b.service === 'object' ? b.service : null) ||
+    (b.serviceId && typeof b.serviceId === 'object' ? b.serviceId : null) ||
+    {};
+
+  // Sometimes services is an array
+  if (!svc.name && Array.isArray(b.services) && b.services.length > 0) {
+    const first = typeof b.services[0] === 'object' ? b.services[0] : {};
+    return {
+      name: first.name || b.serviceName || 'N/A',
+      price: first.price ?? b.price ?? b.totalAmount ?? 0,
+      duration: first.duration ?? b.duration ?? 0,
+    };
+  }
+
+  return {
+    name: svc.name || b.serviceName || b.service || 'N/A',
+    price: svc.price ?? b.price ?? b.totalAmount ?? b.amount ?? 0,
+    duration: svc.duration ?? b.duration ?? b.serviceDuration ?? 0,
+  };
+}
 
 export default function BookingsPage() {
   const [bookings, setBookings] = useState([]);
@@ -46,13 +125,22 @@ export default function BookingsPage() {
     if (result.success) {
       let filtered = result.bookings || result.data || [];
 
+      // Debug once in console so we can see real shape
+      if (filtered.length > 0 && process.env.NODE_ENV === 'development') {
+        console.log('Booking sample:', filtered[0]);
+      }
+
       if (search) {
-        filtered = filtered.filter((b) =>
-          b.customer?.name?.toLowerCase().includes(search.toLowerCase()) ||
-          b.customer?.phone?.includes(search) ||
-          b.shop?.name?.toLowerCase().includes(search.toLowerCase()) ||
-          b.walkInCustomer?.name?.toLowerCase().includes(search.toLowerCase())
-        );
+        const q = search.toLowerCase();
+        filtered = filtered.filter((b) => {
+          const customer = getCustomer(b);
+          const shop = getShop(b);
+          return (
+            customer.name?.toLowerCase().includes(q) ||
+            customer.phone?.includes(search) ||
+            shop.name?.toLowerCase().includes(q)
+          );
+        });
       }
 
       setBookings(filtered);
@@ -85,52 +173,64 @@ export default function BookingsPage() {
     cancelled: 'chip-error',
     declined: 'chip-error',
     noShow: 'chip-neutral',
+    no_show: 'chip-neutral',
   };
 
   const columns = [
     {
       key: 'customer',
       label: 'Customer',
-      render: (b) => (
-        <div>
-          <p className="text-sm font-medium">
-            {b.isWalkIn ? b.walkInCustomer?.name : b.customer?.name || 'Unknown'}
-            {b.isWalkIn && <span className="ml-2 text-2xs text-info">walk-in</span>}
-          </p>
-          <p className="text-2xs text-white/40">
-            {b.isWalkIn ? (b.walkInCustomer?.phone || 'No phone') : b.customer?.phone}
-          </p>
-        </div>
-      ),
+      render: (b) => {
+        const customer = getCustomer(b);
+        return (
+          <div>
+            <p className="text-sm font-medium">
+              {customer.name}
+              {customer.isWalkIn && (
+                <span className="ml-2 text-2xs text-info">walk-in</span>
+              )}
+            </p>
+            <p className="text-2xs text-white/40">
+              {customer.phone || 'No phone'}
+            </p>
+          </div>
+        );
+      },
     },
     {
       key: 'shop',
       label: 'Shop',
-      render: (b) => (
-        <div className="flex items-center gap-2">
-          <Store className="w-3.5 h-3.5 text-white/40" />
-          <span className="text-sm truncate">{b.shop?.name || 'Unknown'}</span>
-        </div>
-      ),
+      render: (b) => {
+        const shop = getShop(b);
+        return (
+          <div className="flex items-center gap-2">
+            <Store className="w-3.5 h-3.5 text-white/40" />
+            <span className="text-sm truncate">{shop.name}</span>
+          </div>
+        );
+      },
     },
     {
       key: 'service',
       label: 'Service',
-      render: (b) => (
-        <div>
-          <p className="text-sm">{b.service?.name || 'N/A'}</p>
-          <p className="text-2xs text-white/40">
-            ₹{b.service?.price || 0} · {b.service?.duration || 0}min
-          </p>
-        </div>
-      ),
+      render: (b) => {
+        const service = getService(b);
+        return (
+          <div>
+            <p className="text-sm">{service.name}</p>
+            <p className="text-2xs text-white/40">
+              ₹{service.price} · {service.duration}min
+            </p>
+          </div>
+        );
+      },
     },
     {
       key: 'position',
       label: 'Queue #',
       render: (b) => (
         <span className="chip-accent">
-          #{b.position || 0}
+          #{b.position ?? b.queuePosition ?? b.queueNumber ?? 0}
         </span>
       ),
     },
@@ -148,7 +248,7 @@ export default function BookingsPage() {
       label: 'Time',
       render: (b) => (
         <span className="text-xs text-white/40">
-          {new Date(b.createdAt).toLocaleString('en-IN', {
+          {new Date(b.createdAt || b.bookingTime || Date.now()).toLocaleString('en-IN', {
             day: '2-digit',
             month: 'short',
             hour: '2-digit',
@@ -242,6 +342,7 @@ export default function BookingsPage() {
           <option value="serving">Serving</option>
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>
+          <option value="declined">Declined</option>
         </select>
 
         <button
