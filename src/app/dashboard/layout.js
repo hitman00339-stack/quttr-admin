@@ -9,6 +9,7 @@ import {
   Sparkles, Scissors, ChevronRight,
   AlertCircle, UserCheck, ShoppingBag,
   QrCode, Megaphone, Image as ImageIcon,
+  Share2,  // ← added for Social Media
 } from 'lucide-react';
 import { authService } from '../../services/auth';
 
@@ -23,6 +24,7 @@ const navigation = [
   { name: 'QR Codes', href: '/dashboard/qr-codes', icon: QrCode },
   { name: 'Posters', href: '/dashboard/posters', icon: ImageIcon, badge: 'NEW' },
   { name: 'Marketing Team', href: '/dashboard/marketing', icon: Megaphone },
+  { name: 'Social Media', href: '/dashboard/social', icon: Share2, badge: 'NEW' }, // ← NEW
   { name: 'Reviews', href: '/dashboard/reviews', icon: Star },
   { name: 'Notices', href: '/dashboard/notices', icon: Bell },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
