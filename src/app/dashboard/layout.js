@@ -5,11 +5,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   LayoutDashboard, Store, Users, Calendar, Star, Bell,
-  BarChart3, Settings, LogOut, Search, Command, Menu, X,
-  Sparkles, Scissors, ChevronRight,
+  BarChart3, Settings, LogOut, Search, Menu, X,
+  Sparkles, ChevronRight,
   AlertCircle, UserCheck, ShoppingBag,
   QrCode, Megaphone, Image as ImageIcon,
-  Share2,  // ← added for Social Media
 } from 'lucide-react';
 import { authService } from '../../services/auth';
 
@@ -24,7 +23,6 @@ const navigation = [
   { name: 'QR Codes', href: '/dashboard/qr-codes', icon: QrCode },
   { name: 'Posters', href: '/dashboard/posters', icon: ImageIcon, badge: 'NEW' },
   { name: 'Marketing Team', href: '/dashboard/marketing', icon: Megaphone },
-  { name: 'Social Media', href: '/dashboard/social', icon: Share2, badge: 'NEW' }, // ← NEW
   { name: 'Reviews', href: '/dashboard/reviews', icon: Star },
   { name: 'Notices', href: '/dashboard/notices', icon: Bell },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
@@ -69,32 +67,68 @@ export default function DashboardLayout({ children }) {
   return (
     <div className="min-h-screen bg-surface-50 flex">
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
-      <aside className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-64 bg-surface-100/80 backdrop-blur-2xl border-r border-white/[0.06] transition-transform duration-300 flex flex-col ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+
+      <aside
+        className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-64 bg-surface-100/80 backdrop-blur-2xl border-r border-white/[0.06] transition-transform duration-300 flex flex-col ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        }`}
+      >
         <div className="h-16 flex items-center justify-between px-6 border-b border-white/[0.06] flex-shrink-0">
           <Link href="/dashboard" className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center shadow-brand">
               <Sparkles className="w-4 h-4 text-white" strokeWidth={2.5} />
             </div>
-            <span className="font-bold text-base">QUTTR<span className="text-accent-500 font-mono">·</span></span>
+            <span className="font-bold text-base">
+              QUTTR<span className="text-accent-500 font-mono">·</span>
+            </span>
           </Link>
           <button onClick={() => setSidebarOpen(false)} className="btn-icon lg:hidden">
             <X className="w-4 h-4" />
           </button>
         </div>
+
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto no-scrollbar">
-          <p className="px-3 py-2 text-2xs font-semibold text-white/30 uppercase tracking-widest">Workspace</p>
+          <p className="px-3 py-2 text-2xs font-semibold text-white/30 uppercase tracking-widest">
+            Workspace
+          </p>
+
           {navigation.map((item) => {
-            const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+            const isActive =
+              pathname === item.href ||
+              (item.href !== '/dashboard' && pathname.startsWith(item.href));
             const Icon = item.icon;
+
             return (
-              <Link key={item.name} href={item.href} onClick={() => setSidebarOpen(false)}
-                className={`nav-link group ${isActive ? 'nav-link-active' : ''} ${item.highlight && !isActive ? 'text-warning' : ''}`}>
-                <Icon className={`w-4 h-4 flex-shrink-0 transition-transform group-hover:scale-110 ${isActive ? 'text-accent-500' : item.highlight ? 'text-warning' : ''}`} />
+              <Link
+                key={item.name}
+                href={item.href}
+                onClick={() => setSidebarOpen(false)}
+                className={`nav-link group ${isActive ? 'nav-link-active' : ''} ${
+                  item.highlight && !isActive ? 'text-warning' : ''
+                }`}
+              >
+                <Icon
+                  className={`w-4 h-4 flex-shrink-0 transition-transform group-hover:scale-110 ${
+                    isActive
+                      ? 'text-accent-500'
+                      : item.highlight
+                      ? 'text-warning'
+                      : ''
+                  }`}
+                />
                 <span className="flex-1">{item.name}</span>
+
                 {isActive && <div className="w-1 h-1 rounded-full bg-accent-500" />}
-                {item.highlight && !isActive && <div className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />}
+
+                {item.highlight && !isActive && (
+                  <div className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
+                )}
+
                 {item.badge && !isActive && (
                   <span className="text-[9px] font-black tracking-wider px-1.5 py-0.5 rounded bg-gradient-to-r from-accent-500 to-accent-700 text-surface-100">
                     {item.badge}
@@ -104,6 +138,7 @@ export default function DashboardLayout({ children }) {
             );
           })}
         </nav>
+
         <div className="p-3 border-t border-white/[0.06] flex-shrink-0">
           <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/[0.03]">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center text-surface-100 font-bold text-sm">
@@ -113,30 +148,49 @@ export default function DashboardLayout({ children }) {
               <p className="text-sm font-medium truncate">{admin?.name || 'Admin'}</p>
               <p className="text-2xs text-white/40 truncate">{admin?.phone}</p>
             </div>
-            <button onClick={() => authService.logout()} className="btn-icon text-white/40 hover:text-error" title="Logout">
+            <button
+              onClick={() => authService.logout()}
+              className="btn-icon text-white/40 hover:text-error"
+              title="Logout"
+            >
               <LogOut className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
       </aside>
+
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 sticky top-0 z-30 bg-surface-50/80 backdrop-blur-2xl border-b border-white/[0.06]">
           <div className="h-full flex items-center justify-between px-4 lg:px-8 gap-4">
             <button onClick={() => setSidebarOpen(true)} className="btn-icon lg:hidden">
               <Menu className="w-5 h-5" />
             </button>
+
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              <Link href="/dashboard" className="text-sm text-white/40 hover:text-white transition-colors">Admin</Link>
+              <Link
+                href="/dashboard"
+                className="text-sm text-white/40 hover:text-white transition-colors"
+              >
+                Admin
+              </Link>
               <ChevronRight className="w-3.5 h-3.5 text-white/20" />
               <span className="text-sm font-medium truncate">
-                {navigation.find(n => n.href === pathname || (n.href !== '/dashboard' && pathname.startsWith(n.href)))?.name || 'Overview'}
+                {navigation.find(
+                  (n) =>
+                    n.href === pathname ||
+                    (n.href !== '/dashboard' && pathname.startsWith(n.href))
+                )?.name || 'Overview'}
               </span>
             </div>
+
             <button className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/40 hover:text-white/70 text-sm transition-colors min-w-[240px]">
               <Search className="w-3.5 h-3.5" />
               <span className="flex-1 text-left">Search...</span>
-              <kbd className="text-2xs font-mono bg-white/[0.06] px-1.5 py-0.5 rounded border border-white/10">⌘K</kbd>
+              <kbd className="text-2xs font-mono bg-white/[0.06] px-1.5 py-0.5 rounded border border-white/10">
+                ⌘K
+              </kbd>
             </button>
+
             <div className="flex items-center gap-1">
               <button className="btn-icon relative">
                 <Bell className="w-4 h-4" />
@@ -145,6 +199,7 @@ export default function DashboardLayout({ children }) {
             </div>
           </div>
         </header>
+
         <main className="flex-1 p-4 lg:p-8 mesh-bg">{children}</main>
       </div>
     </div>
