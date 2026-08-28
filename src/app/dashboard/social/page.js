@@ -9,13 +9,14 @@ import {
 import { authService } from '../../../services/auth';
 
 // ============================================
-// ⚠️ Set your Render backend URL here or in .env
+// ✅ API URL — matches Render backend /api/v1/social
 // ============================================
 const API_BASE = process.env.NEXT_PUBLIC_API_URL
   ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1/social`
   : 'https://quttr-backend.onrender.com/api/v1/social';
+
 // ============================================
-// API HELPER — Uses your quttr_admin_token
+// API HELPER — Uses quttr_admin_token
 // ============================================
 const apiCall = async (endpoint, options = {}) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('quttr_admin_token') : null;
@@ -31,7 +32,7 @@ const apiCall = async (endpoint, options = {}) => {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || err.message || 'API Error');
+    throw new Error(err.error || err.message || `API Error (${res.status})`);
   }
   return res.json();
 };
@@ -94,15 +95,16 @@ export default function SocialMediaPage() {
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 3500);
   };
 
   const loadAccounts = useCallback(async () => {
     try {
       const data = await apiCall('/accounts');
-      setAccounts(data || []);
+      setAccounts(Array.isArray(data) ? data : []);
     } catch (e) {
-      console.error(e);
+      console.error('Load accounts error:', e);
+      showToast(e.message, 'error');
     }
   }, []);
 
@@ -136,7 +138,8 @@ export default function SocialMediaPage() {
         await loadAccounts();
       }
     } catch (e) {
-      console.error(e);
+      console.error('Load tab error:', e);
+      showToast(e.message, 'error');
     }
     setLoading(false);
   }, [tab, loadAccounts]);
@@ -291,7 +294,7 @@ export default function SocialMediaPage() {
     <div className="space-y-6">
       {/* Toast Notification */}
       {toast && (
-        <div className={`fixed top-20 right-6 z-50 px-4 py-3 rounded-xl text-sm font-medium shadow-2xl backdrop-blur-xl border ${toast.type === 'error' ? 'bg-red-500/20 border-red-500/40 text-red-200' : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200'}`}>
+        <div className={`fixed top-20 right-6 z-50 px-4 py-3 rounded-xl text-sm font-medium shadow-2xl backdrop-blur-xl border max-w-md ${toast.type === 'error' ? 'bg-red-500/20 border-red-500/40 text-red-200' : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200'}`}>
           {toast.msg}
         </div>
       )}
@@ -350,11 +353,11 @@ export default function SocialMediaPage() {
               {/* Stat Cards */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 {[
-                  { l: 'Accounts', v: overview.totalAccounts, c: 'text-purple-400', bg: 'bg-purple-500/10' },
-                  { l: 'Reels', v: overview.totalReels, c: 'text-emerald-400', bg: 'bg-emerald-500/10', extra: `+${overview.todayReels} today` },
+                  { l: 'Accounts', v: overview.totalAccounts || 0, c: 'text-purple-400', bg: 'bg-purple-500/10' },
+                  { l: 'Reels', v: overview.totalReels || 0, c: 'text-emerald-400', bg: 'bg-emerald-500/10', extra: `+${overview.todayReels || 0} today` },
                   { l: 'Views', v: fmt(overview.totalViews), c: 'text-blue-400', bg: 'bg-blue-500/10' },
                   { l: 'Likes', v: fmt(overview.totalLikes), c: 'text-orange-400', bg: 'bg-orange-500/10' },
-                  { l: 'Engagement', v: `${overview.avgEngagement}%`, c: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+                  { l: 'Engagement', v: `${overview.avgEngagement || 0}%`, c: 'text-yellow-400', bg: 'bg-yellow-500/10' },
                   { l: 'Auto Replies', v: fmt(overview.totalAutoReplies), c: 'text-pink-400', bg: 'bg-pink-500/10' },
                 ].map((s, i) => (
                   <div key={i} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
@@ -369,14 +372,14 @@ export default function SocialMediaPage() {
               </div>
 
               {/* Today's Upload Tracker */}
-              {todayStats && (
+              {todayStats && todayStats.accounts?.length > 0 && (
                 <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
                   <div className="px-5 py-4 border-b border-white/[0.06] flex items-center gap-2">
                     <Clock className="w-4 h-4 text-accent-500" />
-                    <h3 className="text-sm font-bold">Today&apos;s Uploads: <span className="text-accent-500">{todayStats.totalToday}</span></h3>
+                    <h3 className="text-sm font-bold">Today&apos;s Uploads: <span className="text-accent-500">{todayStats.totalToday || 0}</span></h3>
                   </div>
                   <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                    {todayStats.accounts?.map((a) => (
+                    {todayStats.accounts.map((a) => (
                       <div key={a.accountId} className="rounded-xl bg-white/[0.03] border border-white/[0.05] p-3 text-center">
                         <div
                           className="w-7 h-7 rounded-lg mx-auto flex items-center justify-center text-white text-xs font-bold"
@@ -410,7 +413,7 @@ export default function SocialMediaPage() {
                     <ReelCard key={r._id} reel={r} />
                   ))}
                   {reels.length === 0 && (
-                    <p className="text-sm text-white/30 col-span-full text-center py-8">No reels published yet — go to Setup to seed sample data</p>
+                    <p className="text-sm text-white/30 col-span-full text-center py-8">No reels yet — go to Setup to seed sample data</p>
                   )}
                 </div>
               </div>
@@ -432,7 +435,13 @@ export default function SocialMediaPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {accounts.map((a) => (
+                {accounts.length === 0 ? (
+                  <div className="col-span-full text-center py-12 text-white/30">
+                    <Users className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                    <p className="text-sm">No accounts yet</p>
+                    <p className="text-xs mt-1">Go to Setup tab to seed 10 sample accounts</p>
+                  </div>
+                ) : accounts.map((a) => (
                   <div key={a._id} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 relative">
                     <span
                       className="absolute top-3 right-3 text-[10px] font-bold px-2 py-0.5 rounded-full"
@@ -455,8 +464,8 @@ export default function SocialMediaPage() {
                     <div className="grid grid-cols-3 gap-2 mb-2">
                       {[
                         { l: 'Followers', v: fmt(a.followers) },
-                        { l: 'Reels', v: a.totalReels },
-                        { l: 'Today', v: a.todayUploads },
+                        { l: 'Reels', v: a.totalReels || 0 },
+                        { l: 'Today', v: a.todayUploads || 0 },
                       ].map((s, i) => (
                         <div key={i} className="text-center p-2 rounded-lg bg-white/[0.03]">
                           <p className="text-sm font-bold">{s.v}</p>
@@ -621,7 +630,7 @@ export default function SocialMediaPage() {
                       </div>
                     ))}
                     {activeAccounts.length === 0 && (
-                      <p className="text-xs text-white/30 col-span-2 text-center py-4">No active accounts found — seed accounts first</p>
+                      <p className="text-xs text-white/30 col-span-2 text-center py-4">No active accounts — seed accounts first</p>
                     )}
                   </div>
                 </div>
@@ -853,6 +862,12 @@ export default function SocialMediaPage() {
                     </button>
                   </div>
                 ))}
+                <div className="mt-4 p-3 rounded-xl bg-accent-500/10 border border-accent-500/20">
+                  <p className="text-xs text-accent-400 font-semibold mb-1">💡 Quick Start</p>
+                  <p className="text-[10px] text-white/50 leading-relaxed">
+                    API: <code className="text-accent-400">{API_BASE}</code>
+                  </p>
+                </div>
               </div>
             </div>
           )}
