@@ -12,9 +12,8 @@ import { authService } from '../../../services/auth';
 // ⚠️ Set your Render backend URL here or in .env
 // ============================================
 const API_BASE = process.env.NEXT_PUBLIC_API_URL
-  ? `${process.env.NEXT_PUBLIC_API_URL}/api/social`
-  : 'https://your-backend.onrender.com/api/social';
-
+  ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1/social`
+  : 'https://quttr-backend.onrender.com/api/v1/social';
 // ============================================
 // API HELPER — Uses your quttr_admin_token
 // ============================================
