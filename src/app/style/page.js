@@ -14,12 +14,13 @@ export default function QuttrStylePage() {
   const [cameraActive, setCameraActive] = useState(false);
   const [fontsReady, setFontsReady] = useState(false);
   const [logoImage, setLogoImage] = useState(null);
+  const [logoStatus, setLogoStatus] = useState('loading'); // loading | ok | fail
 
   const fileInputRef = useRef(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
-  // Load fonts
+  // Fonts
   useEffect(() => {
     const loadFonts = async () => {
       try {
@@ -35,13 +36,53 @@ export default function QuttrStylePage() {
     loadFonts();
   }, []);
 
-  // Load logo from public folder
+  // LOGO — try multiple paths (public folder first)
   useEffect(() => {
-    const logo = new Image();
-    logo.crossOrigin = 'anonymous';
-    logo.onload = () => setLogoImage(logo);
-    logo.onerror = () => console.log('Logo not found at /quttr-logo.png');
-    logo.src = '/quttr-logo.png';
+    const paths = [
+      '/quttr-logo.png',
+      '/quttr-business-logo.png',
+      '/logo.png',
+      '/images/quttr-logo.png',
+    ];
+
+    let cancelled = false;
+    let index = 0;
+
+    const tryNext = () => {
+      if (cancelled || index >= paths.length) {
+        if (!cancelled) setLogoStatus('fail');
+        return;
+      }
+
+      const path = paths[index++];
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+
+      img.onload = () => {
+        if (cancelled) return;
+        // Valid image?
+        if (img.width > 0 && img.height > 0) {
+          setLogoImage(img);
+          setLogoStatus('ok');
+          console.log('Quttr logo loaded from', path, img.width, 'x', img.height);
+        } else {
+          tryNext();
+        }
+      };
+
+      img.onerror = () => {
+        console.log('Logo failed:', path);
+        tryNext();
+      };
+
+      // Cache bust so Vercel CDN updates
+      img.src = path + '?v=' + Date.now();
+    };
+
+    tryNext();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -88,32 +129,23 @@ export default function QuttrStylePage() {
     setSelectedImage(dataUrl);
   };
 
-  // Professional image enhancement
   const enhanceImage = (ctx, w, h) => {
     const imgData = ctx.getImageData(0, 0, w, h);
     const d = imgData.data;
-
     for (let i = 0; i < d.length; i += 4) {
       let r = d[i];
       let g = d[i + 1];
       let b = d[i + 2];
-
-      // S-curve contrast
       r = r < 128 ? r * 0.92 : Math.min(255, r * 1.08 + 5);
       g = g < 128 ? g * 0.94 : Math.min(255, g * 1.06 + 3);
       b = b < 128 ? b * 0.96 : Math.min(255, b * 1.04);
-
-      // Cinematic warm highlights / cool shadows
       if (r > 150) r = Math.min(255, r + 8);
       if (b < 100) b = Math.max(0, b - 5);
-
-      // Smooth midtones
       const brightness = (r + g + b) / 3;
       if (brightness > 80 && brightness < 200) {
         r = r * 0.95 + brightness * 0.05;
         g = g * 0.95 + brightness * 0.05;
       }
-
       d[i] = r;
       d[i + 1] = g;
       d[i + 2] = b;
@@ -121,13 +153,11 @@ export default function QuttrStylePage() {
     ctx.putImageData(imgData, 0, 0);
   };
 
-  // Sharpening filter
   const applySharpen = (ctx, w, h) => {
     const imgData = ctx.getImageData(0, 0, w, h);
     const d = imgData.data;
     const copy = new Uint8ClampedArray(d);
     const kernel = [0, -0.5, 0, -0.5, 3, -0.5, 0, -0.5, 0];
-
     for (let y = 1; y < h - 1; y++) {
       for (let x = 1; x < w - 1; x++) {
         const i = (y * w + x) * 4;
@@ -147,11 +177,9 @@ export default function QuttrStylePage() {
     ctx.putImageData(imgData, 0, 0);
   };
 
-  // Text wrap helper
   const drawWrapped = (ctx, text, x, y, maxW, lh) => {
     const words = text.split(' ');
     let line = '';
-    let cy = y;
     const lines = [];
     for (let n = 0; n < words.length; n++) {
       const test = line + words[n] + ' ';
@@ -163,13 +191,64 @@ export default function QuttrStylePage() {
       }
     }
     lines.push(line.trim());
-    lines.forEach((l, idx) => {
-      ctx.fillText(l, x, cy + idx * lh);
-    });
+    lines.forEach((l, idx) => ctx.fillText(l, x, y + idx * lh));
     return lines.length;
   };
 
-  // ============ PROFESSIONAL POSTER GENERATION ============
+  // Draw logo top-right (always visible)
+  const drawLogoTopRight = (ctx) => {
+    const pad = 40;
+    const maxW = 180;
+    const maxH = 90;
+
+    if (logoImage && logoImage.width > 0) {
+      const scale = Math.min(maxW / logoImage.width, maxH / logoImage.height);
+      const drawW = Math.max(40, logoImage.width * scale);
+      const drawH = Math.max(20, logoImage.height * scale);
+      const logoX = 1080 - drawW - pad;
+      const logoY = pad;
+
+      // Soft plate behind logo so dark/transparent logos still show
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      if (typeof ctx.roundRect === 'function') {
+        ctx.beginPath();
+        ctx.roundRect(logoX - 12, logoY - 10, drawW + 24, drawH + 20, 14);
+        ctx.fill();
+      } else {
+        ctx.fillRect(logoX - 12, logoY - 10, drawW + 24, drawH + 20);
+      }
+
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = 16;
+      ctx.drawImage(logoImage, logoX, logoY, drawW, drawH);
+      ctx.restore();
+      return;
+    }
+
+    // FALLBACK badge if file missing
+    const bx = 1080 - 140 - pad;
+    const by = pad;
+    ctx.save();
+    const g = ctx.createLinearGradient(bx, by, bx + 140, by + 56);
+    g.addColorStop(0, '#FFD700');
+    g.addColorStop(1, '#F59E0B');
+    ctx.fillStyle = g;
+    if (typeof ctx.roundRect === 'function') {
+      ctx.beginPath();
+      ctx.roundRect(bx, by, 140, 56, 12);
+      ctx.fill();
+    } else {
+      ctx.fillRect(bx, by, 140, 56);
+    }
+    ctx.fillStyle = '#000';
+    ctx.font = '900 28px "Bebas Neue", Impact, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('QUTTR', bx + 70, by + 30);
+    ctx.restore();
+  };
+
   const generateCard = async () => {
     if (!selectedImage || !fontsReady) return;
     setIsProcessing(true);
@@ -180,6 +259,7 @@ export default function QuttrStylePage() {
     } catch (e) {}
 
     const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     canvas.width = 1080;
     canvas.height = 1920;
@@ -187,7 +267,7 @@ export default function QuttrStylePage() {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
-      // 1. Cinematic background
+      // Background
       const grad = ctx.createLinearGradient(0, 0, 0, 1920);
       grad.addColorStop(0, '#000000');
       grad.addColorStop(0.3, selectedCeleb.bgGradient[0]);
@@ -196,7 +276,6 @@ export default function QuttrStylePage() {
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, 1080, 1920);
 
-      // Radial spotlight
       const spot = ctx.createRadialGradient(540, 400, 100, 540, 600, 900);
       spot.addColorStop(0, selectedCeleb.themeColor + '55');
       spot.addColorStop(0.5, selectedCeleb.themeColor + '22');
@@ -204,9 +283,9 @@ export default function QuttrStylePage() {
       ctx.fillStyle = spot;
       ctx.fillRect(0, 0, 1080, 1920);
 
-      // 2. Light rays
+      // Light rays
       ctx.save();
-      ctx.globalAlpha = 0.15;
+      ctx.globalAlpha = 0.12;
       ctx.translate(540, 200);
       for (let i = 0; i < 8; i++) {
         ctx.save();
@@ -226,11 +305,11 @@ export default function QuttrStylePage() {
       }
       ctx.restore();
 
-      // 3. Smart face crop + enhance
+      // Face process
       const srcW = img.width;
       const srcH = img.height;
-      const cropSrcW = srcW;
       const cropSrcH = Math.min(srcH, srcH * 0.85);
+      const cropSrcW = srcW;
 
       const workCanvas = document.createElement('canvas');
       workCanvas.width = 800;
@@ -254,13 +333,11 @@ export default function QuttrStylePage() {
         sy = 0;
       }
       workCtx.drawImage(img, sx, sy, sw, sh, 0, 0, 800, 1000);
-
       enhanceImage(workCtx, 800, 1000);
       applySharpen(workCtx, 800, 1000);
 
-      // 4. Place face on poster
-      const faceY = 220;
-      const faceH = 1050;
+      const faceY = 200;
+      const faceH = 1020;
       const faceW = 840;
       const faceX = (1080 - faceW) / 2;
 
@@ -270,11 +347,12 @@ export default function QuttrStylePage() {
       ctx.shadowOffsetY = 20;
       ctx.fillStyle = '#000';
       if (typeof ctx.roundRect === 'function') {
+        ctx.beginPath();
         ctx.roundRect(faceX, faceY, faceW, faceH, 20);
+        ctx.fill();
       } else {
-        ctx.rect(faceX, faceY, faceW, faceH);
+        ctx.fillRect(faceX, faceY, faceW, faceH);
       }
-      ctx.fill();
       ctx.restore();
 
       ctx.save();
@@ -287,23 +365,21 @@ export default function QuttrStylePage() {
       ctx.clip();
       ctx.drawImage(workCanvas, faceX, faceY, faceW, faceH);
 
-      // Duotone wash
       ctx.globalCompositeOperation = 'multiply';
       const duoGrad = ctx.createLinearGradient(0, faceY, 0, faceY + faceH);
       duoGrad.addColorStop(0, '#ffffff');
       duoGrad.addColorStop(1, selectedCeleb.themeColor);
       ctx.fillStyle = duoGrad;
-      ctx.globalAlpha = 0.25;
+      ctx.globalAlpha = 0.22;
       ctx.fillRect(faceX, faceY, faceW, faceH);
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
 
-      // Bottom fade into background
-      const fadeGrad = ctx.createLinearGradient(0, faceY + faceH - 300, 0, faceY + faceH);
+      const fadeGrad = ctx.createLinearGradient(0, faceY + faceH - 280, 0, faceY + faceH);
       fadeGrad.addColorStop(0, 'transparent');
       fadeGrad.addColorStop(1, selectedCeleb.bgGradient[1]);
       ctx.fillStyle = fadeGrad;
-      ctx.fillRect(faceX, faceY + faceH - 300, faceW, 300);
+      ctx.fillRect(faceX, faceY + faceH - 280, faceW, 280);
       ctx.restore();
 
       // Gold border
@@ -323,7 +399,7 @@ export default function QuttrStylePage() {
       ctx.stroke();
       ctx.restore();
 
-      // Film grain
+      // Grain
       const grainCanvas = document.createElement('canvas');
       grainCanvas.width = 1080;
       grainCanvas.height = 1920;
@@ -334,72 +410,50 @@ export default function QuttrStylePage() {
         grainData.data[i] = val;
         grainData.data[i + 1] = val;
         grainData.data[i + 2] = val;
-        grainData.data[i + 3] = 25;
+        grainData.data[i + 3] = 22;
       }
       grainCtx.putImageData(grainData, 0, 0);
       ctx.globalCompositeOperation = 'overlay';
-      ctx.globalAlpha = 0.4;
+      ctx.globalAlpha = 0.35;
       ctx.drawImage(grainCanvas, 0, 0);
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
 
-      // ============ TOP: LEFT BRAND + LOGO TOP-RIGHT ============
-      // Left small brand
+      // ===== TOP LEFT text =====
       ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
       ctx.fillStyle = 'rgba(255,255,255,0.95)';
       ctx.font = '700 26px system-ui, sans-serif';
       ctx.fillText('Quttr Style', 48, 78);
-
       ctx.fillStyle = selectedCeleb.themeColor;
       ctx.font = '600 18px system-ui, sans-serif';
       ctx.fillText(selectedCeleb.name, 48, 108);
 
-      // Logo TOP-RIGHT
-      if (logoImage) {
-        const logoMaxW = 160;
-        const logoMaxH = 80;
-        const lw = logoImage.width;
-        const lh = logoImage.height;
-        const scale = Math.min(logoMaxW / lw, logoMaxH / lh);
-        const drawW = lw * scale;
-        const drawH = lh * scale;
-        const logoX = 1080 - drawW - 48;
-        const logoY = 40;
+      // ===== LOGO TOP RIGHT (always) =====
+      drawLogoTopRight(ctx);
 
-        ctx.save();
-        ctx.shadowColor = 'rgba(0,0,0,0.6)';
-        ctx.shadowBlur = 15;
-        ctx.drawImage(logoImage, logoX, logoY, drawW, drawH);
-        ctx.restore();
-      }
-
-      // ============ DIALOGUE SECTION (no style name) ============
+      // ===== DIALOGUE (no style name) =====
       ctx.textAlign = 'center';
-
-      // Opening quote mark
       ctx.fillStyle = selectedCeleb.themeColor;
       ctx.font = '900 100px "Playfair Display", serif';
       ctx.globalAlpha = 0.35;
-      ctx.fillText('"', 180, 1440);
+      ctx.fillText('"', 180, 1420);
       ctx.globalAlpha = 1;
 
-      // Handwritten dialogue
       ctx.fillStyle = '#FFF8E7';
       ctx.font = '700 46px "Caveat", cursive';
       ctx.shadowColor = 'rgba(0,0,0,0.7)';
       ctx.shadowBlur = 10;
-      const lineCount = drawWrapped(ctx, activeDialogue, 540, 1440, 820, 58);
+      const lineCount = drawWrapped(ctx, activeDialogue, 540, 1420, 820, 58);
       ctx.shadowBlur = 0;
 
-      // Closing quote
       ctx.fillStyle = selectedCeleb.themeColor;
       ctx.font = '900 100px "Playfair Display", serif';
       ctx.globalAlpha = 0.35;
-      ctx.fillText('"', 880, 1440 + (lineCount - 1) * 58);
+      ctx.fillText('"', 880, 1420 + (lineCount - 1) * 58);
       ctx.globalAlpha = 1;
 
-      // Divider
-      const dividerY = 1440 + lineCount * 58 + 40;
+      const dividerY = 1420 + lineCount * 58 + 36;
       const divGrad = ctx.createLinearGradient(240, 0, 840, 0);
       divGrad.addColorStop(0, 'transparent');
       divGrad.addColorStop(0.5, '#FFD700');
@@ -407,7 +461,6 @@ export default function QuttrStylePage() {
       ctx.fillStyle = divGrad;
       ctx.fillRect(240, dividerY, 600, 1);
 
-      // Diamond
       ctx.fillStyle = '#FFD700';
       ctx.save();
       ctx.translate(540, dividerY);
@@ -415,13 +468,11 @@ export default function QuttrStylePage() {
       ctx.fillRect(-5, -5, 10, 10);
       ctx.restore();
 
-      // Celebrity name below quote
       ctx.fillStyle = '#FFD700';
       ctx.font = 'italic 600 28px "Playfair Display", serif';
       ctx.fillText('— ' + selectedCeleb.name, 540, dividerY + 45);
 
-      // ============ CTA BUTTON ============
-      const btnY = dividerY + 90;
+      const btnY = Math.min(dividerY + 85, 1780);
       const btnGrad = ctx.createLinearGradient(240, btnY, 840, btnY + 60);
       btnGrad.addColorStop(0, '#FFD700');
       btnGrad.addColorStop(1, '#FFA500');
@@ -436,12 +487,10 @@ export default function QuttrStylePage() {
 
       ctx.fillStyle = '#000';
       ctx.font = '900 28px "Bebas Neue", Impact, sans-serif';
-      ctx.letterSpacing = '2px';
       ctx.fillText('✂  BOOK  ON  QUTTR  APP  ✂', 540, btnY + 43);
 
       ctx.fillStyle = 'rgba(255,255,255,0.6)';
       ctx.font = '500 22px "Playfair Display", serif';
-      ctx.letterSpacing = '4px';
       ctx.fillText('quttr.com/style', 540, btnY + 105);
 
       setGeneratedCardUrl(canvas.toDataURL('image/jpeg', 0.95));
@@ -454,6 +503,7 @@ export default function QuttrStylePage() {
     img.src = selectedImage;
   };
 
+  // Regenerate when logo arrives (important!)
   useEffect(() => {
     if (selectedImage && fontsReady) generateCard();
   }, [selectedImage, selectedCeleb, activeDialogue, fontsReady, logoImage]);
@@ -493,11 +543,18 @@ export default function QuttrStylePage() {
         <div className="inline-block bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-black text-xs px-4 py-1.5 rounded-full mb-3 tracking-widest">
           ★ QUTTR PREMIUM POSTER ★
         </div>
-        <h1 className="text-4xl md:text-6xl font-black tracking-tight" style={{ fontFamily: 'Bebas Neue, Impact, sans-serif', letterSpacing: '3px' }}>
+        <h1
+          className="text-4xl md:text-6xl font-black tracking-tight"
+          style={{ fontFamily: 'Bebas Neue, Impact, sans-serif', letterSpacing: '3px' }}
+        >
           BECOME A <span className="text-yellow-400">CELEBRITY</span>
         </h1>
         <p className="text-slate-400 mt-3" style={{ fontFamily: 'Caveat, cursive', fontSize: 24 }}>
           Upload your photo → Get an ultra-premium celebrity poster
+        </p>
+        {/* Debug line — remove later */}
+        <p className="text-xs mt-2 text-slate-600">
+          Logo: {logoStatus === 'ok' ? '✅ loaded' : logoStatus === 'fail' ? '❌ put file in public/quttr-logo.png' : '⏳ loading...'}
         </p>
       </header>
 
@@ -529,25 +586,12 @@ export default function QuttrStylePage() {
             ) : (
               <div className="space-y-3">
                 <video ref={videoRef} autoPlay playsInline className="w-full rounded-2xl border-2 border-yellow-500" />
-                <button
-                  type="button"
-                  onClick={captureSelfie}
-                  className="w-full bg-gradient-to-r from-rose-600 to-red-600 font-black py-4 rounded-xl text-lg"
-                >
+                <button type="button" onClick={captureSelfie} className="w-full bg-gradient-to-r from-rose-600 to-red-600 font-black py-4 rounded-xl text-lg">
                   📸 CAPTURE PHOTO
                 </button>
               </div>
             )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleFileUpload}
-            />
-            <p className="text-xs text-slate-500 mt-2 text-center">
-              💡 Tip: Use a well-lit front-facing photo for best results
-            </p>
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
           </div>
 
           <div>
@@ -608,9 +652,6 @@ export default function QuttrStylePage() {
               <p className="text-lg font-black text-yellow-400 mb-2" style={{ fontFamily: 'Bebas Neue', letterSpacing: '3px' }}>
                 YOUR POSTER APPEARS HERE
               </p>
-              <p style={{ fontFamily: 'Caveat, cursive', fontSize: 22 }} className="text-slate-400">
-                Upload a photo to see the magic ✨
-              </p>
             </div>
           ) : (
             <div className="w-full max-w-md relative">
@@ -633,7 +674,7 @@ export default function QuttrStylePage() {
                 <button
                   type="button"
                   onClick={shareCard}
-                  className="w-full mt-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-black font-black py-5 rounded-2xl shadow-2xl text-lg tracking-wider transition"
+                  className="w-full mt-4 bg-gradient-to-r from-emerald-500 to-green-600 text-black font-black py-5 rounded-2xl shadow-2xl text-lg tracking-wider"
                   style={{ fontFamily: 'Bebas Neue' }}
                 >
                   📤 SHARE TO WHATSAPP / INSTAGRAM
