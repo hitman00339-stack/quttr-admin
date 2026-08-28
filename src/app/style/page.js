@@ -13,23 +13,35 @@ export default function QuttrStylePage() {
   const [loadingText, setLoadingText] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
   const [fontsReady, setFontsReady] = useState(false);
+  const [logoImage, setLogoImage] = useState(null);
 
   const fileInputRef = useRef(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
+  // Load fonts
   useEffect(() => {
     const loadFonts = async () => {
       try {
         await Promise.all([
-          document.fonts.load('700 48px Caveat'),
+          document.fonts.load('700 60px Caveat'),
           document.fonts.load('700 40px Kalam'),
-          document.fonts.load('40px Permanent Marker'),
+          document.fonts.load('900 80px "Bebas Neue"'),
+          document.fonts.load('40px "Playfair Display"'),
         ]);
       } catch (e) {}
       setFontsReady(true);
     };
     loadFonts();
+  }, []);
+
+  // Load logo from public folder
+  useEffect(() => {
+    const logo = new Image();
+    logo.crossOrigin = 'anonymous';
+    logo.onload = () => setLogoImage(logo);
+    logo.onerror = () => console.log('Logo not found at /quttr-logo.png');
+    logo.src = '/quttr-logo.png';
   }, []);
 
   useEffect(() => {
@@ -45,9 +57,7 @@ export default function QuttrStylePage() {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      setSelectedImage(ev.target.result);
-    };
+    reader.onload = (ev) => setSelectedImage(ev.target.result);
     reader.readAsDataURL(file);
   };
 
@@ -55,7 +65,7 @@ export default function QuttrStylePage() {
     setCameraActive(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' },
+        video: { facingMode: 'user', width: 1280, height: 720 },
       });
       if (videoRef.current) videoRef.current.srcObject = stream;
     } catch (err) {
@@ -68,8 +78,8 @@ export default function QuttrStylePage() {
     const video = videoRef.current;
     if (!video) return;
     const c = document.createElement('canvas');
-    c.width = video.videoWidth || 640;
-    c.height = video.videoHeight || 480;
+    c.width = video.videoWidth || 1280;
+    c.height = video.videoHeight || 720;
     c.getContext('2d').drawImage(video, 0, 0);
     const dataUrl = c.toDataURL('image/png');
     const stream = video.srcObject;
@@ -78,77 +88,92 @@ export default function QuttrStylePage() {
     setSelectedImage(dataUrl);
   };
 
-  // Quttr Style = cartoon / Ghibli-like (cel shade + ink edges) — 100% free, no packages
-  const applyQuttrGhibliStyle = (ctx, w, h) => {
+  // Professional image enhancement
+  const enhanceImage = (ctx, w, h) => {
     const imgData = ctx.getImageData(0, 0, w, h);
     const d = imgData.data;
-    const copy = new Uint8ClampedArray(d);
-    const levels = 5;
-    const factor = 255 / (levels - 1);
 
     for (let i = 0; i < d.length; i += 4) {
-      if (d[i + 3] < 15) continue;
-      let r = Math.min(255, d[i] * 1.18 + 18);
-      let g = Math.min(255, d[i + 1] * 1.06 + 8);
-      let b = Math.min(255, d[i + 2] * 0.88);
-      // soft boost for midtones (skin-friendly)
-      r = Math.round(r / factor) * factor;
-      g = Math.round(g / factor) * factor;
-      b = Math.round(b / factor) * factor;
+      let r = d[i];
+      let g = d[i + 1];
+      let b = d[i + 2];
+
+      // S-curve contrast
+      r = r < 128 ? r * 0.92 : Math.min(255, r * 1.08 + 5);
+      g = g < 128 ? g * 0.94 : Math.min(255, g * 1.06 + 3);
+      b = b < 128 ? b * 0.96 : Math.min(255, b * 1.04);
+
+      // Cinematic warm highlights / cool shadows
+      if (r > 150) r = Math.min(255, r + 8);
+      if (b < 100) b = Math.max(0, b - 5);
+
+      // Smooth midtones
+      const brightness = (r + g + b) / 3;
+      if (brightness > 80 && brightness < 200) {
+        r = r * 0.95 + brightness * 0.05;
+        g = g * 0.95 + brightness * 0.05;
+      }
+
       d[i] = r;
       d[i + 1] = g;
       d[i + 2] = b;
     }
+    ctx.putImageData(imgData, 0, 0);
+  };
 
-    const gray = (x, y) => {
-      if (x < 0 || y < 0 || x >= w || y >= h) return 0;
-      const i = (y * w + x) * 4;
-      return copy[i] * 0.299 + copy[i + 1] * 0.587 + copy[i + 2] * 0.114;
-    };
+  // Sharpening filter
+  const applySharpen = (ctx, w, h) => {
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const d = imgData.data;
+    const copy = new Uint8ClampedArray(d);
+    const kernel = [0, -0.5, 0, -0.5, 3, -0.5, 0, -0.5, 0];
 
     for (let y = 1; y < h - 1; y++) {
       for (let x = 1; x < w - 1; x++) {
         const i = (y * w + x) * 4;
-        if (d[i + 3] < 15) continue;
-        const gx =
-          -gray(x - 1, y - 1) + gray(x + 1, y - 1) -
-          2 * gray(x - 1, y) + 2 * gray(x + 1, y) -
-          gray(x - 1, y + 1) + gray(x + 1, y + 1);
-        const gy =
-          -gray(x - 1, y - 1) - 2 * gray(x, y - 1) - gray(x + 1, y - 1) +
-          gray(x - 1, y + 1) + 2 * gray(x, y + 1) + gray(x + 1, y + 1);
-        const edge = Math.sqrt(gx * gx + gy * gy);
-        if (edge > 48) {
-          d[i] = Math.max(0, d[i] - 170);
-          d[i + 1] = Math.max(0, d[i + 1] - 170);
-          d[i + 2] = Math.max(0, d[i + 2] - 170);
+        for (let c = 0; c < 3; c++) {
+          let sum = 0;
+          let k = 0;
+          for (let ky = -1; ky <= 1; ky++) {
+            for (let kx = -1; kx <= 1; kx++) {
+              const ni = ((y + ky) * w + (x + kx)) * 4 + c;
+              sum += copy[ni] * kernel[k++];
+            }
+          }
+          d[i + c] = Math.max(0, Math.min(255, sum));
         }
       }
     }
     ctx.putImageData(imgData, 0, 0);
   };
 
+  // Text wrap helper
   const drawWrapped = (ctx, text, x, y, maxW, lh) => {
     const words = text.split(' ');
     let line = '';
     let cy = y;
+    const lines = [];
     for (let n = 0; n < words.length; n++) {
       const test = line + words[n] + ' ';
       if (ctx.measureText(test).width > maxW && n > 0) {
-        ctx.fillText(line.trim(), x, cy);
+        lines.push(line.trim());
         line = words[n] + ' ';
-        cy += lh;
       } else {
         line = test;
       }
     }
-    ctx.fillText(line.trim(), x, cy);
+    lines.push(line.trim());
+    lines.forEach((l, idx) => {
+      ctx.fillText(l, x, cy + idx * lh);
+    });
+    return lines.length;
   };
 
+  // ============ PROFESSIONAL POSTER GENERATION ============
   const generateCard = async () => {
     if (!selectedImage || !fontsReady) return;
     setIsProcessing(true);
-    setLoadingText('Creating Quttr Ghibli Style... 🎨');
+    setLoadingText('Creating your poster... 🎬');
 
     try {
       await document.fonts.ready;
@@ -162,122 +187,264 @@ export default function QuttrStylePage() {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
-      // cinematic bg
+      // 1. Cinematic background
       const grad = ctx.createLinearGradient(0, 0, 0, 1920);
-      grad.addColorStop(0, selectedCeleb.bgGradient[0]);
-      grad.addColorStop(1, selectedCeleb.bgGradient[1]);
+      grad.addColorStop(0, '#000000');
+      grad.addColorStop(0.3, selectedCeleb.bgGradient[0]);
+      grad.addColorStop(0.7, selectedCeleb.bgGradient[1]);
+      grad.addColorStop(1, '#000000');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, 1080, 1920);
 
-      const glow = ctx.createRadialGradient(540, 820, 40, 540, 820, 720);
-      glow.addColorStop(0, selectedCeleb.themeColor + '99');
-      glow.addColorStop(1, 'transparent');
-      ctx.fillStyle = glow;
+      // Radial spotlight
+      const spot = ctx.createRadialGradient(540, 400, 100, 540, 600, 900);
+      spot.addColorStop(0, selectedCeleb.themeColor + '55');
+      spot.addColorStop(0.5, selectedCeleb.themeColor + '22');
+      spot.addColorStop(1, 'transparent');
+      ctx.fillStyle = spot;
       ctx.fillRect(0, 0, 1080, 1920);
 
-      // draw face on offscreen + cartoonify
-      const maxSide = 900;
-      const scale0 = Math.min(maxSide / img.width, maxSide / img.height, 1);
-      const ow = Math.max(2, Math.floor(img.width * scale0));
-      const oh = Math.max(2, Math.floor(img.height * scale0));
-      const off = document.createElement('canvas');
-      off.width = ow;
-      off.height = oh;
-      const octx = off.getContext('2d');
-      octx.drawImage(img, 0, 0, ow, oh);
-      applyQuttrGhibliStyle(octx, ow, oh);
-
-      // place avatar
-      const scale = Math.max(980 / ow, 1200 / oh);
-      const dx = (1080 - ow * scale) / 2;
-      const dy = 1920 - oh * scale - 240;
+      // 2. Light rays
       ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.85)';
-      ctx.shadowBlur = 35;
-      ctx.drawImage(off, dx, dy, ow * scale, oh * scale);
-      // soft color wash (poster look)
-      ctx.globalCompositeOperation = 'overlay';
-      ctx.globalAlpha = 0.28;
-      ctx.fillStyle = selectedCeleb.themeColor;
-      ctx.fillRect(0, 300, 1080, 1100);
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 0.15;
+      ctx.translate(540, 200);
+      for (let i = 0; i < 8; i++) {
+        ctx.save();
+        ctx.rotate((i * Math.PI) / 4);
+        const rayGrad = ctx.createLinearGradient(0, 0, 0, 800);
+        rayGrad.addColorStop(0, selectedCeleb.themeColor);
+        rayGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = rayGrad;
+        ctx.beginPath();
+        ctx.moveTo(-40, 0);
+        ctx.lineTo(40, 0);
+        ctx.lineTo(200, 1200);
+        ctx.lineTo(-200, 1200);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
       ctx.restore();
 
-      // vignette bottom
-      const vig = ctx.createLinearGradient(0, 1050, 0, 1920);
-      vig.addColorStop(0, 'transparent');
-      vig.addColorStop(0.45, 'rgba(0,0,0,0.88)');
-      vig.addColorStop(1, '#000');
-      ctx.fillStyle = vig;
-      ctx.fillRect(0, 0, 1080, 1920);
+      // 3. Smart face crop + enhance
+      const srcW = img.width;
+      const srcH = img.height;
+      const cropSrcW = srcW;
+      const cropSrcH = Math.min(srcH, srcH * 0.85);
 
-      const topV = ctx.createLinearGradient(0, 0, 0, 280);
-      topV.addColorStop(0, 'rgba(0,0,0,0.75)');
-      topV.addColorStop(1, 'transparent');
-      ctx.fillStyle = topV;
-      ctx.fillRect(0, 0, 1080, 280);
+      const workCanvas = document.createElement('canvas');
+      workCanvas.width = 800;
+      workCanvas.height = 1000;
+      const workCtx = workCanvas.getContext('2d');
+      workCtx.imageSmoothingEnabled = true;
+      workCtx.imageSmoothingQuality = 'high';
 
-      ctx.textAlign = 'center';
-
-      // brand
-      ctx.fillStyle = '#fff';
-      ctx.font = '900 40px system-ui, sans-serif';
-      ctx.fillText('QUTTR STYLE', 540, 100);
-      ctx.fillStyle = '#FACC15';
-      ctx.font = '700 28px Kalam, cursive';
-      ctx.fillText('Ghibli Celebrity Edition', 540, 150);
-
-      // HANDSTYLE title
-      const title = selectedCeleb.styleName.toUpperCase();
-      ctx.save();
-      ctx.font = '84px Permanent Marker, cursive';
-      ctx.lineWidth = 10;
-      ctx.strokeStyle = '#000';
-      ctx.shadowColor = selectedCeleb.themeColor;
-      ctx.shadowBlur = 22;
-      ctx.strokeText(title, 540, 1340);
-      ctx.fillStyle = '#fff';
-      ctx.fillText(title, 540, 1340);
-      ctx.restore();
-
-      // dialogue box
-      ctx.fillStyle = 'rgba(255,255,255,0.1)';
-      ctx.strokeStyle = selectedCeleb.themeColor;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      if (typeof ctx.roundRect === 'function') {
-        ctx.roundRect(70, 1390, 940, 260, 24);
+      const srcRatio = cropSrcW / cropSrcH;
+      const dstRatio = 800 / 1000;
+      let sx, sy, sw, sh;
+      if (srcRatio > dstRatio) {
+        sh = cropSrcH;
+        sw = cropSrcH * dstRatio;
+        sx = (cropSrcW - sw) / 2;
+        sy = 0;
       } else {
-        ctx.rect(70, 1390, 940, 260);
+        sw = cropSrcW;
+        sh = cropSrcW / dstRatio;
+        sx = 0;
+        sy = 0;
+      }
+      workCtx.drawImage(img, sx, sy, sw, sh, 0, 0, 800, 1000);
+
+      enhanceImage(workCtx, 800, 1000);
+      applySharpen(workCtx, 800, 1000);
+
+      // 4. Place face on poster
+      const faceY = 220;
+      const faceH = 1050;
+      const faceW = 840;
+      const faceX = (1080 - faceW) / 2;
+
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.9)';
+      ctx.shadowBlur = 60;
+      ctx.shadowOffsetY = 20;
+      ctx.fillStyle = '#000';
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(faceX, faceY, faceW, faceH, 20);
+      } else {
+        ctx.rect(faceX, faceY, faceW, faceH);
       }
       ctx.fill();
-      ctx.stroke();
+      ctx.restore();
 
-      // HANDWRITTEN dialogue
-      ctx.fillStyle = '#FFF7ED';
-      ctx.font = '700 50px Caveat, cursive';
-      ctx.shadowColor = 'rgba(0,0,0,0.55)';
-      ctx.shadowBlur = 6;
-      drawWrapped(ctx, '"' + activeDialogue + '"', 540, 1485, 820, 56);
-      ctx.shadowBlur = 0;
+      ctx.save();
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(faceX, faceY, faceW, faceH, 20);
+      } else {
+        ctx.rect(faceX, faceY, faceW, faceH);
+      }
+      ctx.clip();
+      ctx.drawImage(workCanvas, faceX, faceY, faceW, faceH);
+
+      // Duotone wash
+      ctx.globalCompositeOperation = 'multiply';
+      const duoGrad = ctx.createLinearGradient(0, faceY, 0, faceY + faceH);
+      duoGrad.addColorStop(0, '#ffffff');
+      duoGrad.addColorStop(1, selectedCeleb.themeColor);
+      ctx.fillStyle = duoGrad;
+      ctx.globalAlpha = 0.25;
+      ctx.fillRect(faceX, faceY, faceW, faceH);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+
+      // Bottom fade into background
+      const fadeGrad = ctx.createLinearGradient(0, faceY + faceH - 300, 0, faceY + faceH);
+      fadeGrad.addColorStop(0, 'transparent');
+      fadeGrad.addColorStop(1, selectedCeleb.bgGradient[1]);
+      ctx.fillStyle = fadeGrad;
+      ctx.fillRect(faceX, faceY + faceH - 300, faceW, 300);
+      ctx.restore();
+
+      // Gold border
+      ctx.save();
+      const goldGrad = ctx.createLinearGradient(faceX, faceY, faceX + faceW, faceY + faceH);
+      goldGrad.addColorStop(0, '#FFD700');
+      goldGrad.addColorStop(0.5, '#FFA500');
+      goldGrad.addColorStop(1, '#B8860B');
+      ctx.strokeStyle = goldGrad;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(faceX, faceY, faceW, faceH, 20);
+      } else {
+        ctx.rect(faceX, faceY, faceW, faceH);
+      }
+      ctx.stroke();
+      ctx.restore();
+
+      // Film grain
+      const grainCanvas = document.createElement('canvas');
+      grainCanvas.width = 1080;
+      grainCanvas.height = 1920;
+      const grainCtx = grainCanvas.getContext('2d');
+      const grainData = grainCtx.createImageData(1080, 1920);
+      for (let i = 0; i < grainData.data.length; i += 4) {
+        const val = 128 + (Math.random() - 0.5) * 40;
+        grainData.data[i] = val;
+        grainData.data[i + 1] = val;
+        grainData.data[i + 2] = val;
+        grainData.data[i + 3] = 25;
+      }
+      grainCtx.putImageData(grainData, 0, 0);
+      ctx.globalCompositeOperation = 'overlay';
+      ctx.globalAlpha = 0.4;
+      ctx.drawImage(grainCanvas, 0, 0);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+
+      // ============ TOP: LEFT BRAND + LOGO TOP-RIGHT ============
+      // Left small brand
+      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.font = '700 26px system-ui, sans-serif';
+      ctx.fillText('Quttr Style', 48, 78);
 
       ctx.fillStyle = selectedCeleb.themeColor;
-      ctx.font = '700 32px Kalam, cursive';
-      ctx.fillText('— ' + selectedCeleb.name, 540, 1625);
+      ctx.font = '600 18px system-ui, sans-serif';
+      ctx.fillText(selectedCeleb.name, 48, 108);
 
-      // CTA
-      ctx.fillStyle = '#fff';
-      ctx.font = '700 34px Kalam, cursive';
-      ctx.fillText('Want this look in real life?', 540, 1740);
-      ctx.fillStyle = '#FACC15';
-      ctx.font = '700 30px Kalam, cursive';
-      ctx.fillText('Book barbers on Quttr App', 540, 1790);
-      ctx.fillStyle = 'rgba(255,255,255,0.55)';
-      ctx.font = '600 24px system-ui, sans-serif';
-      ctx.fillText('quttr.com/style', 540, 1850);
+      // Logo TOP-RIGHT
+      if (logoImage) {
+        const logoMaxW = 160;
+        const logoMaxH = 80;
+        const lw = logoImage.width;
+        const lh = logoImage.height;
+        const scale = Math.min(logoMaxW / lw, logoMaxH / lh);
+        const drawW = lw * scale;
+        const drawH = lh * scale;
+        const logoX = 1080 - drawW - 48;
+        const logoY = 40;
 
-      setGeneratedCardUrl(canvas.toDataURL('image/jpeg', 0.92));
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.6)';
+        ctx.shadowBlur = 15;
+        ctx.drawImage(logoImage, logoX, logoY, drawW, drawH);
+        ctx.restore();
+      }
+
+      // ============ DIALOGUE SECTION (no style name) ============
+      ctx.textAlign = 'center';
+
+      // Opening quote mark
+      ctx.fillStyle = selectedCeleb.themeColor;
+      ctx.font = '900 100px "Playfair Display", serif';
+      ctx.globalAlpha = 0.35;
+      ctx.fillText('"', 180, 1440);
+      ctx.globalAlpha = 1;
+
+      // Handwritten dialogue
+      ctx.fillStyle = '#FFF8E7';
+      ctx.font = '700 46px "Caveat", cursive';
+      ctx.shadowColor = 'rgba(0,0,0,0.7)';
+      ctx.shadowBlur = 10;
+      const lineCount = drawWrapped(ctx, activeDialogue, 540, 1440, 820, 58);
+      ctx.shadowBlur = 0;
+
+      // Closing quote
+      ctx.fillStyle = selectedCeleb.themeColor;
+      ctx.font = '900 100px "Playfair Display", serif';
+      ctx.globalAlpha = 0.35;
+      ctx.fillText('"', 880, 1440 + (lineCount - 1) * 58);
+      ctx.globalAlpha = 1;
+
+      // Divider
+      const dividerY = 1440 + lineCount * 58 + 40;
+      const divGrad = ctx.createLinearGradient(240, 0, 840, 0);
+      divGrad.addColorStop(0, 'transparent');
+      divGrad.addColorStop(0.5, '#FFD700');
+      divGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = divGrad;
+      ctx.fillRect(240, dividerY, 600, 1);
+
+      // Diamond
+      ctx.fillStyle = '#FFD700';
+      ctx.save();
+      ctx.translate(540, dividerY);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillRect(-5, -5, 10, 10);
+      ctx.restore();
+
+      // Celebrity name below quote
+      ctx.fillStyle = '#FFD700';
+      ctx.font = 'italic 600 28px "Playfair Display", serif';
+      ctx.fillText('— ' + selectedCeleb.name, 540, dividerY + 45);
+
+      // ============ CTA BUTTON ============
+      const btnY = dividerY + 90;
+      const btnGrad = ctx.createLinearGradient(240, btnY, 840, btnY + 60);
+      btnGrad.addColorStop(0, '#FFD700');
+      btnGrad.addColorStop(1, '#FFA500');
+      ctx.fillStyle = btnGrad;
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(240, btnY, 600, 65, 32);
+      } else {
+        ctx.rect(240, btnY, 600, 65);
+      }
+      ctx.fill();
+
+      ctx.fillStyle = '#000';
+      ctx.font = '900 28px "Bebas Neue", Impact, sans-serif';
+      ctx.letterSpacing = '2px';
+      ctx.fillText('✂  BOOK  ON  QUTTR  APP  ✂', 540, btnY + 43);
+
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.font = '500 22px "Playfair Display", serif';
+      ctx.letterSpacing = '4px';
+      ctx.fillText('quttr.com/style', 540, btnY + 105);
+
+      setGeneratedCardUrl(canvas.toDataURL('image/jpeg', 0.95));
       setIsProcessing(false);
     };
     img.onerror = () => {
@@ -289,7 +456,7 @@ export default function QuttrStylePage() {
 
   useEffect(() => {
     if (selectedImage && fontsReady) generateCard();
-  }, [selectedImage, selectedCeleb, activeDialogue, fontsReady]);
+  }, [selectedImage, selectedCeleb, activeDialogue, fontsReady, logoImage]);
 
   const shareCard = async () => {
     if (!generatedCardUrl) return;
@@ -300,10 +467,7 @@ export default function QuttrStylePage() {
         await navigator.share({
           files: [file],
           title: 'My Quttr Style',
-          text:
-            'Mera Quttr Ghibli Style — ' +
-            selectedCeleb.name +
-            '! Try yours: https://quttr.com/style',
+          text: 'Check out my ' + selectedCeleb.name + ' style! 🔥 Try yours: https://quttr.com/style',
         });
       } else {
         const a = document.createElement('a');
@@ -322,51 +486,55 @@ export default function QuttrStylePage() {
       : CELEBRITIES.filter((c) => c.category === activeTab);
 
   return (
-    <div className="min-h-screen bg-[#07070a] text-white p-4 md:p-8">
+    <div className="min-h-screen bg-[#050505] text-white p-4 md:p-8">
       <canvas ref={canvasRef} className="hidden" />
 
-      <header className="max-w-4xl mx-auto text-center my-6">
-        <div className="inline-block bg-amber-400 text-black font-extrabold text-xs px-3 py-1 rounded-full mb-2">
-          QUTTR GHIBLI ENGINE
+      <header className="max-w-4xl mx-auto text-center my-8">
+        <div className="inline-block bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-black text-xs px-4 py-1.5 rounded-full mb-3 tracking-widest">
+          ★ QUTTR PREMIUM POSTER ★
         </div>
-        <h1 className="text-3xl md:text-5xl font-black">
-          See Yourself In <span className="text-amber-400">Quttr Style</span>
+        <h1 className="text-4xl md:text-6xl font-black tracking-tight" style={{ fontFamily: 'Bebas Neue, Impact, sans-serif', letterSpacing: '3px' }}>
+          BECOME A <span className="text-yellow-400">CELEBRITY</span>
         </h1>
-        <p className="text-slate-400 mt-2" style={{ fontFamily: 'Caveat, cursive', fontSize: 22 }}>
-          Upload photo → Cartoon Ghibli look → Handstyle celebrity poster
+        <p className="text-slate-400 mt-3" style={{ fontFamily: 'Caveat, cursive', fontSize: 24 }}>
+          Upload your photo → Get an ultra-premium celebrity poster
         </p>
       </header>
 
       <main className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-start">
-        <div className="space-y-6 bg-slate-900/60 p-6 rounded-3xl border border-slate-800">
+        <div className="space-y-6 bg-gradient-to-b from-slate-900/80 to-slate-950/80 p-6 rounded-3xl border border-yellow-500/20 shadow-2xl">
           <div>
-            <h2 className="text-lg font-bold text-amber-400 mb-3">1. Select Your Photo</h2>
+            <h2 className="text-lg font-black text-yellow-400 mb-3 tracking-wider" style={{ fontFamily: 'Bebas Neue' }}>
+              STEP 1 — YOUR PHOTO
+            </h2>
             {!cameraActive ? (
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
                   onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                  className="bg-slate-800 hover:bg-slate-700 p-4 rounded-2xl flex flex-col items-center gap-2"
+                  className="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-yellow-500 p-5 rounded-2xl flex flex-col items-center gap-2 transition"
                 >
-                  <span className="text-2xl">🖼️</span> Upload Photo
+                  <span className="text-3xl">🖼️</span>
+                  <span className="font-semibold text-sm">Upload Photo</span>
                 </button>
                 <button
                   type="button"
                   onClick={startCamera}
-                  className="bg-slate-800 hover:bg-slate-700 p-4 rounded-2xl flex flex-col items-center gap-2"
+                  className="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-yellow-500 p-5 rounded-2xl flex flex-col items-center gap-2 transition"
                 >
-                  <span className="text-2xl">📸</span> Take Selfie
+                  <span className="text-3xl">📸</span>
+                  <span className="font-semibold text-sm">Take Selfie</span>
                 </button>
               </div>
             ) : (
               <div className="space-y-3">
-                <video ref={videoRef} autoPlay playsInline className="w-full rounded-2xl" />
+                <video ref={videoRef} autoPlay playsInline className="w-full rounded-2xl border-2 border-yellow-500" />
                 <button
                   type="button"
                   onClick={captureSelfie}
-                  className="w-full bg-rose-600 font-bold py-3 rounded-xl"
+                  className="w-full bg-gradient-to-r from-rose-600 to-red-600 font-black py-4 rounded-xl text-lg"
                 >
-                  Capture Photo
+                  📸 CAPTURE PHOTO
                 </button>
               </div>
             )}
@@ -377,10 +545,15 @@ export default function QuttrStylePage() {
               className="hidden"
               onChange={handleFileUpload}
             />
+            <p className="text-xs text-slate-500 mt-2 text-center">
+              💡 Tip: Use a well-lit front-facing photo for best results
+            </p>
           </div>
 
           <div>
-            <h2 className="text-lg font-bold text-amber-400 mb-3">2. Choose Celebrity Style</h2>
+            <h2 className="text-lg font-black text-yellow-400 mb-3 tracking-wider" style={{ fontFamily: 'Bebas Neue' }}>
+              STEP 2 — CHOOSE CELEBRITY
+            </h2>
             <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
               {['All', 'Cricketers', 'Bollywood', 'South Stars'].map((cat) => (
                 <button
@@ -388,28 +561,30 @@ export default function QuttrStylePage() {
                   key={cat}
                   onClick={() => setActiveTab(cat)}
                   className={
-                    'px-4 py-1.5 rounded-full text-xs font-semibold ' +
-                    (activeTab === cat ? 'bg-amber-400 text-black' : 'bg-slate-800 text-slate-300')
+                    'px-4 py-2 rounded-full text-xs font-black tracking-wider whitespace-nowrap transition ' +
+                    (activeTab === cat
+                      ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-black'
+                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700')
                   }
                 >
-                  {cat}
+                  {cat.toUpperCase()}
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-2">
+            <div className="grid grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-2">
               {filtered.map((celeb) => (
                 <div
                   key={celeb.id}
                   onClick={() => setSelectedCeleb(celeb)}
                   className={
-                    'p-4 rounded-2xl cursor-pointer border-2 ' +
+                    'p-4 rounded-2xl cursor-pointer border-2 transition ' +
                     (selectedCeleb.id === celeb.id
-                      ? 'border-amber-400 bg-amber-400/10'
-                      : 'border-transparent bg-slate-800/80')
+                      ? 'border-yellow-400 bg-yellow-400/10 scale-[1.02]'
+                      : 'border-slate-800 bg-slate-800/60 hover:border-slate-600')
                   }
                 >
-                  <div className="font-bold text-sm">{celeb.name}</div>
-                  <div className="text-xs text-amber-400 mt-1">{celeb.styleName}</div>
+                  <div className="font-black text-sm text-white">{celeb.name}</div>
+                  <div className="text-xs text-yellow-400 mt-1 font-medium">{celeb.styleName}</div>
                 </div>
               ))}
             </div>
@@ -419,40 +594,49 @@ export default function QuttrStylePage() {
             <button
               type="button"
               onClick={() => pickRandomDialogue(selectedCeleb)}
-              className="w-full bg-slate-800 border border-slate-700 py-3 rounded-xl text-sm font-bold"
+              className="w-full bg-gradient-to-r from-slate-800 to-slate-700 border border-yellow-500/30 py-4 rounded-xl text-sm font-black tracking-wider hover:border-yellow-500 transition"
             >
-              🎲 Shuffle Celebrity Dialogue
+              🎲 SHUFFLE CELEBRITY DIALOGUE
             </button>
           )}
         </div>
 
         <div className="flex flex-col items-center">
           {!selectedImage ? (
-            <div className="w-full aspect-[9/16] max-w-md rounded-3xl border-2 border-dashed border-slate-700 flex items-center justify-center text-slate-500 p-6 text-center">
-              Upload a photo to generate your handstyle Quttr poster
+            <div className="w-full aspect-[9/16] max-w-md rounded-3xl border-2 border-dashed border-yellow-500/30 flex flex-col items-center justify-center text-slate-500 p-8 text-center bg-gradient-to-b from-slate-900/50 to-black/50">
+              <span className="text-7xl mb-6">🎬</span>
+              <p className="text-lg font-black text-yellow-400 mb-2" style={{ fontFamily: 'Bebas Neue', letterSpacing: '3px' }}>
+                YOUR POSTER APPEARS HERE
+              </p>
+              <p style={{ fontFamily: 'Caveat, cursive', fontSize: 22 }} className="text-slate-400">
+                Upload a photo to see the magic ✨
+              </p>
             </div>
           ) : (
             <div className="w-full max-w-md relative">
               {isProcessing && (
-                <div className="absolute inset-0 z-10 bg-black/80 rounded-3xl flex flex-col items-center justify-center border border-amber-500/40">
-                  <div className="w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mb-3" />
-                  <p className="text-amber-400 font-bold">{loadingText}</p>
+                <div className="absolute inset-0 z-10 bg-black/90 rounded-3xl flex flex-col items-center justify-center border border-yellow-500/40">
+                  <div className="w-16 h-16 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin mb-4" />
+                  <p className="text-yellow-400 font-black tracking-wider" style={{ fontFamily: 'Bebas Neue' }}>
+                    {loadingText}
+                  </p>
                 </div>
               )}
               {generatedCardUrl && (
                 <img
                   src={generatedCardUrl}
                   alt="Quttr Style"
-                  className="w-full rounded-3xl border border-slate-800"
+                  className="w-full rounded-3xl border border-yellow-500/20 shadow-[0_0_80px_rgba(250,204,21,0.15)]"
                 />
               )}
               {generatedCardUrl && !isProcessing && (
                 <button
                   type="button"
                   onClick={shareCard}
-                  className="w-full mt-4 bg-gradient-to-r from-emerald-500 to-green-600 text-black font-extrabold py-4 rounded-2xl"
+                  className="w-full mt-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-black font-black py-5 rounded-2xl shadow-2xl text-lg tracking-wider transition"
+                  style={{ fontFamily: 'Bebas Neue' }}
                 >
-                  📤 Share to WhatsApp / Instagram
+                  📤 SHARE TO WHATSAPP / INSTAGRAM
                 </button>
               )}
             </div>
