@@ -7,13 +7,12 @@ import { CELEBRITIES } from '@/lib/celebrities';
 
 export default function QuttrStylePage() {
   const [selectedImage, setSelectedImage] = useState(null);
-  const [processedImage, setProcessedImage] = useState(null); // Holds BG-removed image
+  const [processedImage, setProcessedImage] = useState(null);
   const [selectedCeleb, setSelectedCeleb] = useState(CELEBRITIES[0]);
   const [activeDialogue, setActiveDialogue] = useState('');
   const [activeTab, setActiveTab] = useState('All');
   const [generatedCardUrl, setGeneratedCardUrl] = useState(null);
   
-  // Status states
   const [isProcessing, setIsProcessing] = useState(false);
   const [loadingText, setLoadingText] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
@@ -31,37 +30,32 @@ export default function QuttrStylePage() {
     setActiveDialogue(celeb.dialogues[randomIndex]);
   };
 
-  // Process image when uploaded (Remove Background)
+  // Step 1: Remove Background
   const handleImageInput = async (dataUrl) => {
     setSelectedImage(dataUrl);
     setIsProcessing(true);
-    setLoadingText('Removing background using AI... ✂️');
+    setLoadingText('Removing Background... ✂️');
 
     try {
-      // Convert DataURL to Blob for imgly
       const response = await fetch(dataUrl);
       const blob = await response.blob();
 
-      // Remove Background (runs locally in browser!)
+      // Remove Background locally
       const bgRemovedBlob = await imglyRemoveBackground(blob);
       const bgRemovedUrl = URL.createObjectURL(bgRemovedBlob);
       
       setProcessedImage(bgRemovedUrl);
     } catch (error) {
       console.error("BG Removal failed, using original", error);
-      setProcessedImage(dataUrl); // Fallback to original if it fails
+      setProcessedImage(dataUrl);
     }
-    
-    setIsProcessing(false);
   };
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (event) => {
-        handleImageInput(event.target.result);
-      };
+      reader.onload = (event) => handleImageInput(event.target.result);
       reader.readAsDataURL(file);
     }
   };
@@ -95,11 +89,79 @@ export default function QuttrStylePage() {
     }
   };
 
-  // Generate 9:16 High-Res CINEMATIC Poster
+  // Step 2: GHIBLI / ANIME CARTOONIFICATION SHADER ENGINE
+  const applyGhibliCartoonShader = (ctx, width, height) => {
+    const imgData = ctx.getImageData(0, 0, width, height);
+    const data = imgData.data;
+    const copyData = new Uint8ClampedArray(data);
+
+    const levels = 5; // Color banding levels for cel-shading
+    const factor = 255 / (levels - 1);
+
+    // Pass 1: Posterization & Ghibli Warmth Filter
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] < 10) continue; // Skip transparent pixels
+
+      let r = data[i];
+      let g = data[i + 1];
+      let b = data[i + 2];
+
+      // Ghibli Warm Color Palette Shift
+      r = Math.min(255, r * 1.15 + 15);
+      g = Math.min(255, g * 1.05 + 5);
+      b = Math.min(255, b * 0.90);
+
+      // Cel-shading (Quantize colors to flat anime bands)
+      r = Math.round(r / factor) * factor;
+      g = Math.round(g / factor) * factor;
+      b = Math.round(b / factor) * factor;
+
+      data[i] = r;
+      data[i + 1] = g;
+      data[i + 2] = b;
+    }
+
+    // Pass 2: Sobel Edge Detection (Anime Outline Ink Lines)
+    const getGray = (x, y) => {
+      if (x < 0 || x >= width || y < 0 || y >= height) return 0;
+      const idx = (y * width + x) * 4;
+      return (copyData[idx] * 0.299 + copyData[idx + 1] * 0.587 + copyData[idx + 2] * 0.114);
+    };
+
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const idx = (y * width + x) * 4;
+        if (data[idx + 3] < 10) continue;
+
+        // Sobel Kernels for Edge Strength
+        const gx = 
+          -1 * getGray(x - 1, y - 1) + 1 * getGray(x + 1, y - 1) +
+          -2 * getGray(x - 1, y)     + 2 * getGray(x + 1, y) +
+          -1 * getGray(x - 1, y + 1) + 1 * getGray(x + 1, y + 1);
+
+        const gy = 
+          -1 * getGray(x - 1, y - 1) - 2 * getGray(x, y - 1) - 1 * getGray(x + 1, y - 1) +
+           1 * getGray(x - 1, y + 1) + 2 * getGray(x, y + 1) + 1 * getGray(x + 1, y + 1);
+
+        const edge = Math.sqrt(gx * gx + gy * gy);
+
+        // If edge detected, draw dark anime line stroke
+        if (edge > 45) {
+          data[idx] = Math.max(0, data[idx] - 180);     // R
+          data[idx + 1] = Math.max(0, data[idx + 1] - 180); // G
+          data[idx + 2] = Math.max(0, data[idx + 2] - 180); // B
+        }
+      }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+  };
+
+  // Step 3: Composite Final Cinematic 9:16 Share Card
   const generateQuttrCard = () => {
     if (!processedImage) return;
     setIsProcessing(true);
-    setLoadingText('Applying Cinematic Style... 🎬');
+    setLoadingText('Converting to Quttr Ghibli Style... 🎨');
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -108,128 +170,112 @@ export default function QuttrStylePage() {
 
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.src = processedImage; // Uses the image with BACKGROUND REMOVED
+    img.src = processedImage;
 
     img.onload = () => {
-      // 1. Draw Cinematic Background
+      // 1. Background Gradient
       const bgGrad = ctx.createLinearGradient(0, 0, 0, 1920);
       bgGrad.addColorStop(0, selectedCeleb.bgGradient[0]);
       bgGrad.addColorStop(1, selectedCeleb.bgGradient[1]);
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, 1080, 1920);
 
-      // Add dramatic radial glow behind the user
-      const glow = ctx.createRadialGradient(540, 960, 100, 540, 960, 800);
-      glow.addColorStop(0, `${selectedCeleb.themeColor}88`); // 50% opacity
+      // Radial Glow
+      const glow = ctx.createRadialGradient(540, 800, 50, 540, 800, 700);
+      glow.addColorStop(0, `${selectedCeleb.themeColor}aa`);
       glow.addColorStop(1, 'transparent');
       ctx.fillStyle = glow;
       ctx.fillRect(0, 0, 1080, 1920);
 
-      // 2. Draw User Image (Scaled beautifully to fit poster)
-      ctx.save();
-      // Calculate scale to make user large and centered at bottom
-      const scale = Math.max(1080 / img.width, 1400 / img.height);
+      // 2. Offscreen Canvas for Ghibli Transformation
+      const offCanvas = document.createElement('canvas');
+      offCanvas.width = img.width;
+      offCanvas.height = img.height;
+      const offCtx = offCanvas.getContext('2d');
+      offCtx.drawImage(img, 0, 0);
+
+      // Apply Ghibli Cartoon Engine to User's Face
+      applyGhibliCartoonShader(offCtx, img.width, img.height);
+
+      // 3. Draw Stylized Ghibli Avatar onto Main Poster
+      const scale = Math.max(1000 / img.width, 1300 / img.height);
       const x = (1080 - img.width * scale) / 2;
-      const y = 1920 - (img.height * scale) - 200; // Pin to bottom area
-      
-      // Apply stylistic color grading (High contrast, slight desaturation)
-      ctx.filter = 'contrast(130%) saturate(80%) brightness(90%) drop-shadow(0px 0px 40px rgba(0,0,0,0.8))';
-      ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-      
-      // 3. Apply "Duotone" Blend Mode Overlay to make it look like movie lighting
-      ctx.globalCompositeOperation = 'overlay';
-      ctx.fillStyle = selectedCeleb.themeColor;
-      ctx.globalAlpha = 0.3; // 30% tint of the celebrity color
-      ctx.fillRect(0, 0, 1080, 1920);
-      ctx.globalAlpha = 1.0;
-      ctx.globalCompositeOperation = 'source-over'; // Reset blend mode
+      const y = 1920 - (img.height * scale) - 220;
+
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = 40;
+      ctx.drawImage(offCanvas, x, y, img.width * scale, img.height * scale);
       ctx.restore();
 
-      // 4. Draw Vignette (Dark edges) & Bottom Fade (For text readability)
-      const vignette = ctx.createLinearGradient(0, 1000, 0, 1920);
+      // 4. Dark Bottom Vignette (Text Readability)
+      const vignette = ctx.createLinearGradient(0, 1100, 0, 1920);
       vignette.addColorStop(0, 'transparent');
-      vignette.addColorStop(0.5, 'rgba(0,0,0,0.8)');
+      vignette.addColorStop(0.4, 'rgba(0,0,0,0.85)');
       vignette.addColorStop(1, '#000000');
       ctx.fillStyle = vignette;
       ctx.fillRect(0, 0, 1080, 1920);
 
-      const topVignette = ctx.createLinearGradient(0, 0, 0, 400);
-      topVignette.addColorStop(0, 'rgba(0,0,0,0.9)');
-      topVignette.addColorStop(1, 'transparent');
-      ctx.fillStyle = topVignette;
-      ctx.fillRect(0, 0, 1080, 400);
-
-      // 5. Typography & Branding
+      // 5. Header Branding
       ctx.textAlign = 'center';
-      
-      // Top Branding
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = '900 45px sans-serif';
-      ctx.fillText('QUTTR STYLE ✂️', 540, 120);
-      
-      ctx.fillStyle = selectedCeleb.themeColor;
-      ctx.font = 'bold 28px sans-serif';
-      ctx.letterSpacing = '5px';
-      ctx.fillText('CELEBRITY EDITION', 540, 170);
+      ctx.font = '900 42px sans-serif';
+      ctx.fillText('QUTTR STYLE ✂️', 540, 110);
 
-      // 6. Style Name Title (Massive Movie Font style)
+      ctx.fillStyle = '#FACC15';
+      ctx.font = 'bold 26px sans-serif';
+      ctx.fillText('GHIBLI CELEBRITY EDITION', 540, 155);
+
+      // 6. Style Name Title
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = '900 90px impact, sans-serif';
+      ctx.font = '900 85px impact, sans-serif';
       ctx.shadowColor = selectedCeleb.themeColor;
-      ctx.shadowBlur = 30;
-      ctx.fillText(selectedCeleb.styleName.toUpperCase(), 540, 1350);
-      ctx.shadowBlur = 0; // Reset shadow
+      ctx.shadowBlur = 25;
+      ctx.fillText(selectedCeleb.styleName.toUpperCase(), 540, 1360);
+      ctx.shadowBlur = 0;
 
       // 7. Dialogue Box
       ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
       ctx.strokeStyle = selectedCeleb.themeColor;
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.roundRect(80, 1420, 920, 240, 30);
+      ctx.roundRect(80, 1430, 920, 230, 25);
       ctx.fill();
       ctx.stroke();
 
-      // Golden Quotes Icon
-      ctx.fillStyle = '#FACC15';
-      ctx.font = '900 80px serif';
-      ctx.fillText('"', 150, 1500);
-
-      // Dialogue Text Wrap
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'italic 600 45px sans-serif';
-      const words = activeDialogue.split(' ');
+      ctx.font = 'italic 600 42px sans-serif';
+      const words = `"${activeDialogue}"`.split(' ');
       let line = '';
       let lineY = 1510;
       for (let n = 0; n < words.length; n++) {
         let testLine = line + words[n] + ' ';
-        if (ctx.measureText(testLine).width > 750 && n > 0) {
+        if (ctx.measureText(testLine).width > 780 && n > 0) {
           ctx.fillText(line, 540, lineY);
           line = words[n] + ' ';
-          lineY += 60;
+          lineY += 55;
         } else {
           line = testLine;
         }
       }
       ctx.fillText(line, 540, lineY);
 
-      // Author Name
       ctx.fillStyle = selectedCeleb.themeColor;
-      ctx.font = 'bold 32px sans-serif';
+      ctx.font = 'bold 30px sans-serif';
       ctx.fillText(`— Style: ${selectedCeleb.name}`, 540, 1620);
 
-      // 8. Call to Action (Footer)
+      // 8. Footer Promotion
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 36px sans-serif';
-      ctx.fillText('Want this look in real life? 💈', 540, 1750);
+      ctx.font = 'bold 34px sans-serif';
+      ctx.fillText('Want this look in real life? 💈', 540, 1745);
       ctx.fillStyle = '#FACC15';
-      ctx.font = '800 32px sans-serif';
-      ctx.fillText('Book top barbers on Quttr App', 540, 1800);
+      ctx.font = '800 30px sans-serif';
+      ctx.fillText('Book top barbers on Quttr App', 540, 1790);
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
       ctx.font = '24px sans-serif';
-      ctx.fillText('quttr.in/style', 540, 1860);
+      ctx.fillText('quttr.in/style', 540, 1850);
 
-      // Save Output
-      setGeneratedCardUrl(canvas.toDataURL('image/jpeg', 0.9));
+      setGeneratedCardUrl(canvas.toDataURL('image/jpeg', 0.92));
       setIsProcessing(false);
     };
   };
@@ -242,17 +288,17 @@ export default function QuttrStylePage() {
     if (!generatedCardUrl) return;
     try {
       const blob = await (await fetch(generatedCardUrl)).blob();
-      const file = new File([blob], 'quttr-style.jpg', { type: 'image/jpeg' });
+      const file = new File([blob], 'quttr-ghibli-style.jpg', { type: 'image/jpeg' });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
           title: `My ${selectedCeleb.styleName} in Quttr Style!`,
-          text: `Check out my ${selectedCeleb.name} style avatar! Get yours at quttr.in/style 💈🔥`
+          text: `Check out my ${selectedCeleb.name} Ghibli avatar! Get yours at quttr.in/style 💈🔥`
         });
       } else {
         const link = document.createElement('a');
         link.href = generatedCardUrl;
-        link.download = `quttr-${selectedCeleb.id}-style.jpg`;
+        link.download = `quttr-${selectedCeleb.id}-ghibli-style.jpg`;
         link.click();
       }
     } catch (err) {
@@ -263,19 +309,22 @@ export default function QuttrStylePage() {
   const filteredCelebs = activeTab === 'All' ? CELEBRITIES : CELEBRITIES.filter(c => c.category === activeTab);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans p-4 md:p-8">
+    <div className="min-h-screen bg-[#07070a] text-white font-sans p-4 md:p-8">
       <canvas ref={canvasRef} className="hidden" />
 
       <header className="max-w-4xl mx-auto text-center my-6">
+        <div className="inline-block bg-amber-400 text-black font-extrabold text-xs px-3 py-1 rounded-full uppercase tracking-wider mb-2">
+          Quttr Ghibli Engine 🎨
+        </div>
         <h1 className="text-3xl md:text-5xl font-black tracking-tight">
-          See Yourself In <span className="text-amber-400">Celebrity Style</span> ✂️
+          See Yourself In <span className="text-amber-400">Quttr Anime Style</span> ✂️
         </h1>
-        <p className="text-slate-400 mt-2">Upload photo → Pick celebrity → Get cinematic poster!</p>
+        <p className="text-slate-400 mt-2">Upload photo → Auto-Convert to Ghibli Style → Share Poster!</p>
       </header>
 
       <main className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-start">
-        {/* LEFT COLUMN: Controls */}
-        <div className="space-y-6 bg-slate-900/50 p-6 rounded-3xl border border-slate-800 backdrop-blur-xl">
+        {/* LEFT COLUMN */}
+        <div className="space-y-6 bg-slate-900/60 p-6 rounded-3xl border border-slate-800 backdrop-blur-xl">
           
           <div>
             <h2 className="text-lg font-bold text-amber-400 mb-3">1. Select Your Photo</h2>
@@ -291,7 +340,7 @@ export default function QuttrStylePage() {
             ) : (
               <div className="space-y-3">
                 <video ref={videoRef} autoPlay playsInline className="w-full rounded-2xl" />
-                <button onClick={captureSelfie} className="w-full bg-rose-600 font-bold py-3 rounded-xl">Capture 📸</button>
+                <button onClick={captureSelfie} className="w-full bg-rose-600 font-bold py-3 rounded-xl">Capture Photo 📸</button>
               </div>
             )}
             <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" />
@@ -323,29 +372,29 @@ export default function QuttrStylePage() {
           )}
         </div>
 
-        {/* RIGHT COLUMN: Poster Preview */}
+        {/* RIGHT COLUMN */}
         <div className="flex flex-col items-center justify-center">
           {!selectedImage ? (
-            <div className="w-full aspect-[9/16] max-w-md bg-slate-900/50 rounded-3xl border-2 border-dashed border-slate-700 flex flex-col items-center justify-center p-6 text-center text-slate-500">
-              <span className="text-6xl mb-4">✂️</span>
-              <p>Upload a photo to see your cinematic avatar.</p>
+            <div className="w-full aspect-[9/16] max-w-md bg-slate-900/40 rounded-3xl border-2 border-dashed border-slate-800 flex flex-col items-center justify-center p-6 text-center text-slate-500">
+              <span className="text-6xl mb-4">🎨</span>
+              <p>Upload your photo to transform into Ghibli Quttr Style!</p>
             </div>
           ) : (
-            <div className="w-full max-w-md relative group">
+            <div className="w-full max-w-md relative">
               {isProcessing && (
-                <div className="absolute inset-0 z-10 bg-black/80 backdrop-blur-sm rounded-3xl flex flex-col items-center justify-center border border-amber-500/50">
-                  <div className="w-10 h-10 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mb-4"></div>
-                  <p className="text-amber-400 font-bold animate-pulse">{loadingText}</p>
+                <div className="absolute inset-0 z-10 bg-black/85 backdrop-blur-md rounded-3xl flex flex-col items-center justify-center border border-amber-500/50">
+                  <div className="w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mb-4"></div>
+                  <p className="text-amber-400 font-bold animate-pulse text-center px-4">{loadingText}</p>
                 </div>
               )}
               
               {generatedCardUrl && (
-                <img src={generatedCardUrl} alt="Poster" className="w-full rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-slate-800" />
+                <img src={generatedCardUrl} alt="Ghibli Poster" className="w-full rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-slate-800" />
               )}
               
               {generatedCardUrl && !isProcessing && (
-                <button onClick={shareCard} className="w-full mt-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:scale-[1.02] active:scale-95 text-black font-extrabold py-4 rounded-2xl shadow-[0_10px_30px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2 text-lg transition-all duration-300">
-                  <span>📤</span> Share to Story / Status
+                <button onClick={shareCard} className="w-full mt-4 bg-gradient-to-r from-emerald-500 to-green-600 text-black font-extrabold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 text-lg hover:scale-[1.02] active:scale-95 transition">
+                  <span>📤</span> Share Ghibli Card to WhatsApp / Instagram
                 </button>
               )}
             </div>
