@@ -568,7 +568,7 @@ export default function QuttrStylePage() {
         await navigator.share({
           files: [file],
           title: 'Quttr Style',
-          text: 'मेरा Quttr Style पोस्टर 🔥 ऐप डाउनलोड करें https://play.google.com/store/apps/details?id=com.quttr.quttr_app&pcampaignid=web_share',
+          text: 'मेरा Quttr Style पोस्टर 🔥 ऐप डाउनलोड करें https://www.quttrr.com/style,
         });
       } else {
         const a = document.createElement('a');
