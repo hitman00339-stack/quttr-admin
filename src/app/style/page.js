@@ -233,7 +233,6 @@ export default function QuttrStylePage() {
     ctx.putImageData(imgData, 0, 0);
   };
 
-  /** Returns lines for quote layout (does not draw) */
   const wrapLines = (ctx, text, maxW) => {
     const words = String(text || '').split(' ');
     const lines = [];
@@ -272,14 +271,12 @@ export default function QuttrStylePage() {
     ctx.restore();
   };
 
-  /** Realistic Google Play badge */
   const drawGooglePlayBadge = (ctx, cx, cy) => {
     const w = 420;
     const h = 88;
     const x = cx - w / 2;
     const y = cy;
 
-    // Outer black pill (official-style)
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.55)';
     ctx.shadowBlur = 18;
@@ -294,16 +291,13 @@ export default function QuttrStylePage() {
     else ctx.rect(x, y, w, h);
     ctx.fill();
 
-    // Thin light border
     ctx.shadowBlur = 0;
     ctx.strokeStyle = 'rgba(255,255,255,0.22)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Multicolor Play triangle (approx Google colors)
     const px = x + 28;
     const py = y + h / 2;
-    // green / blue / yellow / red segments simplified as one triangle with gradient
     const triGrad = ctx.createLinearGradient(px, py - 22, px + 42, py + 22);
     triGrad.addColorStop(0, '#00F076');
     triGrad.addColorStop(0.35, '#00D0FF');
@@ -317,7 +311,6 @@ export default function QuttrStylePage() {
     ctx.closePath();
     ctx.fill();
 
-    // White inner highlight on triangle
     ctx.globalAlpha = 0.25;
     ctx.fillStyle = '#fff';
     ctx.beginPath();
@@ -328,7 +321,6 @@ export default function QuttrStylePage() {
     ctx.fill();
     ctx.globalAlpha = 1;
 
-    // Text
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = 'rgba(255,255,255,0.75)';
@@ -359,7 +351,6 @@ export default function QuttrStylePage() {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
-      // Background
       const grad = ctx.createLinearGradient(0, 0, 0, 1920);
       grad.addColorStop(0, '#000');
       grad.addColorStop(0.3, selectedCeleb.bgGradient[0]);
@@ -375,7 +366,6 @@ export default function QuttrStylePage() {
       ctx.fillStyle = spot;
       ctx.fillRect(0, 0, 1080, 1920);
 
-      // Face
       const cropSrcH = Math.min(img.height, img.height * 0.85);
       const work = document.createElement('canvas');
       work.width = 800;
@@ -439,7 +429,6 @@ export default function QuttrStylePage() {
       ctx.fillRect(faceX, faceY + faceH - 260, faceW, 260);
       ctx.restore();
 
-      // Gold frame
       const gold = ctx.createLinearGradient(faceX, faceY, faceX + faceW, faceY + faceH);
       gold.addColorStop(0, '#FFD700');
       gold.addColorStop(0.5, '#FFA500');
@@ -451,7 +440,6 @@ export default function QuttrStylePage() {
       else ctx.rect(faceX, faceY, faceW, faceH);
       ctx.stroke();
 
-      // Top brand
       ctx.textAlign = 'left';
       ctx.textBaseline = 'alphabetic';
       ctx.fillStyle = 'rgba(255,255,255,0.95)';
@@ -462,7 +450,6 @@ export default function QuttrStylePage() {
       ctx.fillText(selectedCeleb.category.toUpperCase(), 48, 106);
       drawLogoTopRight(ctx);
 
-      // ========== QUOTE BLOCK WITH CORRECT "" ==========
       const quoteMaxW = 780;
       const quoteStartY = 1280;
       ctx.font = '700 40px "Caveat", "Noto Sans Devanagari", system-ui, sans-serif';
@@ -472,7 +459,6 @@ export default function QuttrStylePage() {
       const textTop = quoteStartY;
       const textBottom = textTop + (lines.length - 1) * lh;
 
-      // Soft plate behind quote for readability
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       if (ctx.roundRect) {
         ctx.beginPath();
@@ -480,15 +466,13 @@ export default function QuttrStylePage() {
         ctx.fill();
       } else ctx.fillRect(90, textTop - 70, 900, blockH + 130);
 
-      // Opening “  — top-left of quote block
       ctx.textAlign = 'left';
       ctx.fillStyle = selectedCeleb.themeColor;
       ctx.globalAlpha = 0.9;
       ctx.font = '700 92px "Playfair Display", Georgia, serif';
-      ctx.fillText('\u201C', 110, textTop - 8); // “
+      ctx.fillText('\u201C', 110, textTop - 8); 
       ctx.globalAlpha = 1;
 
-      // Quote lines (centered)
       ctx.textAlign = 'center';
       ctx.fillStyle = '#FFF8E7';
       ctx.font = '700 40px "Caveat", "Noto Sans Devanagari", system-ui, sans-serif';
@@ -499,22 +483,19 @@ export default function QuttrStylePage() {
       });
       ctx.shadowBlur = 0;
 
-      // Closing ” — bottom-right after last line
       ctx.textAlign = 'right';
       ctx.fillStyle = selectedCeleb.themeColor;
       ctx.globalAlpha = 0.9;
       ctx.font = '700 92px "Playfair Display", Georgia, serif';
-      ctx.fillText('\u201D', 970, textBottom + 48); // ”
+      ctx.fillText('\u201D', 970, textBottom + 48); 
       ctx.globalAlpha = 1;
 
-      // Author
       ctx.textAlign = 'center';
       const authorY = textBottom + 78;
       ctx.fillStyle = '#FFD700';
       ctx.font = 'italic 600 26px "Playfair Display", serif';
       ctx.fillText('— ' + selectedCeleb.name, 540, authorY);
 
-      // Gold thin line
       const lineY = authorY + 28;
       const dg = ctx.createLinearGradient(260, 0, 820, 0);
       dg.addColorStop(0, 'transparent');
@@ -523,11 +504,9 @@ export default function QuttrStylePage() {
       ctx.fillStyle = dg;
       ctx.fillRect(260, lineY, 560, 1);
 
-      // Google Play badge (real aesthetic)
       const badgeY = Math.min(lineY + 36, 1720);
       drawGooglePlayBadge(ctx, 540, badgeY);
 
-      // App row under badge
       const appY = badgeY + 110;
       if (logoImage && logoImage.width) {
         const s = 36;
@@ -559,26 +538,45 @@ export default function QuttrStylePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedImage, selectedCeleb, activeDialogue, fontsReady, logoImage]);
 
+  // ==========================================
+  // FIXED SHARING FUNCTION (ALWAYS SENDS LINK)
+  // ==========================================
   const shareCard = async () => {
     if (!generatedCardUrl) return;
     try {
       const blob = await (await fetch(generatedCardUrl)).blob();
       const file = new File([blob], 'quttr-style.jpg', { type: 'image/jpeg' });
+      
+      // We embed the link directly into the text so WhatsApp never drops it.
+      const shareText = 'मेरा Quttr Style पोस्टर 🔥 ऐप डाउनलोड करें: https://www.quttrr.com/style';
+
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
           title: 'Quttr Style',
-        text: 'मेरा Quttr Style पोस्टर 🔥 ऐप डाउनलोड करें https://www.quttrr.com/style',
+          text: shareText,
         });
+      } else if (navigator.share) {
+        // Fallback: Share link/text only, then download image to device
+        await navigator.share({
+          title: 'Quttr Style',
+          text: shareText,
+        });
+        downloadImage();
       } else {
-        const a = document.createElement('a');
-        a.href = generatedCardUrl;
-        a.download = 'quttr-style.jpg';
-        a.click();
+        // Total fallback (Desktop)
+        downloadImage();
       }
     } catch (e) {
-      console.log(e);
+      console.log('Sharing failed or was cancelled:', e);
     }
+  };
+
+  const downloadImage = () => {
+    const a = document.createElement('a');
+    a.href = generatedCardUrl;
+    a.download = 'quttr-style.jpg';
+    a.click();
   };
 
   const tabs = ['Gita Updesh', 'Motivation', 'All', 'Cricketers', 'Bollywood', 'South Stars'];
@@ -603,7 +601,6 @@ export default function QuttrStylePage() {
           गीता उपदेश · मोटिवेशन · सेलिब्रिटी स्टाइल
         </p>
 
-        {/* TOP PRIORITY BUTTONS — Gita & Motivation first */}
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <button
             type="button"
@@ -672,7 +669,6 @@ export default function QuttrStylePage() {
             <h2 className="text-lg font-black text-yellow-400 mb-3 tracking-wider" style={{ fontFamily: 'Bebas Neue' }}>
               STEP 2 — STYLE / QUOTES
             </h2>
-            {/* Tabs: Gita & Motivation first */}
             <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
               {tabs.map((cat) => (
                 <button
