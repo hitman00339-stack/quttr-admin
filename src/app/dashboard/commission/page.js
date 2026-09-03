@@ -5,11 +5,12 @@ import {
   Wallet, Store, Calendar, Banknote, ShieldAlert, ScrollText,
   Search, RefreshCw, CheckCircle2, XCircle, AlertTriangle,
   ToggleLeft, ToggleRight, FileText, Loader2, TrendingUp,
-  DollarSign, Users, X,
+  DollarSign, X,
 } from 'lucide-react';
 import { authService } from '../../../services/auth';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.quttrr.com/api/v1';
+// ─── UPDATED: Pointing to your live Render backend as fallback ───
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://quttr-backend.onrender.com/api/v1';
 
 // ─────────────────────────────────────────────────
 // Helpers
@@ -26,10 +27,21 @@ function timeAgo(date) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
+// ─── UPDATED API CALL: Uses the exact token key from your auth service ───
 async function apiCall(path, options = {}) {
-  const token =
-    (typeof authService.getToken === 'function' ? authService.getToken() : null) ||
-    (typeof window !== 'undefined' ? localStorage.getItem('adminToken') : null);
+  let token = null;
+  
+  if (typeof window !== 'undefined') {
+    // This is the EXACT key your authService uses
+    token = localStorage.getItem('quttr_admin_token');
+  }
+
+  if (!token || token === 'null' || token === 'undefined') {
+    throw new Error('Not logged in — please refresh or login again');
+  }
+
+  // Remove "Bearer " prefix if accidentally saved that way
+  token = token.replace(/^Bearer\s+/i, '');
 
   const res = await fetch(`${API_BASE}/commission${path}`, {
     ...options,
@@ -41,6 +53,14 @@ async function apiCall(path, options = {}) {
   });
 
   const data = await res.json().catch(() => ({}));
+
+  if (res.status === 401) {
+    throw new Error(data.message || 'Invalid or expired token — please login again');
+  }
+  if (res.status === 403) {
+    throw new Error(data.message || 'Access denied — You do not have permission for this action');
+  }
+
   if (!res.ok || data.success === false) {
     throw new Error(data.message || `Request failed (${res.status})`);
   }
@@ -163,6 +183,9 @@ export default function CommissionPage() {
       if (tab === 'audit') await loadAudit();
     } catch (e) {
       setError(e.message || 'Failed to load');
+      if (e.message.includes('login again')) {
+        authService.logout();
+      }
     } finally {
       setLoading(false);
     }
@@ -580,7 +603,7 @@ export default function CommissionPage() {
                           <div className="flex flex-col gap-0.5">
                             <span
                               className={
-                                b.bookingLocation?.distanceFromShop >= 100
+                                b.bookingLocation?.distanceFromShop >= 200
                                   ? 'text-success'
                                   : 'text-error'
                               }
