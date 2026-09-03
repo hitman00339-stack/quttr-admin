@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { CELEBRITIES as IMPORTED_CELEBS } from '@/lib/celebrities';
 
 // ═══════════════════════════════════════════════════════════
-// WORLD-CLASS FESTIVAL & GREETING TEMPLATES
+// FESTIVAL & GREETING TEMPLATES
 // ═══════════════════════════════════════════════════════════
 const NEW_CATEGORIES = [
   {
@@ -220,9 +220,6 @@ const STYLE_MODES = [
 
 const ALL_CATEGORIES = [...NEW_CATEGORIES, ...(IMPORTED_CELEBS || [])];
 
-// ═══════════════════════════════════════════════════════════
-// COMPONENT
-// ═══════════════════════════════════════════════════════════
 export default function QuttrStylePage() {
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedCeleb, setSelectedCeleb] = useState(NEW_CATEGORIES[0]);
@@ -247,7 +244,6 @@ export default function QuttrStylePage() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
-  // Load fonts
   useEffect(() => {
     const loadFonts = async () => {
       try {
@@ -266,7 +262,6 @@ export default function QuttrStylePage() {
     loadFonts();
   }, []);
 
-  // Load logo
   useEffect(() => {
     const paths = ['/quttr-logo.png', '/quttr-business-logo.png', '/logo.png'];
     let cancelled = false;
@@ -348,9 +343,6 @@ export default function QuttrStylePage() {
     setNoPhotoMode(false);
   };
 
-  // ═══════════════════════════════════════════════════════════
-  // IMAGE ENHANCEMENT
-  // ═══════════════════════════════════════════════════════════
   const enhanceImage = (ctx, w, h) => {
     const imgData = ctx.getImageData(0, 0, w, h);
     const d = imgData.data;
@@ -366,6 +358,28 @@ export default function QuttrStylePage() {
         g = g * 0.95 + br * 0.05;
       }
       d[i] = r; d[i + 1] = g; d[i + 2] = b;
+    }
+    ctx.putImageData(imgData, 0, 0);
+  };
+
+  const applySharpen = (ctx, w, h) => {
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const d = imgData.data;
+    const copy = new Uint8ClampedArray(d);
+    const kernel = [0, -0.5, 0, -0.5, 3, -0.5, 0, -0.5, 0];
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const i = (y * w + x) * 4;
+        for (let c = 0; c < 3; c++) {
+          let sum = 0, k = 0;
+          for (let ky = -1; ky <= 1; ky++) {
+            for (let kx = -1; kx <= 1; kx++) {
+              sum += copy[((y + ky) * w + (x + kx)) * 4 + c] * kernel[k++];
+            }
+          }
+          d[i + c] = Math.max(0, Math.min(255, sum));
+        }
+      }
     }
     ctx.putImageData(imgData, 0, 0);
   };
@@ -388,25 +402,18 @@ export default function QuttrStylePage() {
     return finalLines.length ? finalLines : [''];
   };
 
-  // ═══════════════════════════════════════════════════════════
-  // DIVINE VECTOR ART (Peacock Feather, Lotus, Flute, etc)
-  // ═══════════════════════════════════════════════════════════
-
+  // ── Vector art helpers ──
   const drawPeacockFeather = (ctx, x, y, size, angle = 0) => {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
     ctx.scale(size / 200, size / 200);
-
-    // Stem
     ctx.strokeStyle = '#065F46';
     ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.quadraticCurveTo(20, 100, 40, 250);
     ctx.stroke();
-
-    // Feather body (elongated oval)
     const featherGrad = ctx.createRadialGradient(0, -20, 5, 0, -20, 80);
     featherGrad.addColorStop(0, '#FEF3C7');
     featherGrad.addColorStop(0.15, '#FBBF24');
@@ -418,34 +425,18 @@ export default function QuttrStylePage() {
     ctx.beginPath();
     ctx.ellipse(0, -20, 45, 85, 0, 0, Math.PI * 2);
     ctx.fill();
-
-    // Eye of feather
     ctx.fillStyle = '#1E1B4B';
     ctx.beginPath();
     ctx.ellipse(0, -20, 20, 30, 0, 0, Math.PI * 2);
     ctx.fill();
-
     ctx.fillStyle = '#FFD700';
     ctx.beginPath();
     ctx.ellipse(0, -20, 10, 16, 0, 0, Math.PI * 2);
     ctx.fill();
-
     ctx.fillStyle = '#0EA5E9';
     ctx.beginPath();
     ctx.ellipse(0, -20, 5, 8, 0, 0, Math.PI * 2);
     ctx.fill();
-
-    // Wispy strands
-    ctx.strokeStyle = 'rgba(14,165,233,0.4)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 30; i++) {
-      const a = (i / 30) * Math.PI * 2;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(a) * 30, -20 + Math.sin(a) * 60);
-      ctx.lineTo(Math.cos(a) * 55, -20 + Math.sin(a) * 100);
-      ctx.stroke();
-    }
-
     ctx.restore();
   };
 
@@ -454,7 +445,6 @@ export default function QuttrStylePage() {
     ctx.translate(x, y);
     ctx.rotate(angle);
     ctx.scale(size / 300, size / 300);
-
     const grad = ctx.createLinearGradient(0, -20, 0, 20);
     grad.addColorStop(0, '#78350F');
     grad.addColorStop(0.4, '#D97706');
@@ -465,16 +455,12 @@ export default function QuttrStylePage() {
     if (ctx.roundRect) ctx.roundRect(-150, -12, 300, 24, 12);
     else ctx.rect(-150, -12, 300, 24);
     ctx.fill();
-
-    // Ridges & holes
     ctx.fillStyle = '#1C0A00';
     for (let i = -80; i <= 80; i += 30) {
       ctx.beginPath();
       ctx.arc(i, 0, 3, 0, Math.PI * 2);
       ctx.fill();
     }
-
-    // Golden bands
     ctx.strokeStyle = '#FFD700';
     ctx.lineWidth = 2;
     for (let i = -140; i <= 140; i += 15) {
@@ -483,7 +469,6 @@ export default function QuttrStylePage() {
       ctx.lineTo(i, 12);
       ctx.stroke();
     }
-
     ctx.restore();
   };
 
@@ -491,15 +476,13 @@ export default function QuttrStylePage() {
     ctx.save();
     ctx.translate(x, y);
     ctx.scale(size / 100, size / 100);
-
-    // Petals (8 layers)
     for (let layer = 3; layer >= 0; layer--) {
       const petals = 8;
       const radius = 30 + layer * 15;
       for (let i = 0; i < petals; i++) {
-        const angle = (i / petals) * Math.PI * 2 + (layer * 0.15);
+        const a = (i / petals) * Math.PI * 2 + layer * 0.15;
         ctx.save();
-        ctx.rotate(angle);
+        ctx.rotate(a);
         const petalGrad = ctx.createRadialGradient(0, -radius, 5, 0, -radius, 40);
         petalGrad.addColorStop(0, '#FFF5F5');
         petalGrad.addColorStop(0.5, layer % 2 === 0 ? '#FDA4AF' : '#F9A8D4');
@@ -511,8 +494,6 @@ export default function QuttrStylePage() {
         ctx.restore();
       }
     }
-
-    // Center
     const centerGrad = ctx.createRadialGradient(0, 0, 5, 0, 0, 25);
     centerGrad.addColorStop(0, '#FFD700');
     centerGrad.addColorStop(1, '#F59E0B');
@@ -520,7 +501,6 @@ export default function QuttrStylePage() {
     ctx.beginPath();
     ctx.arc(0, 0, 20, 0, Math.PI * 2);
     ctx.fill();
-
     ctx.restore();
   };
 
@@ -528,8 +508,6 @@ export default function QuttrStylePage() {
     ctx.save();
     ctx.translate(x, y);
     ctx.scale(size / 100, size / 100);
-
-    // Body (bowl)
     const bowlGrad = ctx.createLinearGradient(0, -20, 0, 30);
     bowlGrad.addColorStop(0, '#F59E0B');
     bowlGrad.addColorStop(0.5, '#D97706');
@@ -538,18 +516,12 @@ export default function QuttrStylePage() {
     ctx.beginPath();
     ctx.ellipse(0, 15, 55, 20, 0, 0, Math.PI, true);
     ctx.fill();
-
-    // Ghee/oil top
     ctx.fillStyle = '#FEF3C7';
     ctx.beginPath();
     ctx.ellipse(0, -5, 45, 8, 0, 0, Math.PI * 2);
     ctx.fill();
-
-    // Wick base
     ctx.fillStyle = '#000';
     ctx.fillRect(-2, -20, 4, 15);
-
-    // Flame
     const flameGrad = ctx.createRadialGradient(0, -35, 3, 0, -35, 25);
     flameGrad.addColorStop(0, '#FFF');
     flameGrad.addColorStop(0.3, '#FFD700');
@@ -559,15 +531,12 @@ export default function QuttrStylePage() {
     ctx.beginPath();
     ctx.ellipse(0, -35, 12, 25, 0, 0, Math.PI * 2);
     ctx.fill();
-
-    // Glow
     ctx.shadowColor = '#FFD700';
     ctx.shadowBlur = 40;
     ctx.fillStyle = '#FFF8DC';
     ctx.beginPath();
     ctx.ellipse(0, -35, 6, 14, 0, 0, Math.PI * 2);
     ctx.fill();
-
     ctx.restore();
   };
 
@@ -576,8 +545,7 @@ export default function QuttrStylePage() {
     ctx.translate(x, y);
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.3;
-
+    ctx.globalAlpha = 0.25;
     for (let ring = 1; ring <= 4; ring++) {
       const r = size * (ring / 4);
       const petals = 8 + ring * 4;
@@ -600,8 +568,7 @@ export default function QuttrStylePage() {
       const x = Math.random() * w;
       const y = Math.random() * h;
       const size = Math.random() * 3 + 1;
-      const opacity = Math.random() * 0.8 + 0.2;
-      ctx.fillStyle = `rgba(255,255,255,${opacity})`;
+      ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.8 + 0.2})`;
       ctx.shadowColor = '#FFD700';
       ctx.shadowBlur = size * 3;
       ctx.beginPath();
@@ -618,12 +585,11 @@ export default function QuttrStylePage() {
       const x = Math.random() * w;
       const y = Math.random() * h;
       const size = Math.random() * 8 + 4;
-      const angle = Math.random() * Math.PI * 2;
       ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
       ctx.globalAlpha = Math.random() * 0.7 + 0.3;
       ctx.save();
       ctx.translate(x, y);
-      ctx.rotate(angle);
+      ctx.rotate(Math.random() * Math.PI * 2);
       ctx.fillRect(-size / 2, -size / 4, size, size / 2);
       ctx.restore();
     }
@@ -641,13 +607,11 @@ export default function QuttrStylePage() {
     ctx.beginPath();
     ctx.ellipse(0, 0, 25, 32, 0, 0, Math.PI * 2);
     ctx.fill();
-    // Knot
     ctx.beginPath();
     ctx.moveTo(-3, 30);
     ctx.lineTo(0, 36);
     ctx.lineTo(3, 30);
     ctx.fill();
-    // String
     ctx.strokeStyle = 'rgba(255,255,255,0.4)';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -657,50 +621,14 @@ export default function QuttrStylePage() {
     ctx.restore();
   };
 
-  const drawKrishnaSilhouette = (ctx, x, y, size) => {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.scale(size / 400, size / 400);
-
-    // Body silhouette
-    const grad = ctx.createLinearGradient(0, -200, 0, 200);
-    grad.addColorStop(0, 'rgba(30,27,75,0.9)');
-    grad.addColorStop(1, 'rgba(76,29,149,0.7)');
-    ctx.fillStyle = grad;
-
-    // Head
-    ctx.beginPath();
-    ctx.arc(0, -140, 60, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Crown feather
-    drawPeacockFeather(ctx, -20, -200, 100, -0.3);
-
-    // Body
-    ctx.fillStyle = 'rgba(30,27,75,0.85)';
-    ctx.beginPath();
-    ctx.moveTo(-70, -80);
-    ctx.quadraticCurveTo(-90, 0, -50, 100);
-    ctx.lineTo(50, 100);
-    ctx.quadraticCurveTo(90, 0, 70, -80);
-    ctx.closePath();
-    ctx.fill();
-
-    // Flute across
-    drawFlute(ctx, 0, -20, 200, -0.35);
-
-    ctx.restore();
-  };
-
   const drawLightRays = (ctx, cx, cy, radius, color) => {
     ctx.save();
     ctx.translate(cx, cy);
-    const rays = 12;
-    for (let i = 0; i < rays; i++) {
-      const angle = (i / rays) * Math.PI * 2;
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2;
       const grad = ctx.createLinearGradient(0, 0, Math.cos(angle) * radius, Math.sin(angle) * radius);
-      grad.addColorStop(0, color + 'CC');
-      grad.addColorStop(0.5, color + '44');
+      grad.addColorStop(0, color + 'AA');
+      grad.addColorStop(0.5, color + '33');
       grad.addColorStop(1, 'transparent');
       ctx.fillStyle = grad;
       ctx.beginPath();
@@ -713,37 +641,95 @@ export default function QuttrStylePage() {
     ctx.restore();
   };
 
-  const drawOrnateBorder = (ctx, x, y, w, h, color) => {
+  // ── Logo top-right (previous style) ──
+  const drawLogoTopRight = (ctx) => {
+    const pad = 40;
+    if (!logoImage || !logoImage.width) return;
+    const maxW = 170, maxH = 85;
+    const scale = Math.min(maxW / logoImage.width, maxH / logoImage.height);
+    const drawW = logoImage.width * scale;
+    const drawH = logoImage.height * scale;
+    const logoX = 1080 - drawW - pad;
+    const logoY = pad;
     ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    ctx.strokeRect(x, y, w, h);
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x - 8, y - 8, w + 16, h + 16);
-
-    // Corner ornaments
-    const cornerSize = 30;
-    ctx.lineWidth = 2;
-    [
-      [x, y, 1, 1], [x + w, y, -1, 1],
-      [x, y + h, 1, -1], [x + w, y + h, -1, -1],
-    ].forEach(([cx, cy, sx, sy]) => {
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    if (ctx.roundRect) {
       ctx.beginPath();
-      ctx.moveTo(cx + sx * cornerSize, cy);
-      ctx.lineTo(cx, cy);
-      ctx.lineTo(cx, cy + sy * cornerSize);
-      ctx.stroke();
-      // Small circle at corner
-      ctx.beginPath();
-      ctx.arc(cx + sx * cornerSize, cy + sy * cornerSize, 4, 0, Math.PI * 2);
-      ctx.fillStyle = color;
+      ctx.roundRect(logoX - 12, logoY - 10, drawW + 24, drawH + 20, 14);
       ctx.fill();
-    });
+    } else ctx.fillRect(logoX - 12, logoY - 10, drawW + 24, drawH + 20);
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 14;
+    ctx.drawImage(logoImage, logoX, logoY, drawW, drawH);
+    ctx.restore();
+  };
+
+  // ── Google Play badge (previous style) ──
+  const drawGooglePlayBadge = (ctx, cx, cy) => {
+    const w = 420;
+    const h = 88;
+    const x = cx - w / 2;
+    const y = cy;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 6;
+
+    const bg = ctx.createLinearGradient(x, y, x, y + h);
+    bg.addColorStop(0, '#2a2a2a');
+    bg.addColorStop(1, '#000000');
+    ctx.fillStyle = bg;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, 14);
+    else ctx.rect(x, y, w, h);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    const px = x + 28;
+    const py = y + h / 2;
+    const triGrad = ctx.createLinearGradient(px, py - 22, px + 42, py + 22);
+    triGrad.addColorStop(0, '#00F076');
+    triGrad.addColorStop(0.35, '#00D0FF');
+    triGrad.addColorStop(0.65, '#FFD400');
+    triGrad.addColorStop(1, '#FF3A44');
+    ctx.fillStyle = triGrad;
+    ctx.beginPath();
+    ctx.moveTo(px, py - 24);
+    ctx.lineTo(px, py + 24);
+    ctx.lineTo(px + 42, py);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.moveTo(px + 4, py - 14);
+    ctx.lineTo(px + 4, py + 8);
+    ctx.lineTo(px + 28, py - 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.font = '600 15px system-ui, -apple-system, sans-serif';
+    ctx.fillText('GET IT ON', px + 58, y + 32);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '700 32px system-ui, -apple-system, "Segoe UI", sans-serif';
+    ctx.fillText('Google Play', px + 58, y + 64);
+
     ctx.restore();
   };
 
   // ═══════════════════════════════════════════════════════════
-  // MAIN GENERATE FUNCTION
+  // GENERATE — BIG SQUARE PHOTO + PLAY BADGE + LOGO
   // ═══════════════════════════════════════════════════════════
   const generateCard = async () => {
     if ((!selectedImage && !noPhotoMode) || !fontsReady) return;
@@ -759,7 +745,7 @@ export default function QuttrStylePage() {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
-    // ═══ BACKGROUND (4-color mesh gradient) ═══
+    // Background
     const grad = ctx.createLinearGradient(0, 0, 1080, 1920);
     grad.addColorStop(0, selectedCeleb.bgGradient[0]);
     grad.addColorStop(0.35, selectedCeleb.bgGradient[1]);
@@ -768,312 +754,303 @@ export default function QuttrStylePage() {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 1080, 1920);
 
-    // Radial glow center
-    const centerGlow = ctx.createRadialGradient(540, 960, 100, 540, 960, 1200);
-    centerGlow.addColorStop(0, selectedCeleb.themeColor + '30');
+    const centerGlow = ctx.createRadialGradient(540, 500, 80, 540, 700, 1100);
+    centerGlow.addColorStop(0, selectedCeleb.themeColor + '40');
     centerGlow.addColorStop(1, 'transparent');
     ctx.fillStyle = centerGlow;
     ctx.fillRect(0, 0, 1080, 1920);
 
-    const theme = selectedCeleb.theme;
-    const isDivine = theme === 'divine' || styleMode === 'divine';
-    const isCinematic = styleMode === 'cinematic';
-    const isMinimal = styleMode === 'minimal';
-    const isCelebration = theme === 'celebration' || selectedCeleb.id === 'birthday' || selectedCeleb.id === 'anniversary';
-
-    // ═══ THEME-SPECIFIC BACKGROUND ELEMENTS ═══
+    // Theme decorations (behind photo)
     if (selectedCeleb.id === 'janmashtami' || selectedCeleb.id === 'gita') {
-      drawStars(ctx, 100, 1080, 1920);
-      drawMandala(ctx, 540, 960, 700, '#FFD700');
-      drawPeacockFeather(ctx, 150, 200, 280, -0.4);
-      drawPeacockFeather(ctx, 930, 200, 280, 0.4);
-      drawFlute(ctx, 540, 1770, 250, 0);
-      drawLotus(ctx, 120, 1750, 90);
-      drawLotus(ctx, 960, 1750, 90);
+      drawStars(ctx, 90, 1080, 1920);
+      drawMandala(ctx, 540, 900, 650, '#FFD700');
+      drawPeacockFeather(ctx, 120, 180, 240, -0.35);
+      drawPeacockFeather(ctx, 960, 180, 240, 0.35);
     } else if (selectedCeleb.id === 'diwali') {
-      drawStars(ctx, 60, 1080, 1920);
-      drawMandala(ctx, 540, 960, 700, '#F59E0B');
-      drawDiya(ctx, 150, 1780, 130);
-      drawDiya(ctx, 540, 1810, 130);
-      drawDiya(ctx, 930, 1780, 130);
-      drawLotus(ctx, 100, 200, 80);
-      drawLotus(ctx, 980, 200, 80);
+      drawStars(ctx, 50, 1080, 1920);
+      drawMandala(ctx, 540, 900, 650, '#F59E0B');
     } else if (selectedCeleb.id === 'holi') {
       drawConfetti(ctx, 1080, 1920);
-      drawMandala(ctx, 540, 960, 600, '#EC4899');
     } else if (selectedCeleb.id === 'birthday' || selectedCeleb.id === 'anniversary') {
       drawConfetti(ctx, 1080, 1920);
-      drawBalloon(ctx, 150, 300, '#F43F5E');
-      drawBalloon(ctx, 100, 200, '#8B5CF6');
-      drawBalloon(ctx, 220, 400, '#22D3EE');
-      drawBalloon(ctx, 930, 300, '#FBBF24');
-      drawBalloon(ctx, 980, 200, '#EC4899');
-      drawBalloon(ctx, 860, 400, '#3B82F6');
+      drawBalloon(ctx, 130, 220, '#F43F5E');
+      drawBalloon(ctx, 90, 140, '#8B5CF6');
+      drawBalloon(ctx, 950, 220, '#FBBF24');
+      drawBalloon(ctx, 990, 140, '#EC4899');
     } else if (selectedCeleb.id === 'independence') {
-      drawStars(ctx, 60, 1080, 1920);
-    } else if (selectedCeleb.id === 'rakhi' || selectedCeleb.id === 'ganesh') {
+      drawStars(ctx, 50, 1080, 1920);
+    } else {
       drawStars(ctx, 40, 1080, 1920);
-      drawMandala(ctx, 540, 960, 700, '#FFD700');
-      drawLotus(ctx, 120, 250, 80);
-      drawLotus(ctx, 960, 250, 80);
+      drawMandala(ctx, 540, 900, 600, selectedCeleb.accentColor);
     }
 
-    // ═══ PHOTO OR ICON ═══
+    // ═══════════════════════════════════════
+    // BIG SQUARE PHOTO BOX (previous layout)
+    // faceY ~170, faceH ~920, faceW ~820
+    // ═══════════════════════════════════════
+    const faceY = 160;
+    const faceH = 900;
+    const faceW = 820;
+    const faceX = (1080 - faceW) / 2;
+
     if (!noPhotoMode && selectedImage) {
-      await drawUserPhoto(ctx, isDivine, isCelebration, isCinematic);
-    } else if (noPhotoMode && (selectedCeleb.id === 'janmashtami' || selectedCeleb.id === 'gita')) {
-      drawKrishnaSilhouette(ctx, 540, 500, 500);
+      await new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          // Soft shadow plate
+          ctx.save();
+          ctx.shadowColor = 'rgba(0,0,0,0.9)';
+          ctx.shadowBlur = 50;
+          ctx.fillStyle = '#000';
+          if (ctx.roundRect) {
+            ctx.beginPath();
+            ctx.roundRect(faceX, faceY, faceW, faceH, 18);
+            ctx.fill();
+          } else ctx.fillRect(faceX, faceY, faceW, faceH);
+          ctx.restore();
+
+          // Process image into work canvas
+          const cropSrcH = Math.min(img.height, img.height * 0.9);
+          const work = document.createElement('canvas');
+          work.width = 800;
+          work.height = 1000;
+          const wctx = work.getContext('2d');
+          wctx.imageSmoothingEnabled = true;
+          wctx.imageSmoothingQuality = 'high';
+          const srcRatio = img.width / cropSrcH;
+          const dstRatio = 0.8;
+          let sx, sy, sw, sh;
+          if (srcRatio > dstRatio) {
+            sh = cropSrcH;
+            sw = cropSrcH * dstRatio;
+            sx = (img.width - sw) / 2;
+            sy = 0;
+          } else {
+            sw = img.width;
+            sh = img.width / dstRatio;
+            sx = 0;
+            sy = 0;
+          }
+          wctx.drawImage(img, sx, sy, sw, sh, 0, 0, 800, 1000);
+          enhanceImage(wctx, 800, 1000);
+          applySharpen(wctx, 800, 1000);
+
+          // Clip + draw photo
+          ctx.save();
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(faceX, faceY, faceW, faceH, 18);
+          else ctx.rect(faceX, faceY, faceW, faceH);
+          ctx.clip();
+          ctx.drawImage(work, faceX, faceY, faceW, faceH);
+
+          // Duotone
+          ctx.globalCompositeOperation = 'multiply';
+          const duo = ctx.createLinearGradient(0, faceY, 0, faceY + faceH);
+          duo.addColorStop(0, '#fff');
+          duo.addColorStop(1, selectedCeleb.themeColor);
+          ctx.globalAlpha = 0.18;
+          ctx.fillStyle = duo;
+          ctx.fillRect(faceX, faceY, faceW, faceH);
+          ctx.globalAlpha = 1;
+          ctx.globalCompositeOperation = 'source-over';
+
+          // Bottom fade into bg
+          const fade = ctx.createLinearGradient(0, faceY + faceH - 260, 0, faceY + faceH);
+          fade.addColorStop(0, 'transparent');
+          fade.addColorStop(1, selectedCeleb.bgGradient[1]);
+          ctx.fillStyle = fade;
+          ctx.fillRect(faceX, faceY + faceH - 260, faceW, 260);
+          ctx.restore();
+
+          // Gold border around square
+          const gold = ctx.createLinearGradient(faceX, faceY, faceX + faceW, faceY + faceH);
+          gold.addColorStop(0, '#FFD700');
+          gold.addColorStop(0.5, '#FFA500');
+          gold.addColorStop(1, '#B8860B');
+          ctx.strokeStyle = gold;
+          ctx.lineWidth = 5;
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(faceX, faceY, faceW, faceH, 18);
+          else ctx.rect(faceX, faceY, faceW, faceH);
+          ctx.stroke();
+
+          // Outer thin ring
+          ctx.strokeStyle = 'rgba(255,215,0,0.35)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(faceX - 8, faceY - 8, faceW + 16, faceH + 16, 22);
+          else ctx.rect(faceX - 8, faceY - 8, faceW + 16, faceH + 16);
+          ctx.stroke();
+
+          resolve();
+        };
+        img.onerror = () => resolve();
+        img.src = selectedImage;
+      });
     } else if (noPhotoMode) {
-      // Big centered icon
+      // Big icon / divine placeholder in square box
       ctx.save();
-      ctx.font = '400px serif';
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(faceX, faceY, faceW, faceH, 18);
+        ctx.fill();
+      } else ctx.fillRect(faceX, faceY, faceW, faceH);
+
+      ctx.font = '320px serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.globalAlpha = 0.9;
-      ctx.fillText(selectedCeleb.icon, 540, 550);
+      ctx.fillText(selectedCeleb.icon || '✨', 540, faceY + faceH / 2 - 40);
+
+      const gold = ctx.createLinearGradient(faceX, faceY, faceX + faceW, faceY + faceH);
+      gold.addColorStop(0, '#FFD700');
+      gold.addColorStop(1, '#B8860B');
+      ctx.strokeStyle = gold;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(faceX, faceY, faceW, faceH, 18);
+      else ctx.rect(faceX, faceY, faceW, faceH);
+      ctx.stroke();
       ctx.restore();
     }
 
-    // ═══ TOP HEADING ═══
+    // Decorative bottom elements after photo
+    if (selectedCeleb.id === 'janmashtami' || selectedCeleb.id === 'gita') {
+      drawFlute(ctx, 540, 1120, 200, 0);
+      drawLotus(ctx, 140, 1140, 70);
+      drawLotus(ctx, 940, 1140, 70);
+    } else if (selectedCeleb.id === 'diwali') {
+      drawDiya(ctx, 180, 1140, 100);
+      drawDiya(ctx, 540, 1160, 100);
+      drawDiya(ctx, 900, 1140, 100);
+    }
+
+    // ── Top left brand + top right logo ──
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.font = '700 26px system-ui, sans-serif';
+    ctx.fillText('Quttr Style', 48, 78);
+    ctx.fillStyle = selectedCeleb.themeColor;
+    ctx.font = '600 17px system-ui, sans-serif';
+    ctx.fillText(selectedCeleb.category.toUpperCase(), 48, 106);
+    drawLogoTopRight(ctx);
+
+    // ── Heading ──
     ctx.save();
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-
-    // Heading in decorative font
     ctx.shadowColor = 'rgba(0,0,0,0.6)';
-    ctx.shadowBlur = 15;
-    const headFont = isDivine
-      ? '900 68px "Noto Sans Devanagari", "Playfair Display", serif'
-      : isCinematic
-      ? '900 78px "Cinzel", "Bebas Neue", Impact, serif'
-      : '700 62px "Playfair Display", Georgia, serif';
-    ctx.font = headFont;
-
-    const headGrad = ctx.createLinearGradient(0, 60, 0, 130);
+    ctx.shadowBlur = 12;
+    const headGrad = ctx.createLinearGradient(0, 1180, 0, 1260);
     headGrad.addColorStop(0, '#FFF8DC');
     headGrad.addColorStop(0.5, selectedCeleb.accentColor);
     headGrad.addColorStop(1, '#B8860B');
     ctx.fillStyle = headGrad;
-    ctx.fillText(selectedCeleb.heading, 540, 60);
-
-    // Subheading
-    ctx.shadowBlur = 8;
-    ctx.font = '600 26px system-ui, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.fillText(selectedCeleb.subHeading, 540, 140);
+    ctx.font = '900 58px "Noto Sans Devanagari", "Cinzel", "Playfair Display", serif';
+    ctx.fillText(selectedCeleb.heading, 540, 1210);
+    ctx.shadowBlur = 0;
+    ctx.font = '600 22px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.fillText(selectedCeleb.subHeading, 540, 1270);
     ctx.restore();
 
-    // ═══ USER NAME (Signature style) ═══
+    // ── Name ──
+    let nameBottomY = 1285;
     if (userName.trim()) {
-      const nameY = noPhotoMode ? 1050 : 1240;
       ctx.save();
       ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-
-      // Name background flourish
-      const nameText = userName.toUpperCase();
-      ctx.font = '700 68px "Dancing Script", "Playfair Display", cursive';
-      const nameW = ctx.measureText(userName).width;
-
-      // Underline flourish
-      const flourGrad = ctx.createLinearGradient(540 - nameW / 2, 0, 540 + nameW / 2, 0);
-      flourGrad.addColorStop(0, 'transparent');
-      flourGrad.addColorStop(0.5, selectedCeleb.accentColor);
-      flourGrad.addColorStop(1, 'transparent');
-      ctx.fillStyle = flourGrad;
-      ctx.fillRect(540 - nameW / 2 - 20, nameY + 90, nameW + 40, 2);
-
-      // Age badge (top-right of name area)
-      if (userAge && (selectedCeleb.id === 'birthday' || selectedCeleb.id === 'anniversary')) {
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        // Star burst behind age
-        drawLightRays(ctx, 900, nameY + 40, 100, selectedCeleb.accentColor);
-        // Age circle
-        const ageGrad = ctx.createRadialGradient(900, nameY + 40, 5, 900, nameY + 40, 50);
-        ageGrad.addColorStop(0, '#FFD700');
-        ageGrad.addColorStop(1, '#B8860B');
-        ctx.fillStyle = ageGrad;
-        ctx.beginPath();
-        ctx.arc(900, nameY + 40, 55, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#000';
-        ctx.font = '900 42px "Bebas Neue", Impact, sans-serif';
-        ctx.fillText(userAge, 900, nameY + 45);
-        ctx.restore();
-      }
-
-      // Name text
       ctx.shadowColor = 'rgba(0,0,0,0.8)';
-      ctx.shadowBlur = 20;
-      const nameGrad = ctx.createLinearGradient(0, nameY, 0, nameY + 80);
+      ctx.shadowBlur = 16;
+      const nameGrad = ctx.createLinearGradient(0, 1300, 0, 1380);
       nameGrad.addColorStop(0, '#FFF8DC');
       nameGrad.addColorStop(0.5, selectedCeleb.accentColor);
       nameGrad.addColorStop(1, '#D97706');
       ctx.fillStyle = nameGrad;
-      ctx.font = '700 78px "Dancing Script", "Playfair Display", cursive';
-      ctx.fillText(userName, 540, nameY);
+      ctx.font = '700 64px "Dancing Script", "Playfair Display", cursive';
+      ctx.fillText(userName, 540, 1345);
+      nameBottomY = 1390;
+
+      // Age badge
+      if (userAge && selectedCeleb.supportsAge) {
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        drawLightRays(ctx, 920, 1340, 70, selectedCeleb.accentColor);
+        const ageGrad = ctx.createRadialGradient(920, 1340, 5, 920, 1340, 42);
+        ageGrad.addColorStop(0, '#FFD700');
+        ageGrad.addColorStop(1, '#B8860B');
+        ctx.fillStyle = ageGrad;
+        ctx.beginPath();
+        ctx.arc(920, 1340, 48, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.font = '900 36px "Bebas Neue", Impact, sans-serif';
+        ctx.fillText(userAge, 920, 1342);
+        ctx.restore();
+      }
       ctx.restore();
     }
 
-    // ═══ MESSAGE QUOTE ═══
-    const msgY = userName.trim() ? (noPhotoMode ? 1200 : 1400) : (noPhotoMode ? 1100 : 1300);
+    // ── Message ──
+    const msgY = nameBottomY + 30;
     ctx.save();
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
     ctx.shadowColor = 'rgba(0,0,0,0.7)';
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 8;
     ctx.fillStyle = '#FFF8E7';
-    ctx.font = '600 38px "Kalam", "Noto Sans Devanagari", "Caveat", cursive';
-
+    ctx.font = '600 36px "Kalam", "Noto Sans Devanagari", "Caveat", cursive';
     const message = getFinalMessage();
-    const lines = wrapLines(ctx, message, 820);
-    const lh = 55;
+    const lines = wrapLines(ctx, message, 800);
+    const lh = 50;
     lines.forEach((ln, idx) => {
       ctx.fillText(ln, 540, msgY + idx * lh);
     });
     ctx.restore();
 
-    // ═══ FROM SIGNATURE ═══
+    let afterMsgY = msgY + lines.length * lh + 20;
+
     if (userFrom.trim()) {
       ctx.save();
       ctx.textAlign = 'center';
       ctx.fillStyle = selectedCeleb.accentColor;
       ctx.font = 'italic 500 24px "Playfair Display", serif';
-      const fromY = msgY + lines.length * 55 + 30;
-      ctx.fillText('— ' + userFrom, 540, fromY);
+      ctx.fillText('— ' + userFrom, 540, afterMsgY);
+      afterMsgY += 40;
       ctx.restore();
     }
 
-    // ═══ BOTTOM BRANDING ═══
-    ctx.save();
-    // Divider line
+    // Divider
     const dg = ctx.createLinearGradient(200, 0, 880, 0);
     dg.addColorStop(0, 'transparent');
     dg.addColorStop(0.5, selectedCeleb.accentColor);
     dg.addColorStop(1, 'transparent');
     ctx.fillStyle = dg;
-    ctx.fillRect(200, 1780, 680, 1.5);
+    ctx.fillRect(200, Math.min(afterMsgY + 10, 1580), 680, 1.5);
 
-    // Logo + text
+    // ── Google Play badge (previous) ──
+    const badgeY = Math.min(afterMsgY + 40, 1620);
+    drawGooglePlayBadge(ctx, 540, badgeY);
+
+    // ── Bottom Quttr logo + text (previous) ──
+    const appY = badgeY + 110;
     if (logoImage && logoImage.width) {
-      const s = 44;
+      const s = 36;
       const ratio = logoImage.height / logoImage.width;
-      ctx.drawImage(logoImage, 380, 1810, s, s * ratio);
+      ctx.drawImage(logoImage, 540 - 100, appY - 8, s, s * ratio);
     }
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#FFF';
-    ctx.font = '900 36px "Bebas Neue", Impact, sans-serif';
-    ctx.fillText('QUTTR', 435, 1842);
-    ctx.fillStyle = selectedCeleb.accentColor;
-    ctx.font = '500 22px system-ui, sans-serif';
-    ctx.fillText('· quttrr.com/style', 435, 1875);
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.font = '800 26px "Bebas Neue", Impact, sans-serif';
+    ctx.fillText('QUTTR APP', 540 - 50, appY + 22);
 
-    // Right side tagline
-    ctx.textAlign = 'right';
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '400 18px system-ui, sans-serif';
-    ctx.fillText('Create yours free', 900, 1855);
-    ctx.restore();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.font = '500 18px system-ui, sans-serif';
+    ctx.fillText('Barber booking  ·  quttrr.com/style', 540, appY + 52);
 
     setGeneratedCardUrl(canvas.toDataURL('image/jpeg', 0.95));
     setIsProcessing(false);
-  };
-
-  const drawUserPhoto = async (ctx, isDivine, isCelebration, isCinematic) => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        const centerX = 540;
-        const centerY = 550;
-        const radius = 280;
-
-        // Divine glow / halo behind
-        if (isDivine) {
-          drawLightRays(ctx, centerX, centerY, radius + 180, selectedCeleb.accentColor);
-          // Halo ring
-          for (let i = 0; i < 3; i++) {
-            ctx.save();
-            ctx.strokeStyle = selectedCeleb.accentColor;
-            ctx.globalAlpha = 0.3 - i * 0.08;
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, radius + 20 + i * 15, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.restore();
-          }
-        } else if (isCelebration) {
-          // Sparkle burst
-          drawLightRays(ctx, centerX, centerY, radius + 150, selectedCeleb.accentColor);
-        }
-
-        // Process image
-        const work = document.createElement('canvas');
-        work.width = 800;
-        work.height = 800;
-        const wctx = work.getContext('2d');
-        wctx.imageSmoothingQuality = 'high';
-
-        // Square crop
-        const size = Math.min(img.width, img.height);
-        const sx = (img.width - size) / 2;
-        const sy = (img.height - size) / 2;
-        wctx.drawImage(img, sx, sy, size, size, 0, 0, 800, 800);
-        enhanceImage(wctx, 800, 800);
-
-        // Draw circular photo with border
-        ctx.save();
-        ctx.shadowColor = 'rgba(0,0,0,0.8)';
-        ctx.shadowBlur = 40;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-        ctx.fillStyle = '#000';
-        ctx.fill();
-        ctx.restore();
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.drawImage(work, centerX - radius, centerY - radius, radius * 2, radius * 2);
-
-        // Duotone tint
-        ctx.globalCompositeOperation = 'multiply';
-        const tint = ctx.createLinearGradient(0, centerY - radius, 0, centerY + radius);
-        tint.addColorStop(0, '#FFFFFF');
-        tint.addColorStop(1, selectedCeleb.themeColor);
-        ctx.globalAlpha = 0.15;
-        ctx.fillStyle = tint;
-        ctx.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2);
-        ctx.globalAlpha = 1;
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.restore();
-
-        // Golden ring
-        const ringGrad = ctx.createLinearGradient(centerX - radius, centerY, centerX + radius, centerY);
-        ringGrad.addColorStop(0, '#FFD700');
-        ringGrad.addColorStop(0.5, '#FEF3C7');
-        ringGrad.addColorStop(1, '#B8860B');
-        ctx.strokeStyle = ringGrad;
-        ctx.lineWidth = 8;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Inner thin ring
-        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius - 10, 0, Math.PI * 2);
-        ctx.stroke();
-
-        resolve();
-      };
-      img.onerror = () => resolve();
-      img.src = selectedImage;
-    });
   };
 
   useEffect(() => {
@@ -1088,18 +1065,17 @@ export default function QuttrStylePage() {
     try {
       const blob = await (await fetch(generatedCardUrl)).blob();
       const file = new File([blob], 'quttr-greeting.jpg', { type: 'image/jpeg' });
-      const shareText = `${selectedCeleb.icon} ${selectedCeleb.heading}!\n\nCreate your own beautiful poster free 👇\nhttps://www.quttrr.com/style`;
-
+      const shareText = `${selectedCeleb.icon} ${selectedCeleb.heading}!\n\nCreate your own free 👇\nhttps://www.quttrr.com/style`;
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'Quttr Greetings', text: shareText });
+        await navigator.share({ files: [file], title: 'Quttr Style', text: shareText });
       } else if (navigator.share) {
-        await navigator.share({ title: 'Quttr Greetings', text: shareText });
+        await navigator.share({ title: 'Quttr Style', text: shareText });
         downloadImage();
       } else {
         downloadImage();
       }
     } catch (e) {
-      console.log('Share cancelled:', e);
+      console.log('Share cancelled', e);
     }
   };
 
@@ -1118,7 +1094,6 @@ export default function QuttrStylePage() {
     <div className="min-h-screen bg-[#050505] text-white p-4 md:p-8 overflow-x-hidden">
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* HEADER */}
       <header className="max-w-4xl mx-auto text-center my-6">
         <div className="inline-block bg-gradient-to-r from-yellow-400 via-orange-500 to-red-600 text-black font-black text-xs px-5 py-2 rounded-full mb-4 tracking-widest shadow-lg shadow-yellow-500/30">
           ✨ INDIA'S #1 GREETING POSTER MAKER ✨
@@ -1133,7 +1108,6 @@ export default function QuttrStylePage() {
           जन्माष्टमी · जन्मदिन · दीपावली · हर पल की खुशी
         </p>
 
-        {/* Quick festival buttons */}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           {NEW_CATEGORIES.filter(c => c.category === 'Festivals' || c.category === 'Greetings').slice(0, 6).map(item => (
             <button
@@ -1152,13 +1126,9 @@ export default function QuttrStylePage() {
         </div>
       </header>
 
-      {/* MAIN GRID */}
       <main className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-
-        {/* LEFT: Controls */}
+        {/* LEFT CONTROLS */}
         <div className="space-y-5 bg-gradient-to-b from-slate-900/90 to-slate-950/90 p-6 rounded-3xl border border-yellow-500/20 shadow-2xl">
-
-          {/* Style Mode Selector */}
           <div>
             <label className="text-xs font-black text-yellow-400 mb-2 block tracking-widest">POSTER STYLE</label>
             <div className="grid grid-cols-3 gap-2">
@@ -1180,7 +1150,6 @@ export default function QuttrStylePage() {
             </div>
           </div>
 
-          {/* Name Input */}
           <div>
             <label className="text-xs font-black text-yellow-400 mb-2 block tracking-widest">
               YOUR NAME {selectedCeleb.requireName && <span className="text-rose-400">*</span>}
@@ -1194,7 +1163,6 @@ export default function QuttrStylePage() {
             />
           </div>
 
-          {/* Age (birthday/anniversary) */}
           {selectedCeleb.supportsAge && (
             <div>
               <label className="text-xs font-black text-yellow-400 mb-2 block tracking-widest">AGE / YEARS (Optional)</label>
@@ -1208,7 +1176,6 @@ export default function QuttrStylePage() {
             </div>
           )}
 
-          {/* From */}
           <div>
             <label className="text-xs font-black text-yellow-400 mb-2 block tracking-widest">FROM (Optional)</label>
             <input
@@ -1220,15 +1187,9 @@ export default function QuttrStylePage() {
             />
           </div>
 
-          {/* Custom Message Toggle */}
           <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700">
             <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={useCustomMsg}
-                onChange={(e) => setUseCustomMsg(e.target.checked)}
-                className="w-4 h-4"
-              />
+              <input type="checkbox" checked={useCustomMsg} onChange={(e) => setUseCustomMsg(e.target.checked)} className="w-4 h-4" />
               <span className="text-xs font-bold text-yellow-400 tracking-wider">WRITE MY OWN MESSAGE</span>
             </label>
             {useCustomMsg && (
@@ -1243,7 +1204,6 @@ export default function QuttrStylePage() {
             )}
           </div>
 
-          {/* Photo Section */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-black text-yellow-400 tracking-widest">YOUR PHOTO</label>
@@ -1252,9 +1212,7 @@ export default function QuttrStylePage() {
                   onClick={() => { setNoPhotoMode(!noPhotoMode); if (!noPhotoMode) setSelectedImage(null); }}
                   className={
                     'text-xs px-3 py-1 rounded-full font-bold transition ' +
-                    (noPhotoMode
-                      ? 'bg-yellow-400 text-black'
-                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600')
+                    (noPhotoMode ? 'bg-yellow-400 text-black' : 'bg-slate-700 text-slate-300 hover:bg-slate-600')
                   }
                 >
                   {noPhotoMode ? '✓ NO PHOTO MODE' : 'Skip Photo'}
@@ -1264,17 +1222,11 @@ export default function QuttrStylePage() {
 
             {!noPhotoMode && !cameraActive && (
               <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="bg-slate-800 hover:bg-slate-700 border-2 border-slate-700 hover:border-yellow-500 p-4 rounded-xl flex flex-col items-center gap-2 transition"
-                >
+                <button onClick={() => fileInputRef.current?.click()} className="bg-slate-800 hover:bg-slate-700 border-2 border-slate-700 hover:border-yellow-500 p-4 rounded-xl flex flex-col items-center gap-2 transition">
                   <span className="text-3xl">🖼️</span>
                   <span className="font-bold text-sm">Upload</span>
                 </button>
-                <button
-                  onClick={startCamera}
-                  className="bg-slate-800 hover:bg-slate-700 border-2 border-slate-700 hover:border-yellow-500 p-4 rounded-xl flex flex-col items-center gap-2 transition"
-                >
+                <button onClick={startCamera} className="bg-slate-800 hover:bg-slate-700 border-2 border-slate-700 hover:border-yellow-500 p-4 rounded-xl flex flex-col items-center gap-2 transition">
                   <span className="text-3xl">📸</span>
                   <span className="font-bold text-sm">Selfie</span>
                 </button>
@@ -1289,7 +1241,6 @@ export default function QuttrStylePage() {
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
           </div>
 
-          {/* Category tabs */}
           <div>
             <label className="text-xs font-black text-yellow-400 mb-2 block tracking-widest">CHOOSE TEMPLATE</label>
             <div className="flex gap-2 overflow-x-auto pb-2 mb-2 no-scrollbar">
@@ -1329,7 +1280,6 @@ export default function QuttrStylePage() {
             </div>
           </div>
 
-          {/* Reroll */}
           {canGenerate && !useCustomMsg && (
             <button
               onClick={() => pickRandomDialogue(selectedCeleb)}
@@ -1340,7 +1290,7 @@ export default function QuttrStylePage() {
           )}
         </div>
 
-        {/* RIGHT: Preview */}
+        {/* RIGHT PREVIEW */}
         <div className="lg:sticky lg:top-8 flex flex-col items-center">
           {!canGenerate ? (
             <div className="w-full aspect-[9/16] max-w-md rounded-3xl border-2 border-dashed border-yellow-500/30 bg-slate-900/50 flex flex-col items-center justify-center p-8 text-center">
@@ -1348,11 +1298,9 @@ export default function QuttrStylePage() {
               <p className="text-yellow-400 font-black text-3xl tracking-widest" style={{ fontFamily: 'Bebas Neue' }}>
                 LIVE PREVIEW
               </p>
-              <p className="text-sm mt-3 text-slate-400">Enter your name and add photo</p>
+              <p className="text-sm mt-3 text-slate-400">Enter name & upload photo</p>
               {selectedCeleb.supportsNoPhoto && (
-                <p className="text-xs mt-4 text-yellow-400/70">
-                  ✨ Or tap "Skip Photo" for divine art
-                </p>
+                <p className="text-xs mt-4 text-yellow-400/70">✨ Or tap Skip Photo for divine art</p>
               )}
             </div>
           ) : (
@@ -1364,11 +1312,7 @@ export default function QuttrStylePage() {
                 </div>
               )}
               {generatedCardUrl && (
-                <img
-                  src={generatedCardUrl}
-                  alt="Your Card"
-                  className="w-full rounded-3xl border-4 border-slate-800 shadow-2xl shadow-yellow-500/20"
-                />
+                <img src={generatedCardUrl} alt="Your Card" className="w-full rounded-3xl border-4 border-slate-800 shadow-2xl shadow-yellow-500/20" />
               )}
               {generatedCardUrl && !isProcessing && (
                 <div className="mt-4 space-y-2">
