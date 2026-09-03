@@ -3,87 +3,82 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { CELEBRITIES as IMPORTED_CELEBS } from '@/lib/celebrities';
 
-// ============ GITA & MOTIVATION (HINDI) ============
+// ============ CATEGORIES WITH GREETINGS & FESTIVALS ============
 const NEW_CATEGORIES = [
   {
+    id: 'janmashtami',
+    name: 'जन्माष्टमी 🦚',
+    styleName: 'Krishna Janmashtami',
+    category: 'Festivals',
+    themeColor: '#0ea5e9', // Peacock Blue
+    bgGradient: ['#020617', '#082f49'], // Deep night sky
+    requireName: true,
+    dialogues: [
+      'हाथी घोड़ा पालकी, जय कन्हैया लाल की!\n{name} की ओर से जन्माष्टमी की हार्दिक शुभकामनाएँ।',
+      'माखन चोर नंद किशोर, बांधी जिसने प्रीत की डोर।\n{name} के परिवार की ओर से शुभ जन्माष्टमी।',
+      'मुरली मनोहर, गोपी मनोरम, यमुना के तट पर जिनका डेरा।\n{name} की तरफ से हैप्पी जन्माष्टमी।',
+      'नटखट कान्हा आए द्वार, लेकर अपनी बांसुरी की पुकार।\n{name} की ओर से जय श्री कृष्णा!',
+      'May Lord Krishna steal all your tensions and worries.\nHappy Janmashtami from {name}!',
+    ],
+  },
+  {
+    id: 'birthday',
+    name: 'Happy Birthday 🎂',
+    styleName: 'जन्मदिन की बधाई',
+    category: 'Greetings',
+    themeColor: '#f43f5e', // Rose
+    bgGradient: ['#4c0519', '#9f1239'], // Ruby
+    requireName: true,
+    dialogues: [
+      'Wishing {name} a very Happy Birthday! 🎉\nMay all your dreams come true.',
+      'जन्मदिन की अनंत शुभकामनाएँ, {name}! 🎂\nईश्वर आपको हमेशा खुश रखें।',
+      'Happy Birthday {name}!\nKeep shining and inspiring everyone around you. ✨',
+      'मुस्कुराते रहो हमेशा! {name} को जन्मदिन की ढेरों बधाइयाँ। 🎁',
+    ],
+  },
+  {
     id: 'gita',
-    name: 'भगवद् गीता',
+    name: 'भगवद् गीता 🕉️',
     styleName: 'गीता उपदेश',
-    category: 'Gita Updesh',
+    category: 'Spiritual',
     themeColor: '#f97316',
     bgGradient: ['#431407', '#7c2d12'],
+    requireName: false,
     dialogues: [
       'कर्मण्येवाधिकारस्ते मा फलेषु कदाचन।',
       'जो हुआ, वह अच्छा हुआ। जो हो रहा है, वह अच्छा हो रहा है।',
-      'परिवर्तन ही संसार का नियम है।',
-      'आत्मा न कभी जन्म लेती है और न कभी मरती है।',
-      'मन अशांत है, लेकिन अभ्यास और वैराग्य से इसे वश में किया जा सकता है।',
       'खाली हाथ आए थे, खाली हाथ जाओगे।',
-      'क्रोध से भ्रम पैदा होता है, और भ्रम से बुद्धि नष्ट होती है।',
       'मनुष्य अपने विश्वास से निर्मित होता है।',
-      'न कोई मरता है, न कोई मारता है, सब निमित्त मात्र हैं।',
-      'सन्देह करने वाले के लिए न इस लोक में सुख है, न परलोक में।',
-      'जो मन को नियंत्रित नहीं करते, उनके लिए मन शत्रु के समान है।',
-      'सुख-दुख, लाभ-हानि, जय-पराजय को समान समझो।',
-      'डरने की कोई बात नहीं, सत्य कभी नष्ट नहीं होता।',
       'श्रेष्ठ पुरुष जो आचरण करते हैं, सामान्य मनुष्य उसी का अनुसरण करते हैं।',
-      'अपने अनिवार्य कर्तव्य का पालन करो, अकर्म से कर्म बेहतर है।',
-      'जन्म लेने वाले की मृत्यु निश्चित है और मरने वाले का जन्म निश्चित है।',
-      'तुम क्या लाए थे जो तुमने खो दिया? क्या गया जो तुम रोते हो?',
-      'मैं सभी प्राणियों के हृदय में स्थित हूँ।',
-      'अहंकार, क्रोध और लालच — ये नरक के तीन द्वार हैं।',
-      'योग: कर्मसु कौशलम् — काम में कुशलता ही योग है।',
-      'समत्वं योग उच्यते — समभाव ही योग है।',
-      'उद्धरेदात्मनात्मानं — अपने आप को स्वयं उठाओ।',
-      'श्रद्धावान् लभते ज्ञानम् — श्रद्धावान को ज्ञान मिलता है।',
-      'न हि कल्याणकृत् कश्चित् दुर्गतिं तात गच्छति।',
-      'असंशयं महाबाहो मनो दुर्निग्रहं चलम्।',
     ],
   },
   {
     id: 'motivation',
-    name: 'सक्सेस माइंडसेट',
+    name: 'सक्सेस माइंडसेट 🔥',
     styleName: 'प्रेरक विचार',
     category: 'Motivation',
-    themeColor: '#0ea5e9',
-    bgGradient: ['#082f49', '#0369a1'],
+    themeColor: '#eab308',
+    bgGradient: ['#422006', '#854d0e'],
+    requireName: false,
     dialogues: [
       'मंजिलें उन्हीं को मिलती हैं, जिनके सपनों में जान होती है।',
-      'संघर्ष में आदमी अकेला होता है, सफलता में दुनिया उसके साथ होती है।',
       'हार हो जाती है जब मान लिया जाता है, जीत तब होती है जब ठान लिया जाता है।',
       'अगर मेहनत आदत बन जाए, तो कामयाबी मुकद्दर बन जाती है।',
-      'जिंदगी में रिस्क लेने से कभी मत डरो — या तो जीत मिलेगी या सीख।',
       'पानी में गिरने से जान नहीं जाती, जान तब जाती है जब तैरना नहीं आता।',
-      'आज रास्ता बना लिया है, तो कल मंजिल भी मिल जाएगी।',
-      'बुरा वक्त एक ऐसी तिजोरी है, जहां से सफलता के हथियार मिलते हैं।',
-      'मैदान में हारा इंसान जीत सकता है, मन से हारा कभी नहीं।',
       'जो उड़ने का शौक रखते हैं, वो गिरने का खौफ नहीं रखते।',
-      'ख्वाहिशें भले छोटी हों, उन्हें पूरा करने की जिद होनी चाहिए।',
-      'जब लोग आपका साथ छोड़ दें, समझ लेना आप सही रास्ते पर हैं।',
-      'अकेले चलने का साहस रखो, कामयाबी एक दिन तुम्हारे कदम चूमेगी।',
-      'तैरना सीखना है तो पानी में उतरना ही होगा।',
-      'भीड़ आसान रास्ते पर चलती है — अपना रास्ता खुद चुनो।',
-      'इंतजार करने वालों को उतना ही मिलता है, जितना कोशिश करने वाले छोड़ देते हैं।',
-      'अपने सपनों को जिंदा रखो।',
-      'थककर मत बैठो, मंजिल और करीब आ चुकी है।',
-      'छोटी-छोटी रोज़ की मेहनत बड़े नतीजे लाती है।',
-      'डर के आगे जीत है।',
-      'आज की मेहनत कल की पहचान है।',
-      'सपने वो नहीं जो नींद में आएं, सपने वो हैं जो नींद न आने दें।',
-      'हिम्मत रखो, मुश्किलें हार जाती हैं।',
-      'जो बोया है वही काटोगे — मेहनत बोओ, सफलता काटो।',
-      'रुको मत, रुकोगे तो मिट जाओगे।',
     ],
   },
 ];
 
-const ALL_CELEBS = [...NEW_CATEGORIES, ...IMPORTED_CELEBS];
+const ALL_CELEBS = [...NEW_CATEGORIES, ...(IMPORTED_CELEBS || [])];
 
 export default function QuttrStylePage() {
   const [selectedImage, setSelectedImage] = useState(null);
-  const [selectedCeleb, setSelectedCeleb] = useState(NEW_CATEGORIES[0]); // Gita first
+  const [selectedCeleb, setSelectedCeleb] = useState(NEW_CATEGORIES[0]); // Janmashtami default
   const [activeDialogue, setActiveDialogue] = useState('');
-  const [activeTab, setActiveTab] = useState('Gita Updesh');
+  const [userName, setUserName] = useState(''); // Custom name input
+  
+  const [activeTab, setActiveTab] = useState('Festivals');
   const [generatedCardUrl, setGeneratedCardUrl] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [loadingText, setLoadingText] = useState('');
@@ -135,14 +130,20 @@ export default function QuttrStylePage() {
   useEffect(() => {
     pickRandomDialogue(selectedCeleb);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCeleb]);
+  }, [selectedCeleb, userName]);
 
   const pickRandomDialogue = (celeb) => {
     if (!celeb?.dialogues?.length) return;
     const len = celeb.dialogues.length;
     let i = Math.floor(Math.random() * len);
     if (len > 1 && celeb.dialogues[i] === activeDialogue) i = (i + 1) % len;
-    setActiveDialogue(celeb.dialogues[i]);
+    
+    // Replace {name} placeholder with user input (or fallback)
+    let text = celeb.dialogues[i];
+    if (text.includes('{name}')) {
+      text = text.replace(/{name}/g, userName.trim() !== '' ? userName : 'आपका नाम');
+    }
+    setActiveDialogue(text);
   };
 
   const selectQuickCategory = (catId) => {
@@ -190,9 +191,7 @@ export default function QuttrStylePage() {
     const imgData = ctx.getImageData(0, 0, w, h);
     const d = imgData.data;
     for (let i = 0; i < d.length; i += 4) {
-      let r = d[i],
-        g = d[i + 1],
-        b = d[i + 2];
+      let r = d[i], g = d[i + 1], b = d[i + 2];
       r = r < 128 ? r * 0.92 : Math.min(255, r * 1.08 + 5);
       g = g < 128 ? g * 0.94 : Math.min(255, g * 1.06 + 3);
       b = b < 128 ? b * 0.96 : Math.min(255, b * 1.04);
@@ -203,9 +202,7 @@ export default function QuttrStylePage() {
         r = r * 0.95 + br * 0.05;
         g = g * 0.95 + br * 0.05;
       }
-      d[i] = r;
-      d[i + 1] = g;
-      d[i + 2] = b;
+      d[i] = r; d[i + 1] = g; d[i + 2] = b;
     }
     ctx.putImageData(imgData, 0, 0);
   };
@@ -219,8 +216,7 @@ export default function QuttrStylePage() {
       for (let x = 1; x < w - 1; x++) {
         const i = (y * w + x) * 4;
         for (let c = 0; c < 3; c++) {
-          let sum = 0,
-            k = 0;
+          let sum = 0, k = 0;
           for (let ky = -1; ky <= 1; ky++) {
             for (let kx = -1; kx <= 1; kx++) {
               sum += copy[((y + ky) * w + (x + kx)) * 4 + c] * kernel[k++];
@@ -245,14 +241,19 @@ export default function QuttrStylePage() {
       } else line = test;
     }
     if (line.trim()) lines.push(line.trim());
-    return lines.length ? lines : [''];
+    
+    // Support manual \n line breaks too
+    const finalLines = [];
+    lines.forEach(l => {
+      finalLines.push(...l.split('\n'));
+    });
+    return finalLines.length ? finalLines : [''];
   };
 
   const drawLogoTopRight = (ctx) => {
     const pad = 40;
     if (!logoImage || !logoImage.width) return;
-    const maxW = 170,
-      maxH = 85;
+    const maxW = 170, maxH = 85;
     const scale = Math.min(maxW / logoImage.width, maxH / logoImage.height);
     const drawW = logoImage.width * scale;
     const drawH = logoImage.height * scale;
@@ -272,65 +273,31 @@ export default function QuttrStylePage() {
   };
 
   const drawGooglePlayBadge = (ctx, cx, cy) => {
-    const w = 420;
-    const h = 88;
-    const x = cx - w / 2;
-    const y = cy;
-
+    const w = 420; const h = 88;
+    const x = cx - w / 2; const y = cy;
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.55)';
-    ctx.shadowBlur = 18;
-    ctx.shadowOffsetY = 6;
-
+    ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
     const bg = ctx.createLinearGradient(x, y, x, y + h);
-    bg.addColorStop(0, '#2a2a2a');
-    bg.addColorStop(1, '#000000');
+    bg.addColorStop(0, '#2a2a2a'); bg.addColorStop(1, '#000000');
     ctx.fillStyle = bg;
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(x, y, w, h, 14);
-    else ctx.rect(x, y, w, h);
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, 14); else ctx.rect(x, y, w, h);
     ctx.fill();
-
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    const px = x + 28;
-    const py = y + h / 2;
+    ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1.5; ctx.stroke();
+    
+    const px = x + 28, py = y + h / 2;
     const triGrad = ctx.createLinearGradient(px, py - 22, px + 42, py + 22);
-    triGrad.addColorStop(0, '#00F076');
-    triGrad.addColorStop(0.35, '#00D0FF');
-    triGrad.addColorStop(0.65, '#FFD400');
-    triGrad.addColorStop(1, '#FF3A44');
+    triGrad.addColorStop(0, '#00F076'); triGrad.addColorStop(0.35, '#00D0FF');
+    triGrad.addColorStop(0.65, '#FFD400'); triGrad.addColorStop(1, '#FF3A44');
     ctx.fillStyle = triGrad;
-    ctx.beginPath();
-    ctx.moveTo(px, py - 24);
-    ctx.lineTo(px, py + 24);
-    ctx.lineTo(px + 42, py);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.globalAlpha = 0.25;
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.moveTo(px + 4, py - 14);
-    ctx.lineTo(px + 4, py + 8);
-    ctx.lineTo(px + 28, py - 2);
-    ctx.closePath();
-    ctx.fill();
+    ctx.beginPath(); ctx.moveTo(px, py - 24); ctx.lineTo(px, py + 24); ctx.lineTo(px + 42, py); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 0.25; ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.moveTo(px + 4, py - 14); ctx.lineTo(px + 4, py + 8); ctx.lineTo(px + 28, py - 2); ctx.closePath(); ctx.fill();
     ctx.globalAlpha = 1;
-
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = 'rgba(255,255,255,0.75)';
-    ctx.font = '600 15px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.font = '600 15px system-ui, sans-serif';
     ctx.fillText('GET IT ON', px + 58, y + 32);
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = '700 32px system-ui, -apple-system, "Segoe UI", sans-serif';
+    ctx.fillStyle = '#FFFFFF'; ctx.font = '700 32px system-ui, sans-serif';
     ctx.fillText('Google Play', px + 58, y + 64);
-
     ctx.restore();
   };
 
@@ -338,15 +305,12 @@ export default function QuttrStylePage() {
     if (!selectedImage || !fontsReady) return;
     setIsProcessing(true);
     setLoadingText('Creating your poster... 🎬');
-    try {
-      await document.fonts.ready;
-    } catch (e) {}
+    try { await document.fonts.ready; } catch (e) {}
 
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    canvas.width = 1080;
-    canvas.height = 1920;
+    canvas.width = 1080; canvas.height = 1920;
 
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -368,178 +332,126 @@ export default function QuttrStylePage() {
 
       const cropSrcH = Math.min(img.height, img.height * 0.85);
       const work = document.createElement('canvas');
-      work.width = 800;
-      work.height = 1000;
+      work.width = 800; work.height = 1000;
       const wctx = work.getContext('2d');
-      wctx.imageSmoothingEnabled = true;
-      wctx.imageSmoothingQuality = 'high';
+      wctx.imageSmoothingEnabled = true; wctx.imageSmoothingQuality = 'high';
       const srcRatio = img.width / cropSrcH;
       const dstRatio = 0.8;
       let sx, sy, sw, sh;
       if (srcRatio > dstRatio) {
-        sh = cropSrcH;
-        sw = cropSrcH * dstRatio;
-        sx = (img.width - sw) / 2;
-        sy = 0;
+        sh = cropSrcH; sw = cropSrcH * dstRatio; sx = (img.width - sw) / 2; sy = 0;
       } else {
-        sw = img.width;
-        sh = img.width / dstRatio;
-        sx = 0;
-        sy = 0;
+        sw = img.width; sh = img.width / dstRatio; sx = 0; sy = 0;
       }
       wctx.drawImage(img, sx, sy, sw, sh, 0, 0, 800, 1000);
       enhanceImage(wctx, 800, 1000);
       applySharpen(wctx, 800, 1000);
 
-      const faceY = 170,
-        faceH = 920,
-        faceW = 820,
-        faceX = (1080 - faceW) / 2;
-
+      const faceY = 170, faceH = 920, faceW = 820, faceX = (1080 - faceW) / 2;
       ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.9)';
-      ctx.shadowBlur = 50;
-      ctx.fillStyle = '#000';
-      if (ctx.roundRect) {
-        ctx.beginPath();
-        ctx.roundRect(faceX, faceY, faceW, faceH, 18);
-        ctx.fill();
-      } else ctx.fillRect(faceX, faceY, faceW, faceH);
+      ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 50; ctx.fillStyle = '#000';
+      if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(faceX, faceY, faceW, faceH, 18); ctx.fill(); }
+      else ctx.fillRect(faceX, faceY, faceW, faceH);
       ctx.restore();
 
       ctx.save();
       ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(faceX, faceY, faceW, faceH, 18);
-      else ctx.rect(faceX, faceY, faceW, faceH);
+      if (ctx.roundRect) ctx.roundRect(faceX, faceY, faceW, faceH, 18); else ctx.rect(faceX, faceY, faceW, faceH);
       ctx.clip();
       ctx.drawImage(work, faceX, faceY, faceW, faceH);
       ctx.globalCompositeOperation = 'multiply';
       const duo = ctx.createLinearGradient(0, faceY, 0, faceY + faceH);
-      duo.addColorStop(0, '#fff');
-      duo.addColorStop(1, selectedCeleb.themeColor);
-      ctx.globalAlpha = 0.2;
-      ctx.fillStyle = duo;
-      ctx.fillRect(faceX, faceY, faceW, faceH);
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
+      duo.addColorStop(0, '#fff'); duo.addColorStop(1, selectedCeleb.themeColor);
+      ctx.globalAlpha = 0.2; ctx.fillStyle = duo; ctx.fillRect(faceX, faceY, faceW, faceH);
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
       const fade = ctx.createLinearGradient(0, faceY + faceH - 260, 0, faceY + faceH);
-      fade.addColorStop(0, 'transparent');
-      fade.addColorStop(1, selectedCeleb.bgGradient[1]);
-      ctx.fillStyle = fade;
-      ctx.fillRect(faceX, faceY + faceH - 260, faceW, 260);
+      fade.addColorStop(0, 'transparent'); fade.addColorStop(1, selectedCeleb.bgGradient[1]);
+      ctx.fillStyle = fade; ctx.fillRect(faceX, faceY + faceH - 260, faceW, 260);
       ctx.restore();
 
       const gold = ctx.createLinearGradient(faceX, faceY, faceX + faceW, faceY + faceH);
-      gold.addColorStop(0, '#FFD700');
-      gold.addColorStop(0.5, '#FFA500');
-      gold.addColorStop(1, '#B8860B');
-      ctx.strokeStyle = gold;
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(faceX, faceY, faceW, faceH, 18);
-      else ctx.rect(faceX, faceY, faceW, faceH);
+      gold.addColorStop(0, '#FFD700'); gold.addColorStop(0.5, '#FFA500'); gold.addColorStop(1, '#B8860B');
+      ctx.strokeStyle = gold; ctx.lineWidth = 4; ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(faceX, faceY, faceW, faceH, 18); else ctx.rect(faceX, faceY, faceW, faceH);
       ctx.stroke();
 
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'alphabetic';
-      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = 'rgba(255,255,255,0.95)';
       ctx.font = '700 26px system-ui, sans-serif';
       ctx.fillText('Quttr Style', 48, 78);
-      ctx.fillStyle = selectedCeleb.themeColor;
-      ctx.font = '600 17px system-ui, sans-serif';
+      ctx.fillStyle = selectedCeleb.themeColor; ctx.font = '600 17px system-ui, sans-serif';
       ctx.fillText(selectedCeleb.category.toUpperCase(), 48, 106);
       drawLogoTopRight(ctx);
 
       const quoteMaxW = 780;
-      const quoteStartY = 1280;
-      ctx.font = '700 40px "Caveat", "Noto Sans Devanagari", system-ui, sans-serif';
-      const lines = wrapLines(ctx, activeDialogue, quoteMaxW);
-      const lh = 54;
+      const quoteStartY = 1240;
+      ctx.font = '700 46px "Caveat", "Noto Sans Devanagari", system-ui, sans-serif';
+      
+      // Update text in case name changed just before draw
+      let finalDialogue = activeDialogue;
+      if (selectedCeleb.requireName && userName.trim() !== '') {
+         // Auto-replace just in case
+         if (!finalDialogue.includes(userName)) {
+           finalDialogue = finalDialogue.replace(/आपका नाम/g, userName).replace(/{name}/g, userName);
+         }
+      }
+
+      const lines = wrapLines(ctx, finalDialogue, quoteMaxW);
+      const lh = 64;
       const blockH = lines.length * lh;
       const textTop = quoteStartY;
       const textBottom = textTop + (lines.length - 1) * lh;
 
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       if (ctx.roundRect) {
-        ctx.beginPath();
-        ctx.roundRect(90, textTop - 70, 900, blockH + 130, 20);
-        ctx.fill();
+        ctx.beginPath(); ctx.roundRect(90, textTop - 70, 900, blockH + 130, 20); ctx.fill();
       } else ctx.fillRect(90, textTop - 70, 900, blockH + 130);
-
-      ctx.textAlign = 'left';
-      ctx.fillStyle = selectedCeleb.themeColor;
-      ctx.globalAlpha = 0.9;
-      ctx.font = '700 92px "Playfair Display", Georgia, serif';
-      ctx.fillText('\u201C', 110, textTop - 8); 
-      ctx.globalAlpha = 1;
 
       ctx.textAlign = 'center';
       ctx.fillStyle = '#FFF8E7';
-      ctx.font = '700 40px "Caveat", "Noto Sans Devanagari", system-ui, sans-serif';
-      ctx.shadowColor = 'rgba(0,0,0,0.75)';
-      ctx.shadowBlur = 8;
-      lines.forEach((ln, idx) => {
-        ctx.fillText(ln, 540, textTop + idx * lh);
-      });
+      ctx.font = '700 46px "Caveat", "Noto Sans Devanagari", system-ui, sans-serif';
+      ctx.shadowColor = 'rgba(0,0,0,0.75)'; ctx.shadowBlur = 8;
+      lines.forEach((ln, idx) => { ctx.fillText(ln, 540, textTop + idx * lh); });
       ctx.shadowBlur = 0;
-
-      ctx.textAlign = 'right';
-      ctx.fillStyle = selectedCeleb.themeColor;
-      ctx.globalAlpha = 0.9;
-      ctx.font = '700 92px "Playfair Display", Georgia, serif';
-      ctx.fillText('\u201D', 970, textBottom + 48); 
-      ctx.globalAlpha = 1;
 
       ctx.textAlign = 'center';
       const authorY = textBottom + 78;
       ctx.fillStyle = '#FFD700';
       ctx.font = 'italic 600 26px "Playfair Display", serif';
-      ctx.fillText('— ' + selectedCeleb.name, 540, authorY);
+      ctx.fillText('— ' + (selectedCeleb.name), 540, authorY);
 
       const lineY = authorY + 28;
       const dg = ctx.createLinearGradient(260, 0, 820, 0);
-      dg.addColorStop(0, 'transparent');
-      dg.addColorStop(0.5, '#FFD700');
-      dg.addColorStop(1, 'transparent');
-      ctx.fillStyle = dg;
-      ctx.fillRect(260, lineY, 560, 1);
+      dg.addColorStop(0, 'transparent'); dg.addColorStop(0.5, '#FFD700'); dg.addColorStop(1, 'transparent');
+      ctx.fillStyle = dg; ctx.fillRect(260, lineY, 560, 1);
 
       const badgeY = Math.min(lineY + 36, 1720);
       drawGooglePlayBadge(ctx, 540, badgeY);
 
       const appY = badgeY + 110;
       if (logoImage && logoImage.width) {
-        const s = 36;
-        const ratio = logoImage.height / logoImage.width;
+        const s = 36; const ratio = logoImage.height / logoImage.width;
         ctx.drawImage(logoImage, 540 - 100, appY - 8, s, s * ratio);
       }
-      ctx.textAlign = 'left';
-      ctx.fillStyle = 'rgba(255,255,255,0.92)';
-      ctx.font = '800 26px "Bebas Neue", Impact, sans-serif';
+      ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.font = '800 26px "Bebas Neue", Impact, sans-serif';
       ctx.fillText('QUTTR APP', 540 - 50, appY + 22);
 
-      ctx.textAlign = 'center';
-      ctx.fillStyle = 'rgba(255,255,255,0.45)';
-      ctx.font = '500 18px system-ui, sans-serif';
-      ctx.fillText('Barber booking  ·  quttr.com', 540, appY + 52);
+      ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.font = '500 18px system-ui, sans-serif';
+      ctx.fillText('Barber booking  ·  quttrr.com/style', 540, appY + 52);
 
       setGeneratedCardUrl(canvas.toDataURL('image/jpeg', 0.95));
       setIsProcessing(false);
     };
-    img.onerror = () => {
-      setIsProcessing(false);
-      alert('Photo load failed. Try another image.');
-    };
+    img.onerror = () => { setIsProcessing(false); alert('Photo load failed. Try another image.'); };
     img.src = selectedImage;
   };
 
   useEffect(() => {
     if (selectedImage && fontsReady) generateCard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedImage, selectedCeleb, activeDialogue, fontsReady, logoImage]);
+  }, [selectedImage, selectedCeleb, activeDialogue, fontsReady, logoImage, userName]);
 
   // ==========================================
-  // FIXED SHARING FUNCTION (ALWAYS SENDS LINK)
+  // SHARING FUNCTION — Auto Includes Link
   // ==========================================
   const shareCard = async () => {
     if (!generatedCardUrl) return;
@@ -547,8 +459,8 @@ export default function QuttrStylePage() {
       const blob = await (await fetch(generatedCardUrl)).blob();
       const file = new File([blob], 'quttr-style.jpg', { type: 'image/jpeg' });
       
-      // We embed the link directly into the text so WhatsApp never drops it.
-      const shareText = 'मेरा Quttr Style पोस्टर 🔥 ऐप डाउनलोड करें: https://www.quttrr.com/style';
+      // ⭐ Embed the exact link to this page so others can make posters too!
+      const shareText = 'Make your own Poster & Greetings! 🔥\nClick here: https://www.quttrr.com/style';
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
@@ -557,18 +469,13 @@ export default function QuttrStylePage() {
           text: shareText,
         });
       } else if (navigator.share) {
-        // Fallback: Share link/text only, then download image to device
-        await navigator.share({
-          title: 'Quttr Style',
-          text: shareText,
-        });
+        await navigator.share({ title: 'Quttr Style', text: shareText });
         downloadImage();
       } else {
-        // Total fallback (Desktop)
         downloadImage();
       }
     } catch (e) {
-      console.log('Sharing failed or was cancelled:', e);
+      console.log('Sharing failed:', e);
     }
   };
 
@@ -579,17 +486,16 @@ export default function QuttrStylePage() {
     a.click();
   };
 
-  const tabs = ['Gita Updesh', 'Motivation', 'All', 'Cricketers', 'Bollywood', 'South Stars'];
-  const filtered =
-    activeTab === 'All' ? ALL_CELEBS : ALL_CELEBS.filter((c) => c.category === activeTab);
+  const tabs = ['Festivals', 'Greetings', 'Spiritual', 'Motivation', 'Cricketers', 'Bollywood'];
+  const filtered = activeTab === 'All' ? ALL_CELEBS : ALL_CELEBS.filter((c) => c.category === activeTab);
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white p-4 md:p-8">
+    <div className="min-h-screen bg-[#050505] text-white p-4 md:p-8 overflow-x-hidden">
       <canvas ref={canvasRef} className="hidden" />
 
       <header className="max-w-4xl mx-auto text-center my-6">
         <div className="inline-block bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-black text-xs px-4 py-1.5 rounded-full mb-3 tracking-widest">
-          ★ QUTTR PREMIUM POSTER ★
+          ★ QUTTR GREETINGS & POSTERS ★
         </div>
         <h1
           className="text-4xl md:text-6xl font-black tracking-tight"
@@ -597,50 +503,68 @@ export default function QuttrStylePage() {
         >
           BECOME A <span className="text-yellow-400">STAR</span>
         </h1>
-        <p className="text-slate-400 mt-2" style={{ fontFamily: 'Caveat, cursive', fontSize: 22 }}>
-          गीता उपदेश · मोटिवेशन · सेलिब्रिटी स्टाइल
+        <p className="text-slate-400 mt-2" style={{ fontFamily: 'Caveat, cursive', fontSize: 24 }}>
+          जन्माष्टमी · जन्मदिन · मोटिवेशन · बॉलीवुड
         </p>
 
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <button
             type="button"
-            onClick={() => selectQuickCategory('gita')}
+            onClick={() => selectQuickCategory('janmashtami')}
             className={
               'px-6 py-3 rounded-2xl font-black text-sm tracking-wide border-2 transition shadow-lg ' +
-              (selectedCeleb.id === 'gita'
-                ? 'bg-gradient-to-r from-orange-500 to-amber-600 border-orange-300 text-black scale-105'
-                : 'bg-orange-950/80 border-orange-500/50 text-orange-200 hover:border-orange-400')
-            }
-          >
-            🕉️ गीता उपदेश
-          </button>
-          <button
-            type="button"
-            onClick={() => selectQuickCategory('motivation')}
-            className={
-              'px-6 py-3 rounded-2xl font-black text-sm tracking-wide border-2 transition shadow-lg ' +
-              (selectedCeleb.id === 'motivation'
+              (selectedCeleb.id === 'janmashtami'
                 ? 'bg-gradient-to-r from-sky-400 to-blue-600 border-sky-300 text-black scale-105'
                 : 'bg-sky-950/80 border-sky-500/50 text-sky-200 hover:border-sky-400')
             }
           >
-            🔥 मोटिवेशनल कोट्स
+            🦚 जन्माष्टमी विश
+          </button>
+          <button
+            type="button"
+            onClick={() => selectQuickCategory('birthday')}
+            className={
+              'px-6 py-3 rounded-2xl font-black text-sm tracking-wide border-2 transition shadow-lg ' +
+              (selectedCeleb.id === 'birthday'
+                ? 'bg-gradient-to-r from-rose-400 to-red-600 border-rose-300 text-black scale-105'
+                : 'bg-rose-950/80 border-rose-500/50 text-rose-200 hover:border-rose-400')
+            }
+          >
+            🎂 हैप्पी बर्थडे
           </button>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-start">
+        
+        {/* LEFT COLUMN: Controls */}
         <div className="space-y-6 bg-gradient-to-b from-slate-900/80 to-slate-950/80 p-6 rounded-3xl border border-yellow-500/20 shadow-2xl">
+          
+          {/* Custom Name Input */}
           <div>
             <h2 className="text-lg font-black text-yellow-400 mb-3 tracking-wider" style={{ fontFamily: 'Bebas Neue' }}>
-              STEP 1 — YOUR PHOTO
+              STEP 1 — YOUR NAME
+            </h2>
+            <input 
+              type="text" 
+              placeholder="Enter your name (e.g. Rahul Sharma)"
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              className="w-full bg-slate-800 border-2 border-slate-700 focus:border-yellow-400 text-white rounded-xl px-4 py-3 outline-none transition font-semibold"
+            />
+          </div>
+
+          {/* Photo Upload */}
+          <div>
+            <h2 className="text-lg font-black text-yellow-400 mb-3 tracking-wider" style={{ fontFamily: 'Bebas Neue' }}>
+              STEP 2 — YOUR PHOTO
             </h2>
             {!cameraActive ? (
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-yellow-500 p-5 rounded-2xl flex flex-col items-center gap-2"
+                  className="bg-slate-800 hover:bg-slate-700 border-2 border-slate-700 hover:border-yellow-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition"
                 >
                   <span className="text-3xl">🖼️</span>
                   <span className="font-semibold text-sm">Upload Photo</span>
@@ -648,7 +572,7 @@ export default function QuttrStylePage() {
                 <button
                   type="button"
                   onClick={startCamera}
-                  className="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-yellow-500 p-5 rounded-2xl flex flex-col items-center gap-2"
+                  className="bg-slate-800 hover:bg-slate-700 border-2 border-slate-700 hover:border-yellow-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition"
                 >
                   <span className="text-3xl">📸</span>
                   <span className="font-semibold text-sm">Take Selfie</span>
@@ -657,7 +581,7 @@ export default function QuttrStylePage() {
             ) : (
               <div className="space-y-3">
                 <video ref={videoRef} autoPlay playsInline className="w-full rounded-2xl border-2 border-yellow-500" />
-                <button type="button" onClick={captureSelfie} className="w-full bg-rose-600 font-black py-4 rounded-xl">
+                <button type="button" onClick={captureSelfie} className="w-full bg-rose-600 font-black py-4 rounded-xl shadow-lg">
                   📸 CAPTURE
                 </button>
               </div>
@@ -665,95 +589,115 @@ export default function QuttrStylePage() {
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
           </div>
 
+          {/* Category / Style */}
           <div>
             <h2 className="text-lg font-black text-yellow-400 mb-3 tracking-wider" style={{ fontFamily: 'Bebas Neue' }}>
-              STEP 2 — STYLE / QUOTES
+              STEP 3 — STYLE / QUOTE
             </h2>
-            <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
+            <div className="flex gap-2 overflow-x-auto pb-2 mb-3 no-scrollbar">
               {tabs.map((cat) => (
                 <button
                   type="button"
                   key={cat}
                   onClick={() => {
                     setActiveTab(cat);
-                    if (cat === 'Gita Updesh') selectQuickCategory('gita');
-                    if (cat === 'Motivation') selectQuickCategory('motivation');
+                    if (cat === 'Festivals') selectQuickCategory('janmashtami');
+                    if (cat === 'Greetings') selectQuickCategory('birthday');
                   }}
                   className={
-                    'px-4 py-2 rounded-full text-xs font-black tracking-wider whitespace-nowrap transition ' +
+                    'px-4 py-2 rounded-full text-xs font-black tracking-wider whitespace-nowrap transition border ' +
                     (activeTab === cat
-                      ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-black'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700')
+                      ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-black border-yellow-300'
+                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700')
                   }
                 >
-                  {cat === 'Gita Updesh' ? '🕉️ GITA' : cat === 'Motivation' ? '🔥 MOTIVATION' : cat.toUpperCase()}
+                  {cat.toUpperCase()}
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-2">
+            
+            <div className="grid grid-cols-2 gap-3 max-h-56 overflow-y-auto pr-2 custom-scrollbar">
               {filtered.map((celeb) => (
                 <div
                   key={celeb.id}
                   onClick={() => setSelectedCeleb(celeb)}
                   className={
-                    'p-4 rounded-2xl cursor-pointer border-2 transition ' +
+                    'p-3 rounded-xl cursor-pointer border-2 transition ' +
                     (selectedCeleb.id === celeb.id
                       ? 'border-yellow-400 bg-yellow-400/10'
-                      : 'border-slate-800 bg-slate-800/60')
+                      : 'border-slate-800 bg-slate-800/60 hover:border-slate-600')
                   }
                 >
                   <div className="font-black text-sm">{celeb.name}</div>
-                  <div className="text-xs text-yellow-400 mt-1">{celeb.styleName}</div>
+                  <div className="text-xs text-yellow-400 mt-1 truncate">{celeb.styleName}</div>
                 </div>
               ))}
             </div>
           </div>
 
+          {/* Reroll Quote */}
           {selectedImage && (
             <button
               type="button"
               onClick={() => pickRandomDialogue(selectedCeleb)}
-              className="w-full bg-slate-800 border border-yellow-500/30 py-4 rounded-xl text-sm font-black hover:border-yellow-500"
+              className="w-full bg-slate-800 border-2 border-yellow-500/30 py-4 rounded-xl text-sm font-black hover:border-yellow-500 transition text-yellow-400"
             >
-              🎲 नया कोट / डायलॉग (हर क्लिक अलग)
+              🎲 नया मैसेज / कोट (New Message)
             </button>
           )}
         </div>
 
+        {/* RIGHT COLUMN: Live Preview */}
         <div className="flex flex-col items-center">
           {!selectedImage ? (
-            <div className="w-full aspect-[9/16] max-w-md rounded-3xl border-2 border-dashed border-yellow-500/30 flex flex-col items-center justify-center p-8 text-center text-slate-500">
-              <span className="text-6xl mb-4">🎬</span>
-              <p className="text-yellow-400 font-black" style={{ fontFamily: 'Bebas Neue' }}>
-                POSTER HERE
+            <div className="w-full aspect-[9/16] max-w-md rounded-3xl border-2 border-dashed border-yellow-500/30 bg-slate-900/50 flex flex-col items-center justify-center p-8 text-center text-slate-500 shadow-2xl">
+              <span className="text-6xl mb-4">🎨</span>
+              <p className="text-yellow-400 font-black text-2xl tracking-widest" style={{ fontFamily: 'Bebas Neue' }}>
+                LIVE PREVIEW
               </p>
-              <p className="text-sm mt-2">पहले ऊपर से गीता / मोटिवेशन चुनें</p>
+              <p className="text-sm mt-2 text-slate-400">अपना नाम लिखें और फोटो अपलोड करें</p>
             </div>
           ) : (
             <div className="w-full max-w-md relative">
               {isProcessing && (
                 <div className="absolute inset-0 z-10 bg-black/90 rounded-3xl flex flex-col items-center justify-center border border-yellow-500/40">
                   <div className="w-14 h-14 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin mb-3" />
-                  <p className="text-yellow-400 font-black">{loadingText}</p>
+                  <p className="text-yellow-400 font-black tracking-widest">{loadingText}</p>
                 </div>
               )}
+              
               {generatedCardUrl && (
-                <img src={generatedCardUrl} alt="Quttr" className="w-full rounded-3xl border border-yellow-500/20" />
+                <img 
+                  src={generatedCardUrl} 
+                  alt="Your Quttr Card" 
+                  className="w-full rounded-3xl border-4 border-slate-800 shadow-2xl" 
+                />
               )}
+
               {generatedCardUrl && !isProcessing && (
                 <button
                   type="button"
                   onClick={shareCard}
-                  className="w-full mt-4 bg-gradient-to-r from-emerald-500 to-green-600 text-black font-black py-5 rounded-2xl"
-                  style={{ fontFamily: 'Bebas Neue' }}
+                  className="w-full mt-6 bg-gradient-to-r from-emerald-500 to-green-600 text-black text-xl py-5 rounded-2xl shadow-lg hover:scale-[1.02] transition-transform flex items-center justify-center gap-3"
+                  style={{ fontFamily: 'Bebas Neue', letterSpacing: '2px' }}
                 >
-                  📤 SHARE WHATSAPP / INSTAGRAM
+                  <span>📤</span>
+                  <span>SHARE TO WHATSAPP & INSTA</span>
                 </button>
               )}
             </div>
           )}
         </div>
       </main>
+      
+      {/* Scrollbar styles for cleaner UI */}
+      <style dangerouslySetContent={`
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+      `} />
     </div>
   );
 }
