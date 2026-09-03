@@ -9,12 +9,8 @@ import {
 } from 'lucide-react';
 import { authService } from '../../../services/auth';
 
-// ─── UPDATED: Pointing to your live Render backend as fallback ───
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://quttr-backend.onrender.com/api/v1';
 
-// ─────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────
 function money(n) {
   return `₹${Number(n || 0).toLocaleString('en-IN')}`;
 }
@@ -27,12 +23,10 @@ function timeAgo(date) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
-// ─── UPDATED API CALL: Uses the exact token key from your auth service ───
 async function apiCall(path, options = {}) {
   let token = null;
   
   if (typeof window !== 'undefined') {
-    // This is the EXACT key your authService uses
     token = localStorage.getItem('quttr_admin_token');
   }
 
@@ -40,7 +34,6 @@ async function apiCall(path, options = {}) {
     throw new Error('Not logged in — please refresh or login again');
   }
 
-  // Remove "Bearer " prefix if accidentally saved that way
   token = token.replace(/^Bearer\s+/i, '');
 
   const res = await fetch(`${API_BASE}/commission${path}`, {
@@ -55,10 +48,10 @@ async function apiCall(path, options = {}) {
   const data = await res.json().catch(() => ({}));
 
   if (res.status === 401) {
-    throw new Error(data.message || 'Invalid or expired token — please login again');
+    throw new Error(data.message || 'Invalid or expired token');
   }
   if (res.status === 403) {
-    throw new Error(data.message || 'Access denied — You do not have permission for this action');
+    throw new Error(data.message || 'Access denied');
   }
 
   if (!res.ok || data.success === false) {
@@ -76,45 +69,35 @@ const TABS = [
   { id: 'audit', name: 'Audit Log', icon: ScrollText },
 ];
 
-// ═══════════════════════════════════════════════════
-// MAIN PAGE
-// ═══════════════════════════════════════════════════
 export default function CommissionPage() {
   const [tab, setTab] = useState('overview');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Overview
   const [summary, setSummary] = useState(null);
 
-  // Shops
   const [shops, setShops] = useState([]);
   const [shopQ, setShopQ] = useState('');
   const [shopFilter, setShopFilter] = useState('all');
   const [shopPage, setShopPage] = useState(1);
   const [shopPag, setShopPag] = useState({ totalPages: 1 });
 
-  // Bookings
   const [bookings, setBookings] = useState([]);
   const [bookPage, setBookPage] = useState(1);
   const [bookPag, setBookPag] = useState({ totalPages: 1 });
   const [bookFilter, setBookFilter] = useState('credited');
 
-  // Withdrawals
   const [withdrawals, setWithdrawals] = useState([]);
   const [wdStatus, setWdStatus] = useState('pending');
   const [wdPage, setWdPage] = useState(1);
   const [wdPag, setWdPag] = useState({ totalPages: 1 });
 
-  // Suspicious
   const [suspicious, setSuspicious] = useState([]);
 
-  // Audit
   const [audits, setAudits] = useState([]);
   const [auditPage, setAuditPage] = useState(1);
   const [auditPag, setAuditPag] = useState({ totalPages: 1 });
 
-  // Modal state
   const [editShop, setEditShop] = useState(null);
   const [editForm, setEditForm] = useState({
     commissionEnabled: false,
@@ -123,14 +106,12 @@ export default function CommissionPage() {
   });
   const [saving, setSaving] = useState(false);
 
-  // Toast
   const [toast, setToast] = useState(null);
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   };
 
-  // ─── LOADERS ───
   const loadSummary = useCallback(async () => {
     const d = await apiCall('/admin/summary');
     setSummary(d.data);
@@ -183,9 +164,6 @@ export default function CommissionPage() {
       if (tab === 'audit') await loadAudit();
     } catch (e) {
       setError(e.message || 'Failed to load');
-      if (e.message.includes('login again')) {
-        authService.logout();
-      }
     } finally {
       setLoading(false);
     }
@@ -195,7 +173,6 @@ export default function CommissionPage() {
     refresh();
   }, [refresh]);
 
-  // Debounced shop search
   useEffect(() => {
     if (tab !== 'shops') return;
     const t = setTimeout(() => {
@@ -205,7 +182,6 @@ export default function CommissionPage() {
     return () => clearTimeout(t);
   }, [shopQ]); // eslint-disable-line
 
-  // ─── ACTIONS ───
   const openEdit = (shop) => {
     setEditShop(shop);
     setEditForm({
@@ -286,7 +262,6 @@ export default function CommissionPage() {
     }
   };
 
-  // ─── UI ───
   const cards = useMemo(() => {
     const t = summary?.totals || {};
     return [
@@ -334,7 +309,6 @@ export default function CommissionPage() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* ─── HEADER ─── */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
@@ -355,7 +329,6 @@ export default function CommissionPage() {
         </button>
       </div>
 
-      {/* ─── TABS ─── */}
       <div className="flex gap-1 overflow-x-auto no-scrollbar p-1 rounded-xl bg-white/[0.03] border border-white/[0.06]">
         {TABS.map((t) => {
           const Icon = t.icon;
@@ -377,7 +350,6 @@ export default function CommissionPage() {
         })}
       </div>
 
-      {/* ─── ERROR ─── */}
       {error && (
         <div className="rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm text-error flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" />
@@ -385,14 +357,12 @@ export default function CommissionPage() {
         </div>
       )}
 
-      {/* ─── LOADING ─── */}
       {loading && (
         <div className="flex justify-center py-6">
           <Loader2 className="w-5 h-5 animate-spin text-accent-500" />
         </div>
       )}
 
-      {/* ═══════════ OVERVIEW ═══════════ */}
       {tab === 'overview' && summary && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {cards.map((c) => {
@@ -422,7 +392,6 @@ export default function CommissionPage() {
         </div>
       )}
 
-      {/* ═══════════ SHOPS ═══════════ */}
       {tab === 'shops' && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-3">
@@ -526,7 +495,6 @@ export default function CommissionPage() {
         </div>
       )}
 
-      {/* ═══════════ BOOKINGS ═══════════ */}
       {tab === 'bookings' && (
         <div className="space-y-4">
           <div className="flex gap-2 flex-wrap">
@@ -672,7 +640,6 @@ export default function CommissionPage() {
         </div>
       )}
 
-      {/* ═══════════ WITHDRAWALS ═══════════ */}
       {tab === 'withdrawals' && (
         <div className="space-y-4">
           <div className="flex gap-2 flex-wrap">
@@ -777,7 +744,6 @@ export default function CommissionPage() {
         </div>
       )}
 
-      {/* ═══════════ SUSPICIOUS ═══════════ */}
       {tab === 'suspicious' && (
         <div className="space-y-3">
           <div className="rounded-xl border border-warning/20 bg-warning/[0.05] p-4">
@@ -834,7 +800,6 @@ export default function CommissionPage() {
         </div>
       )}
 
-      {/* ═══════════ AUDIT ═══════════ */}
       {tab === 'audit' && (
         <div className="space-y-2">
           {audits.map((log) => {
@@ -895,7 +860,6 @@ export default function CommissionPage() {
         </div>
       )}
 
-      {/* ═══════════ EDIT MODAL ═══════════ */}
       {editShop && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 animate-fade-in">
           <div
@@ -1010,7 +974,6 @@ export default function CommissionPage() {
         </div>
       )}
 
-      {/* ─── TOAST ─── */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-[90] animate-slide-up">
           <div
@@ -1028,9 +991,6 @@ export default function CommissionPage() {
   );
 }
 
-// ═══════════════════════════════════════════════════
-// PAGINATION COMPONENT
-// ═══════════════════════════════════════════════════
 function Pager({ page, totalPages = 1, onChange }) {
   if (totalPages <= 1) return null;
   return (
