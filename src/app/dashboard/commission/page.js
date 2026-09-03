@@ -25,17 +25,13 @@ function timeAgo(date) {
 
 async function apiCall(path, options = {}) {
   let token = null;
-  
   if (typeof window !== 'undefined') {
     token = localStorage.getItem('quttr_admin_token');
   }
-
   if (!token || token === 'null' || token === 'undefined') {
     throw new Error('Not logged in — please refresh or login again');
   }
-
   token = token.replace(/^Bearer\s+/i, '');
-
   const res = await fetch(`${API_BASE}/commission${path}`, {
     ...options,
     headers: {
@@ -44,16 +40,9 @@ async function apiCall(path, options = {}) {
       ...(options.headers || {}),
     },
   });
-
   const data = await res.json().catch(() => ({}));
-
-  if (res.status === 401) {
-    throw new Error(data.message || 'Invalid or expired token');
-  }
-  if (res.status === 403) {
-    throw new Error(data.message || 'Access denied');
-  }
-
+  if (res.status === 401) throw new Error(data.message || 'Invalid or expired token');
+  if (res.status === 403) throw new Error(data.message || 'Access denied');
   if (!res.ok || data.success === false) {
     throw new Error(data.message || `Request failed (${res.status})`);
   }
@@ -105,6 +94,11 @@ export default function CommissionPage() {
     minWithdrawalAmount: 500,
   });
   const [saving, setSaving] = useState(false);
+
+  // ⭐ Per-service commission state
+  const [shopServices, setShopServices] = useState([]);
+  const [loadingServices, setLoadingServices] = useState(false);
+  const [savingServiceIdx, setSavingServiceIdx] = useState(null);
 
   const [toast, setToast] = useState(null);
   const showToast = (msg, type = 'success') => {
@@ -182,13 +176,31 @@ export default function CommissionPage() {
     return () => clearTimeout(t);
   }, [shopQ]); // eslint-disable-line
 
-  const openEdit = (shop) => {
+  // ⭐ Open Configure + load services
+  const openEdit = async (shop) => {
     setEditShop(shop);
     setEditForm({
       commissionEnabled: !!shop.commissionEnabled,
       commissionPercent: shop.commissionPercent || 0,
       minWithdrawalAmount: shop.minWithdrawalAmount || 500,
     });
+    setShopServices([]);
+    setLoadingServices(true);
+    try {
+      const d = await apiCall(`/admin/shops/${shop._id}/services`);
+      setShopServices(d.data?.services || []);
+      if (d.data) {
+        setEditForm({
+          commissionEnabled: !!d.data.commissionEnabled,
+          commissionPercent: d.data.commissionPercent || 0,
+          minWithdrawalAmount: d.data.minWithdrawalAmount || 500,
+        });
+      }
+    } catch (e) {
+      showToast(e.message, 'error');
+    } finally {
+      setLoadingServices(false);
+    }
   };
 
   const saveShopCommission = async () => {
@@ -200,13 +212,39 @@ export default function CommissionPage() {
         body: JSON.stringify({ shopId: editShop._id, ...editForm }),
       });
       showToast('Commission settings saved ✓');
-      setEditShop(null);
+      // Reload services after master change (so gate reflects fresh state)
+      try {
+        const d = await apiCall(`/admin/shops/${editShop._id}/services`);
+        setShopServices(d.data?.services || []);
+      } catch (_) {}
       await loadShops();
       loadSummary().catch(() => {});
     } catch (e) {
       showToast(e.message, 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // ⭐ Toggle one service
+  const toggleServiceCommission = async (serviceIndex, enabled) => {
+    if (!editShop) return;
+    setSavingServiceIdx(serviceIndex);
+    try {
+      const d = await apiCall('/admin/set-service-commission', {
+        method: 'POST',
+        body: JSON.stringify({
+          shopId: editShop._id,
+          serviceIndex,
+          commissionEnabled: enabled,
+        }),
+      });
+      setShopServices(d.data?.services || []);
+      showToast(enabled ? 'Service commission ON ✓' : 'Service commission OFF ✓');
+    } catch (e) {
+      showToast(e.message, 'error');
+    } finally {
+      setSavingServiceIdx(null);
     }
   };
 
@@ -230,7 +268,6 @@ export default function CommissionPage() {
   const processWd = async (wd, action) => {
     let rejectionReason = '';
     let transactionReference = '';
-
     if (action === 'reject') {
       rejectionReason = prompt('Rejection reason?');
       if (!rejectionReason) return;
@@ -240,7 +277,6 @@ export default function CommissionPage() {
       );
       if (!transactionReference) return;
     }
-
     try {
       const d = await apiCall('/admin/process-withdrawal', {
         method: 'POST',
@@ -265,47 +301,16 @@ export default function CommissionPage() {
   const cards = useMemo(() => {
     const t = summary?.totals || {};
     return [
-      {
-        label: 'Enabled Shops',
-        value: summary?.enabledShops ?? '—',
-        icon: Store,
-        color: 'from-accent-500 to-accent-700',
-      },
-      {
-        label: 'Pending Withdrawals',
-        value: summary?.pendingWithdrawals ?? '—',
-        icon: Banknote,
-        color: 'from-warning to-yellow-600',
-        highlight: (summary?.pendingWithdrawals || 0) > 0,
-      },
-      {
-        label: 'Credited Today',
-        value: summary?.creditedToday ?? '—',
-        icon: TrendingUp,
-        color: 'from-success to-green-600',
-      },
-      {
-        label: 'Fake Flags',
-        value: summary?.fakeFlags ?? '—',
-        icon: ShieldAlert,
-        color: 'from-error to-red-700',
-      },
-      {
-        label: 'Lifetime Earned',
-        value: money(t.totalEarned),
-        icon: DollarSign,
-        color: 'from-brand-500 to-brand-700',
-        wide: true,
-      },
-      {
-        label: 'Total Withdrawn',
-        value: money(t.totalWithdrawn),
-        icon: Wallet,
-        color: 'from-business-500 to-business-800',
-        wide: true,
-      },
+      { label: 'Enabled Shops', value: summary?.enabledShops ?? '—', icon: Store, color: 'from-accent-500 to-accent-700' },
+      { label: 'Pending Withdrawals', value: summary?.pendingWithdrawals ?? '—', icon: Banknote, color: 'from-warning to-yellow-600', highlight: (summary?.pendingWithdrawals || 0) > 0 },
+      { label: 'Credited Today', value: summary?.creditedToday ?? '—', icon: TrendingUp, color: 'from-success to-green-600' },
+      { label: 'Fake Flags', value: summary?.fakeFlags ?? '—', icon: ShieldAlert, color: 'from-error to-red-700' },
+      { label: 'Lifetime Earned', value: money(t.totalEarned), icon: DollarSign, color: 'from-brand-500 to-brand-700', wide: true },
+      { label: 'Total Withdrawn', value: money(t.totalWithdrawn), icon: Wallet, color: 'from-business-500 to-business-800', wide: true },
     ];
   }, [summary]);
+
+  const enabledServiceCount = shopServices.filter((s) => s.commissionEnabled).length;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -316,13 +321,12 @@ export default function CommissionPage() {
             Commission Control
           </h1>
           <p className="text-sm text-white/40 mt-1">
-            Owner-only commissions · Staff services credit the shop owner · Silent fraud checks
+            Owner-only commissions · Per-service toggles · Silent fraud checks
           </p>
         </div>
         <button
           onClick={refresh}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-sm hover:bg-white/[0.08] transition-colors"
-          title="Refresh"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Refresh
@@ -356,7 +360,6 @@ export default function CommissionPage() {
           {error}
         </div>
       )}
-
       {loading && (
         <div className="flex justify-center py-6">
           <Loader2 className="w-5 h-5 animate-spin text-accent-500" />
@@ -379,9 +382,7 @@ export default function CommissionPage() {
                 <div className={`absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-10 bg-gradient-to-br ${c.color}`} />
                 <div className="relative flex items-start justify-between">
                   <div>
-                    <p className="text-2xs uppercase tracking-widest text-white/35 font-semibold">
-                      {c.label}
-                    </p>
+                    <p className="text-2xs uppercase tracking-widest text-white/35 font-semibold">{c.label}</p>
                     <p className="text-2xl font-bold mt-2">{c.value}</p>
                   </div>
                   <Icon className="w-5 h-5 text-white/30" />
@@ -408,10 +409,7 @@ export default function CommissionPage() {
               {['all', 'enabled', 'disabled'].map((f) => (
                 <button
                   key={f}
-                  onClick={() => {
-                    setShopFilter(f);
-                    setShopPage(1);
-                  }}
+                  onClick={() => { setShopFilter(f); setShopPage(1); }}
                   className={`px-3 py-2 rounded-lg text-xs font-semibold capitalize border transition-colors ${
                     shopFilter === f
                       ? 'border-accent-500/40 bg-accent-500/15 text-accent-500'
@@ -439,10 +437,7 @@ export default function CommissionPage() {
                 </thead>
                 <tbody>
                   {shops.map((s) => (
-                    <tr
-                      key={s._id}
-                      className="border-t border-white/[0.05] hover:bg-white/[0.02] transition-colors"
-                    >
+                    <tr key={s._id} className="border-t border-white/[0.05] hover:bg-white/[0.02] transition-colors">
                       <td className="px-4 py-3">
                         <div className="font-medium">{s.name}</div>
                         <div className="text-xs text-white/40 mt-0.5">
@@ -452,22 +447,17 @@ export default function CommissionPage() {
                       <td className="px-4 py-3">
                         {s.commissionEnabled ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-success/15 text-success text-xs font-bold">
-                            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                            ON
+                            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" /> ON
                           </span>
                         ) : (
                           <span className="text-white/30 text-xs">Off</span>
                         )}
                       </td>
                       <td className="px-4 py-3 font-mono">{s.commissionPercent || 0}%</td>
-                      <td className="px-4 py-3 font-mono text-xs">
-                        {money(s.minWithdrawalAmount || 500)}
-                      </td>
+                      <td className="px-4 py-3 font-mono text-xs">{money(s.minWithdrawalAmount || 500)}</td>
                       <td className="px-4 py-3 text-xs text-white/60">
                         <div>Earned: {money(s.ownerWallet?.totalEarned)}</div>
-                        <div className="text-accent-500">
-                          Avail: {money(s.ownerWallet?.withdrawableBalance)}
-                        </div>
+                        <div className="text-accent-500">Avail: {money(s.ownerWallet?.withdrawableBalance)}</div>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
@@ -481,9 +471,7 @@ export default function CommissionPage() {
                   ))}
                   {shops.length === 0 && !loading && (
                     <tr>
-                      <td colSpan={6} className="px-4 py-16 text-center text-white/30">
-                        No shops found
-                      </td>
+                      <td colSpan={6} className="px-4 py-16 text-center text-white/30">No shops found</td>
                     </tr>
                   )}
                 </tbody>
@@ -505,10 +493,7 @@ export default function CommissionPage() {
             ].map((f) => (
               <button
                 key={f.id}
-                onClick={() => {
-                  setBookFilter(f.id);
-                  setBookPage(1);
-                }}
+                onClick={() => { setBookFilter(f.id); setBookPage(1); }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
                   bookFilter === f.id
                     ? 'border-accent-500/40 bg-accent-500/15 text-accent-500'
@@ -535,60 +520,32 @@ export default function CommissionPage() {
                 </thead>
                 <tbody>
                   {bookings.map((b) => {
-                    const gap =
-                      b.actualStartTime || b.completedAt
-                        ? (
-                            (new Date(b.actualStartTime || b.completedAt) -
-                              new Date(b.createdAt)) /
-                            60000
-                          ).toFixed(1)
-                        : '—';
+                    const gap = b.actualStartTime || b.completedAt
+                      ? ((new Date(b.actualStartTime || b.completedAt) - new Date(b.createdAt)) / 60000).toFixed(1)
+                      : '—';
                     return (
-                      <tr
-                        key={b._id}
-                        className="border-t border-white/[0.05] hover:bg-white/[0.02]"
-                      >
+                      <tr key={b._id} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
                         <td className="px-4 py-3">
-                          <div className="font-medium font-mono">
-                            {b.queueNumber || `#${b._id.slice(-6)}`}
-                          </div>
+                          <div className="font-medium font-mono">{b.queueNumber || `#${b._id.slice(-6)}`}</div>
                           <div className="text-xs text-white/40">{b.service?.name}</div>
                           <div className="text-xs text-white/30">{money(b.service?.price)}</div>
                         </td>
                         <td className="px-4 py-3">
                           <div className="text-xs">{b.shop?.name}</div>
-                          <div className="text-2xs text-white/40 mt-0.5">
-                            Staff: {b.staff?.name || '—'}
-                          </div>
+                          <div className="text-2xs text-white/40 mt-0.5">Staff: {b.staff?.name || '—'}</div>
                         </td>
                         <td className="px-4 py-3">
                           <div className="text-xs">{b.customer?.name || '—'}</div>
-                          <div className="text-2xs text-white/40 mt-0.5">
-                            {b.customer?.phone || '—'}
-                          </div>
+                          <div className="text-2xs text-white/40 mt-0.5">{b.customer?.phone || '—'}</div>
                         </td>
                         <td className="px-4 py-3 text-2xs">
                           <div className="flex flex-col gap-0.5">
-                            <span
-                              className={
-                                b.bookingLocation?.distanceFromShop >= 200
-                                  ? 'text-success'
-                                  : 'text-error'
-                              }
-                            >
-                              📍{' '}
-                              {b.bookingLocation?.distanceFromShop != null
-                                ? `${b.bookingLocation.distanceFromShop}m`
-                                : 'no gps'}
+                            <span className={b.bookingLocation?.distanceFromShop >= 200 ? 'text-success' : 'text-error'}>
+                              📍 {b.bookingLocation?.distanceFromShop != null ? `${b.bookingLocation.distanceFromShop}m` : 'no gps'}
                             </span>
-                            <span className={gap >= 5 ? 'text-success' : 'text-error'}>
-                              ⏱ {gap} min gap
-                            </span>
+                            <span className={gap >= 5 ? 'text-success' : 'text-error'}>⏱ {gap} min gap</span>
                             {b.fraudReason && (
-                              <span
-                                className="text-warning max-w-[160px] truncate"
-                                title={b.fraudReason}
-                              >
+                              <span className="text-warning max-w-[160px] truncate" title={b.fraudReason}>
                                 {b.fraudReason}
                               </span>
                             )}
@@ -596,17 +553,11 @@ export default function CommissionPage() {
                         </td>
                         <td className="px-4 py-3">
                           {b.commissionFraudFlag ? (
-                            <span className="inline-flex px-2 py-0.5 rounded-full bg-error/15 text-error text-2xs font-bold">
-                              FAKE
-                            </span>
+                            <span className="inline-flex px-2 py-0.5 rounded-full bg-error/15 text-error text-2xs font-bold">FAKE</span>
                           ) : b.commissionCredited ? (
                             <div>
-                              <div className="text-success text-xs font-bold">
-                                {money(b.commissionAmount)}
-                              </div>
-                              <div className="text-2xs text-white/40">
-                                {b.commissionPercent}%
-                              </div>
+                              <div className="text-success text-xs font-bold">{money(b.commissionAmount)}</div>
+                              <div className="text-2xs text-white/40">{b.commissionPercent}%</div>
                             </div>
                           ) : (
                             <span className="text-white/30 text-2xs">Not credited</span>
@@ -627,9 +578,7 @@ export default function CommissionPage() {
                   })}
                   {bookings.length === 0 && !loading && (
                     <tr>
-                      <td colSpan={6} className="px-4 py-16 text-center text-white/30">
-                        No bookings
-                      </td>
+                      <td colSpan={6} className="px-4 py-16 text-center text-white/30">No bookings</td>
                     </tr>
                   )}
                 </tbody>
@@ -646,10 +595,7 @@ export default function CommissionPage() {
             {['pending', 'approved', 'rejected'].map((s) => (
               <button
                 key={s}
-                onClick={() => {
-                  setWdStatus(s);
-                  setWdPage(1);
-                }}
+                onClick={() => { setWdStatus(s); setWdPage(1); }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border capitalize transition-colors ${
                   wdStatus === s
                     ? 'border-accent-500/40 bg-accent-500/15 text-accent-500'
@@ -663,10 +609,7 @@ export default function CommissionPage() {
 
           <div className="space-y-3">
             {withdrawals.map((w) => (
-              <div
-                key={w._id}
-                className="rounded-2xl border border-white/[0.06] bg-surface-100/50 p-4 backdrop-blur"
-              >
+              <div key={w._id} className="rounded-2xl border border-white/[0.06] bg-surface-100/50 p-4 backdrop-blur">
                 <div className="flex flex-col lg:flex-row lg:items-center gap-4 justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
@@ -692,14 +635,10 @@ export default function CommissionPage() {
                       🕐 {new Date(w.createdAt).toLocaleString('en-IN')} · {timeAgo(w.createdAt)}
                     </div>
                     {w.rejectionReason && (
-                      <div className="text-xs text-error mt-2">
-                        Rejected: {w.rejectionReason}
-                      </div>
+                      <div className="text-xs text-error mt-2">Rejected: {w.rejectionReason}</div>
                     )}
                     {w.transactionReference && w.status === 'approved' && (
-                      <div className="text-xs text-success mt-2">
-                        Ref: {w.transactionReference}
-                      </div>
+                      <div className="text-xs text-success mt-2">Ref: {w.transactionReference}</div>
                     )}
                   </div>
 
@@ -752,12 +691,8 @@ export default function CommissionPage() {
               Auto-Detection: Same customer completing 3+ bookings at same shop within 24 hours
             </p>
           </div>
-
           {suspicious.map((a, idx) => (
-            <div
-              key={idx}
-              className="rounded-xl border border-warning/20 bg-warning/[0.03] p-4 hover:bg-warning/[0.06] transition-colors"
-            >
+            <div key={idx} className="rounded-xl border border-warning/20 bg-warning/[0.03] p-4 hover:bg-warning/[0.06] transition-colors">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
@@ -766,25 +701,18 @@ export default function CommissionPage() {
                     <span className="text-sm font-semibold">{money(a.totalPaid)} total</span>
                   </div>
                   <div className="text-sm mt-2">
-                    <span className="text-white/70">Shop:</span>{' '}
-                    <span className="font-medium">{a.shopName || 'Unknown'}</span>
+                    <span className="text-white/70">Shop:</span> <span className="font-medium">{a.shopName || 'Unknown'}</span>
                   </div>
                   <div className="text-sm">
-                    <span className="text-white/70">Customer:</span>{' '}
-                    <span className="font-medium">{a.customerName || 'Unknown'}</span>
-                    {a.customerPhone && (
-                      <span className="text-white/40 text-xs ml-2">({a.customerPhone})</span>
-                    )}
+                    <span className="text-white/70">Customer:</span> <span className="font-medium">{a.customerName || 'Unknown'}</span>
+                    {a.customerPhone && (<span className="text-white/40 text-xs ml-2">({a.customerPhone})</span>)}
                   </div>
                   <div className="text-2xs text-white/30 mt-2 font-mono">
                     IDs: {(a.bookingIds || []).map((id) => id.toString().slice(-6)).join(', ')}
                   </div>
                 </div>
                 <button
-                  onClick={() => {
-                    setBookFilter('credited');
-                    setTab('bookings');
-                  }}
+                  onClick={() => { setBookFilter('credited'); setTab('bookings'); }}
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] transition-colors"
                 >
                   Investigate
@@ -812,37 +740,19 @@ export default function CommissionPage() {
                 ? 'bg-warning/15 text-warning border-warning/20'
                 : 'bg-accent-500/15 text-accent-500 border-accent-500/20';
             return (
-              <div
-                key={log._id}
-                className="rounded-xl border border-white/[0.06] p-4 bg-surface-100/40 hover:bg-surface-100/60 transition-colors"
-              >
+              <div key={log._id} className="rounded-xl border border-white/[0.06] p-4 bg-surface-100/40 hover:bg-surface-100/60 transition-colors">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <span
-                    className={`inline-flex px-2 py-1 rounded-md text-2xs font-bold border ${badge}`}
-                  >
-                    {log.action}
-                  </span>
-                  <div className="text-2xs text-white/30 font-mono">
-                    {new Date(log.createdAt).toLocaleString('en-IN')}
-                  </div>
+                  <span className={`inline-flex px-2 py-1 rounded-md text-2xs font-bold border ${badge}`}>{log.action}</span>
+                  <div className="text-2xs text-white/30 font-mono">{new Date(log.createdAt).toLocaleString('en-IN')}</div>
                 </div>
                 <div className="text-sm mt-2">
                   <span className="text-white/70">By:</span>{' '}
-                  <span className="font-medium">
-                    {log.adminName || log.admin?.name || 'Admin'}
-                  </span>
-                  {log.reason && (
-                    <>
-                      <span className="text-white/40 mx-2">·</span>
-                      <span className="text-white/80">{log.reason}</span>
-                    </>
-                  )}
+                  <span className="font-medium">{log.adminName || log.admin?.name || 'Admin'}</span>
+                  {log.reason && (<><span className="text-white/40 mx-2">·</span><span className="text-white/80">{log.reason}</span></>)}
                 </div>
                 {log.details && (
                   <details className="mt-2">
-                    <summary className="text-2xs text-white/40 cursor-pointer hover:text-white/60">
-                      Details
-                    </summary>
+                    <summary className="text-2xs text-white/40 cursor-pointer hover:text-white/60">Details</summary>
                     <pre className="text-2xs text-white/40 mt-2 p-2 rounded bg-black/40 overflow-x-auto">
                       {JSON.stringify(log.details, null, 2)}
                     </pre>
@@ -860,39 +770,30 @@ export default function CommissionPage() {
         </div>
       )}
 
+      {/* ═══════════ EDIT MODAL ═══════════ */}
       {editShop && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 animate-fade-in">
-          <div
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            onClick={() => setEditShop(null)}
-          />
-          <div className="relative w-full max-w-md rounded-2xl border border-white/[0.08] bg-surface-100 p-6 shadow-elevation-4 animate-scale-in">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setEditShop(null)} />
+          <div className="relative w-full max-w-lg rounded-2xl border border-white/[0.08] bg-surface-100 p-6 shadow-elevation-4 animate-scale-in max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between mb-1">
               <div>
                 <h3 className="text-lg font-bold">Configure Commission</h3>
                 <p className="text-sm text-white/40 mt-1">{editShop.name}</p>
-                <p className="text-xs text-white/30 mt-0.5">
-                  Owner: {editShop.owner?.name || '—'}
-                </p>
+                <p className="text-xs text-white/30 mt-0.5">Owner: {editShop.owner?.name || '—'}</p>
               </div>
-              <button
-                onClick={() => setEditShop(null)}
-                className="p-1 rounded-lg hover:bg-white/10"
-              >
+              <button onClick={() => setEditShop(null)} className="p-1 rounded-lg hover:bg-white/10">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <button
-              onClick={() =>
-                setEditForm((f) => ({ ...f, commissionEnabled: !f.commissionEnabled }))
-              }
+              onClick={() => setEditForm((f) => ({ ...f, commissionEnabled: !f.commissionEnabled }))}
               className="mt-5 w-full flex items-center justify-between px-4 py-3.5 rounded-xl bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.06] transition-colors"
             >
               <div className="text-left">
-                <div className="text-sm font-medium">Enable commission</div>
+                <div className="text-sm font-medium">Enable commission (shop master)</div>
                 <div className="text-2xs text-white/40 mt-0.5">
-                  Owner will start earning from valid bookings
+                  Turn ON to allow any per-service commission
                 </div>
               </div>
               {editForm.commissionEnabled ? (
@@ -914,45 +815,104 @@ export default function CommissionPage() {
                   step="0.1"
                   value={editForm.commissionPercent}
                   onChange={(e) =>
-                    setEditForm((f) => ({
-                      ...f,
-                      commissionPercent: parseFloat(e.target.value) || 0,
-                    }))
+                    setEditForm((f) => ({ ...f, commissionPercent: parseFloat(e.target.value) || 0 }))
                   }
                   className="w-full pl-3 pr-8 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm outline-none focus:border-accent-500/40"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 text-sm">
-                  %
-                </span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 text-sm">%</span>
               </div>
             </div>
 
             <div className="mt-4">
-              <label className="block text-xs text-white/50 mb-1.5 font-medium">
-                Minimum Withdrawal Amount
-              </label>
+              <label className="block text-xs text-white/50 mb-1.5 font-medium">Minimum Withdrawal Amount</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm">
-                  ₹
-                </span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm">₹</span>
                 <input
                   type="number"
                   min={0}
                   value={editForm.minWithdrawalAmount}
                   onChange={(e) =>
-                    setEditForm((f) => ({
-                      ...f,
-                      minWithdrawalAmount: parseFloat(e.target.value) || 0,
-                    }))
+                    setEditForm((f) => ({ ...f, minWithdrawalAmount: parseFloat(e.target.value) || 0 }))
                   }
                   className="w-full pl-8 pr-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm outline-none focus:border-accent-500/40"
                 />
               </div>
             </div>
 
+            {/* ⭐ PER-SERVICE TOGGLES */}
+            <div className="mt-5">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs text-white/50 font-medium">Services eligible for commission</label>
+                <span className="text-2xs text-white/30">
+                  {enabledServiceCount}/{shopServices.length} ON
+                </span>
+              </div>
+
+              {!editForm.commissionEnabled && (
+                <div className="mb-2 text-2xs text-warning/80 px-2">
+                  ⚠ Turn on shop master switch above first — then enable individual services.
+                </div>
+              )}
+
+              {loadingServices ? (
+                <div className="py-6 flex justify-center">
+                  <Loader2 className="w-4 h-4 animate-spin text-accent-500" />
+                </div>
+              ) : shopServices.length === 0 ? (
+                <div className="text-xs text-white/30 py-4 text-center border border-white/[0.06] rounded-xl">
+                  No services on this shop
+                </div>
+              ) : (
+                <div className="max-h-56 overflow-y-auto space-y-2 pr-1 rounded-xl border border-white/[0.06] p-2 bg-white/[0.02]">
+                  {shopServices.map((svc) => (
+                    <div
+                      key={svc.index}
+                      className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border transition-colors ${
+                        svc.commissionEnabled
+                          ? 'border-success/30 bg-success/[0.06]'
+                          : 'border-white/[0.06] bg-white/[0.02]'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">{svc.name}</div>
+                        <div className="text-2xs text-white/40">
+                          ₹{svc.price} · {svc.duration}m
+                          {svc.category ? ` · ${svc.category}` : ''}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={savingServiceIdx === svc.index || !editForm.commissionEnabled}
+                        onClick={() => toggleServiceCommission(svc.index, !svc.commissionEnabled)}
+                        className="flex-shrink-0 disabled:opacity-40"
+                        title={
+                          !editForm.commissionEnabled
+                            ? 'Enable shop commission first'
+                            : svc.commissionEnabled
+                            ? 'Disable for this service'
+                            : 'Enable for this service'
+                        }
+                      >
+                        {savingServiceIdx === svc.index ? (
+                          <Loader2 className="w-6 h-6 animate-spin text-white/40" />
+                        ) : svc.commissionEnabled ? (
+                          <ToggleRight className="w-8 h-8 text-success" />
+                        ) : (
+                          <ToggleLeft className="w-8 h-8 text-white/30" />
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-2xs text-white/30 mt-2">
+                Only completed bookings for <span className="text-white/50">ON</span> services earn commission.
+                Multi-service bookings (e.g. Haircut + Beard) earn if at least one service is ON.
+              </p>
+            </div>
+
             <div className="mt-6 p-3 rounded-xl bg-warning/[0.05] border border-warning/20 text-2xs text-warning/80">
-              ⚠ All changes are logged in Audit Log with your admin identity, IP address, and
-              timestamp
+              ⚠ All changes are logged in Audit Log with your admin identity, IP address, and timestamp
             </div>
 
             <div className="flex gap-2 mt-5">
@@ -960,14 +920,14 @@ export default function CommissionPage() {
                 onClick={() => setEditShop(null)}
                 className="flex-1 py-2.5 rounded-xl border border-white/10 text-sm text-white/60 hover:bg-white/[0.04] transition-colors"
               >
-                Cancel
+                Close
               </button>
               <button
                 onClick={saveShopCommission}
                 disabled={saving}
                 className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-brand-500 to-brand-700 text-sm font-bold shadow-brand disabled:opacity-50"
               >
-                {saving ? 'Saving…' : 'Save'}
+                {saving ? 'Saving…' : 'Save Master'}
               </button>
             </div>
           </div>
@@ -1002,9 +962,7 @@ function Pager({ page, totalPages = 1, onChange }) {
       >
         ← Prev
       </button>
-      <span className="text-xs text-white/40 px-3">
-        Page {page} of {totalPages}
-      </span>
+      <span className="text-xs text-white/40 px-3">Page {page} of {totalPages}</span>
       <button
         disabled={page >= totalPages}
         onClick={() => onChange(page + 1)}
