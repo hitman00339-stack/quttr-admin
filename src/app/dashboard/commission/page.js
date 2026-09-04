@@ -5,7 +5,7 @@ import {
   Wallet, Store, Calendar, Banknote, ShieldAlert, ScrollText,
   Search, RefreshCw, CheckCircle2, XCircle, AlertTriangle,
   ToggleLeft, ToggleRight, FileText, Loader2, TrendingUp,
-  DollarSign, X,
+  DollarSign, X, Zap,
 } from 'lucide-react';
 import { authService } from '../../../services/auth';
 
@@ -74,7 +74,7 @@ export default function CommissionPage() {
   const [bookings, setBookings] = useState([]);
   const [bookPage, setBookPage] = useState(1);
   const [bookPag, setBookPag] = useState({ totalPages: 1 });
-  const [bookFilter, setBookFilter] = useState('credited');
+  const [bookFilter, setBookFilter] = useState('all');
 
   const [withdrawals, setWithdrawals] = useState([]);
   const [wdStatus, setWdStatus] = useState('pending');
@@ -95,10 +95,10 @@ export default function CommissionPage() {
   });
   const [saving, setSaving] = useState(false);
 
-  // ⭐ Per-service commission state
   const [shopServices, setShopServices] = useState([]);
   const [loadingServices, setLoadingServices] = useState(false);
   const [savingServiceIdx, setSavingServiceIdx] = useState(null);
+  const [recalculatingId, setRecalculatingId] = useState(null);
 
   const [toast, setToast] = useState(null);
   const showToast = (msg, type = 'success') => {
@@ -176,7 +176,6 @@ export default function CommissionPage() {
     return () => clearTimeout(t);
   }, [shopQ]); // eslint-disable-line
 
-  // ⭐ Open Configure + load services
   const openEdit = async (shop) => {
     setEditShop(shop);
     setEditForm({
@@ -212,7 +211,6 @@ export default function CommissionPage() {
         body: JSON.stringify({ shopId: editShop._id, ...editForm }),
       });
       showToast('Commission settings saved ✓');
-      // Reload services after master change (so gate reflects fresh state)
       try {
         const d = await apiCall(`/admin/shops/${editShop._id}/services`);
         setShopServices(d.data?.services || []);
@@ -226,7 +224,6 @@ export default function CommissionPage() {
     }
   };
 
-  // ⭐ Toggle one service
   const toggleServiceCommission = async (serviceIndex, enabled) => {
     if (!editShop) return;
     setSavingServiceIdx(serviceIndex);
@@ -245,6 +242,24 @@ export default function CommissionPage() {
       showToast(e.message, 'error');
     } finally {
       setSavingServiceIdx(null);
+    }
+  };
+
+  // ⭐ 1-CLICK RECALCULATE / CREDIT NOW
+  const recalculateBooking = async (bookingId) => {
+    setRecalculatingId(bookingId);
+    try {
+      const res = await apiCall('/admin/recalculate-booking', {
+        method: 'POST',
+        body: JSON.stringify({ bookingId }),
+      });
+      showToast(res.message, res.message.includes('Credited') ? 'success' : 'error');
+      await loadBookings();
+      loadSummary().catch(() => {});
+    } catch (e) {
+      showToast(e.message, 'error');
+    } finally {
+      setRecalculatingId(null);
     }
   };
 
@@ -487,8 +502,8 @@ export default function CommissionPage() {
         <div className="space-y-4">
           <div className="flex gap-2 flex-wrap">
             {[
-              { id: 'credited', label: 'Credited' },
               { id: 'all', label: 'All completed' },
+              { id: 'credited', label: 'Credited (>₹0)' },
               { id: 'fake', label: 'Marked fake' },
             ].map((f) => (
               <button
@@ -523,6 +538,8 @@ export default function CommissionPage() {
                     const gap = b.actualStartTime || b.completedAt
                       ? ((new Date(b.actualStartTime || b.completedAt) - new Date(b.createdAt)) / 60000).toFixed(1)
                       : '—';
+                    const isZeroCredit = b.commissionAmount <= 0;
+
                     return (
                       <tr key={b._id} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
                         <td className="px-4 py-3">
@@ -554,24 +571,45 @@ export default function CommissionPage() {
                         <td className="px-4 py-3">
                           {b.commissionFraudFlag ? (
                             <span className="inline-flex px-2 py-0.5 rounded-full bg-error/15 text-error text-2xs font-bold">FAKE</span>
-                          ) : b.commissionCredited ? (
+                          ) : b.commissionCredited && b.commissionAmount > 0 ? (
                             <div>
                               <div className="text-success text-xs font-bold">{money(b.commissionAmount)}</div>
                               <div className="text-2xs text-white/40">{b.commissionPercent}%</div>
                             </div>
                           ) : (
-                            <span className="text-white/30 text-2xs">Not credited</span>
+                            <div>
+                              <span className="text-white/30 text-2xs">₹0 (0%)</span>
+                            </div>
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {!b.commissionFraudFlag && (
-                            <button
-                              onClick={() => markFake(b)}
-                              className="px-3 py-1.5 rounded-lg text-2xs font-semibold bg-error/10 text-error border border-error/20 hover:bg-error/20 transition-colors"
-                            >
-                              Mark Fake
-                            </button>
-                          )}
+                          <div className="flex items-center justify-end gap-2">
+                            {/* ⭐ 1-CLICK RECALCULATE / CREDIT NOW BUTTON */}
+                            {isZeroCredit && !b.commissionFraudFlag && (
+                              <button
+                                onClick={() => recalculateBooking(b._id)}
+                                disabled={recalculatingId === b._id}
+                                className="px-2.5 py-1.5 rounded-lg text-2xs font-bold bg-accent-500/15 text-accent-500 border border-accent-500/30 hover:bg-accent-500/25 transition-colors flex items-center gap-1 disabled:opacity-40"
+                                title="Click to recalculate and credit commission now"
+                              >
+                                {recalculatingId === b._id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <Zap className="w-3 h-3 text-accent-500" />
+                                )}
+                                Credit Now
+                              </button>
+                            )}
+
+                            {!b.commissionFraudFlag && (
+                              <button
+                                onClick={() => markFake(b)}
+                                className="px-2.5 py-1.5 rounded-lg text-2xs font-semibold bg-error/10 text-error border border-error/20 hover:bg-error/20 transition-colors"
+                              >
+                                Mark Fake
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -712,7 +750,7 @@ export default function CommissionPage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => { setBookFilter('credited'); setTab('bookings'); }}
+                  onClick={() => { setBookFilter('all'); setTab('bookings'); }}
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] transition-colors"
                 >
                   Investigate
@@ -885,13 +923,6 @@ export default function CommissionPage() {
                         disabled={savingServiceIdx === svc.index || !editForm.commissionEnabled}
                         onClick={() => toggleServiceCommission(svc.index, !svc.commissionEnabled)}
                         className="flex-shrink-0 disabled:opacity-40"
-                        title={
-                          !editForm.commissionEnabled
-                            ? 'Enable shop commission first'
-                            : svc.commissionEnabled
-                            ? 'Disable for this service'
-                            : 'Enable for this service'
-                        }
                       >
                         {savingServiceIdx === svc.index ? (
                           <Loader2 className="w-6 h-6 animate-spin text-white/40" />
@@ -905,14 +936,6 @@ export default function CommissionPage() {
                   ))}
                 </div>
               )}
-              <p className="text-2xs text-white/30 mt-2">
-                Only completed bookings for <span className="text-white/50">ON</span> services earn commission.
-                Multi-service bookings (e.g. Haircut + Beard) earn if at least one service is ON.
-              </p>
-            </div>
-
-            <div className="mt-6 p-3 rounded-xl bg-warning/[0.05] border border-warning/20 text-2xs text-warning/80">
-              ⚠ All changes are logged in Audit Log with your admin identity, IP address, and timestamp
             </div>
 
             <div className="flex gap-2 mt-5">
