@@ -100,10 +100,13 @@ export default function CommissionPage() {
   const [savingServiceIdx, setSavingServiceIdx] = useState(null);
   const [recalculatingId, setRecalculatingId] = useState(null);
 
+  // ⭐ CONFIRMATION MODAL STATE FOR CREDIT NOW
+  const [confirmCreditBooking, setConfirmCreditBooking] = useState(null);
+
   const [toast, setToast] = useState(null);
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 3500);
   };
 
   const loadSummary = useCallback(async () => {
@@ -245,16 +248,18 @@ export default function CommissionPage() {
     }
   };
 
-  // ⭐ 1-CLICK RECALCULATE / CREDIT NOW
-  const recalculateBooking = async (bookingId) => {
-    setRecalculatingId(bookingId);
+  // ⭐ CONFIRMED RECALCULATE & CREDIT ACTION
+  const executeRecalculateBooking = async (booking) => {
+    setRecalculatingId(booking._id);
+    setConfirmCreditBooking(null); // Close modal
     try {
       const res = await apiCall('/admin/recalculate-booking', {
         method: 'POST',
-        body: JSON.stringify({ bookingId }),
+        body: JSON.stringify({ bookingId: booking._id }),
       });
       showToast(res.message, res.message.includes('Credited') ? 'success' : 'error');
       await loadBookings();
+      await loadShops();
       loadSummary().catch(() => {});
     } catch (e) {
       showToast(e.message, 'error');
@@ -275,6 +280,8 @@ export default function CommissionPage() {
       });
       showToast('Marked fake · commission reversed ✓');
       await loadBookings();
+      await loadShops();
+      loadSummary().catch(() => {});
     } catch (e) {
       showToast(e.message, 'error');
     }
@@ -307,6 +314,7 @@ export default function CommissionPage() {
         window.open(d.data.documentUrl, '_blank');
       }
       await loadWithdrawals();
+      await loadShops();
       loadSummary().catch(() => {});
     } catch (e) {
       showToast(e.message, 'error');
@@ -538,7 +546,6 @@ export default function CommissionPage() {
                     const gap = b.actualStartTime || b.completedAt
                       ? ((new Date(b.actualStartTime || b.completedAt) - new Date(b.createdAt)) / 60000).toFixed(1)
                       : '—';
-                    const isZeroCredit = b.commissionAmount <= 0;
 
                     return (
                       <tr key={b._id} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
@@ -584,20 +591,20 @@ export default function CommissionPage() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            {/* ⭐ 1-CLICK RECALCULATE / CREDIT NOW BUTTON */}
-                            {isZeroCredit && !b.commissionFraudFlag && (
+                            {/* ⭐ CONFIRMED RECALCULATE / CREDIT NOW BUTTON */}
+                            {!b.commissionFraudFlag && (
                               <button
-                                onClick={() => recalculateBooking(b._id)}
+                                onClick={() => setConfirmCreditBooking(b)}
                                 disabled={recalculatingId === b._id}
                                 className="px-2.5 py-1.5 rounded-lg text-2xs font-bold bg-accent-500/15 text-accent-500 border border-accent-500/30 hover:bg-accent-500/25 transition-colors flex items-center gap-1 disabled:opacity-40"
-                                title="Click to recalculate and credit commission now"
+                                title="Recalculate & Sync Commission to Shop Owner Wallet"
                               >
                                 {recalculatingId === b._id ? (
                                   <Loader2 className="w-3 h-3 animate-spin" />
                                 ) : (
                                   <Zap className="w-3 h-3 text-accent-500" />
                                 )}
-                                Credit Now
+                                Credit / Sync
                               </button>
                             )}
 
@@ -957,8 +964,72 @@ export default function CommissionPage() {
         </div>
       )}
 
+      {/* ⭐ CONFIRMATION MODAL FOR CREDIT NOW */}
+      {confirmCreditBooking && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 animate-fade-in">
+          <div
+            className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            onClick={() => setConfirmCreditBooking(null)}
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-accent-500/40 bg-surface-100 p-6 shadow-glow-md animate-scale-in">
+            <div className="flex items-center gap-3 text-accent-500 mb-3">
+              <div className="p-2 rounded-xl bg-accent-500/15 border border-accent-500/30">
+                <Zap className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold text-white">Confirm Commission Credit</h3>
+            </div>
+
+            <p className="text-sm text-white/70 leading-relaxed mb-4">
+              Are you sure you want to calculate and credit commission for booking{' '}
+              <span className="font-mono text-white font-bold">
+                #{confirmCreditBooking.queueNumber || confirmCreditBooking._id.slice(-6)}
+              </span>{' '}
+              to <span className="text-accent-500 font-bold">{confirmCreditBooking.shop?.name}</span>?
+            </p>
+
+            <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs space-y-1.5 mb-5 text-white/60">
+              <div>
+                Service:{' '}
+                <span className="text-white font-medium">
+                  {confirmCreditBooking.service?.name} ({money(confirmCreditBooking.service?.price)})
+                </span>
+              </div>
+              <div>
+                Customer:{' '}
+                <span className="text-white font-medium">
+                  {confirmCreditBooking.customer?.name} ({confirmCreditBooking.customer?.phone})
+                </span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmCreditBooking(null)}
+                className="flex-1 py-2.5 rounded-xl border border-white/10 text-sm text-white/60 hover:bg-white/[0.04] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => executeRecalculateBooking(confirmCreditBooking)}
+                disabled={recalculatingId === confirmCreditBooking._id}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-accent-500 to-amber-600 text-surface-100 text-sm font-bold shadow-glow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {recalculatingId === confirmCreditBooking._id ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 fill-current" />
+                    Confirm & Credit
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && (
-        <div className="fixed bottom-6 right-6 z-[90] animate-slide-up">
+        <div className="fixed bottom-6 right-6 z-[100] animate-slide-up">
           <div
             className={`px-4 py-3 rounded-xl shadow-elevation-3 backdrop-blur border text-sm font-medium ${
               toast.type === 'error'
