@@ -5,7 +5,7 @@ import {
   Wallet, Store, Calendar, Banknote, ShieldAlert, ScrollText,
   Search, RefreshCw, CheckCircle2, XCircle, AlertTriangle,
   ToggleLeft, ToggleRight, FileText, Loader2, TrendingUp,
-  DollarSign, X, Zap, Undo2,
+  DollarSign, X, Zap, Undo2, ShieldCheck,
 } from 'lucide-react';
 import { authService } from '../../../services/auth';
 
@@ -98,17 +98,20 @@ export default function CommissionPage() {
   const [shopServices, setShopServices] = useState([]);
   const [loadingServices, setLoadingServices] = useState(false);
   const [savingServiceIdx, setSavingServiceIdx] = useState(null);
+
   const [recalculatingId, setRecalculatingId] = useState(null);
+  const [forceCreditingId, setForceCreditingId] = useState(null);
   const [undoingId, setUndoingId] = useState(null);
 
   // ⭐ CONFIRMATION MODALS
   const [confirmCreditBooking, setConfirmCreditBooking] = useState(null);
+  const [confirmForceBooking, setConfirmForceBooking] = useState(null);
   const [confirmUndoBooking, setConfirmUndoBooking] = useState(null);
 
   const [toast, setToast] = useState(null);
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 4000);
+    setTimeout(() => setToast(null), 4500);
   };
 
   const loadSummary = useCallback(async () => {
@@ -250,7 +253,7 @@ export default function CommissionPage() {
     }
   };
 
-  // ⭐ CONFIRMED CREDIT/SYNC (Idempotent — Never Doubles)
+  // ⭐ Normal Recalculate / Sync (Idempotent, respects fraud rules)
   const executeRecalculateBooking = async (booking) => {
     setRecalculatingId(booking._id);
     setConfirmCreditBooking(null);
@@ -271,7 +274,30 @@ export default function CommissionPage() {
     }
   };
 
-  // ⭐ UNDO DUPLICATE CREDIT
+  // ⭐ Force Credit (Admin Override — Bypasses GPS/Time/Verified Rules)
+  const executeForceCredit = async (booking) => {
+    setForceCreditingId(booking._id);
+    setConfirmForceBooking(null);
+    try {
+      const res = await apiCall('/admin/force-credit-booking', {
+        method: 'POST',
+        body: JSON.stringify({
+          bookingId: booking._id,
+          reason: 'Admin manual force credit after review',
+        }),
+      });
+      showToast(res.message, 'success');
+      await loadBookings();
+      await loadShops();
+      loadSummary().catch(() => {});
+    } catch (e) {
+      showToast(e.message, 'error');
+    } finally {
+      setForceCreditingId(null);
+    }
+  };
+
+  // ⭐ Undo Duplicate / Over-Credit
   const executeUndoDuplicate = async (booking) => {
     setUndoingId(booking._id);
     setConfirmUndoBooking(null);
@@ -280,7 +306,7 @@ export default function CommissionPage() {
         method: 'POST',
         body: JSON.stringify({
           bookingId: booking._id,
-          reason: 'Manual undo by Admin — removed accidental over-credit',
+          reason: 'Manual undo by Admin — removed over-credit',
         }),
       });
       showToast(res.message, 'success');
@@ -370,7 +396,7 @@ export default function CommissionPage() {
             Commission Control
           </h1>
           <p className="text-sm text-white/40 mt-1">
-            Owner-only commissions · Per-service toggles · Silent fraud checks · Idempotent credits
+            Owner-only commissions · Idempotent · Silent fraud checks · Duplicate-safe
           </p>
         </div>
         <button
@@ -534,24 +560,29 @@ export default function CommissionPage() {
 
       {tab === 'bookings' && (
         <div className="space-y-4">
-          <div className="flex gap-2 flex-wrap">
-            {[
-              { id: 'all', label: 'All completed' },
-              { id: 'credited', label: 'Credited (>₹0)' },
-              { id: 'fake', label: 'Marked fake' },
-            ].map((f) => (
-              <button
-                key={f.id}
-                onClick={() => { setBookFilter(f.id); setBookPage(1); }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                  bookFilter === f.id
-                    ? 'border-accent-500/40 bg-accent-500/15 text-accent-500'
-                    : 'border-white/10 text-white/40 hover:text-white'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+          <div className="flex gap-2 flex-wrap items-center justify-between">
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { id: 'all', label: 'All completed' },
+                { id: 'credited', label: 'Credited (>₹0)' },
+                { id: 'fake', label: 'Marked fake' },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => { setBookFilter(f.id); setBookPage(1); }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                    bookFilter === f.id
+                      ? 'border-accent-500/40 bg-accent-500/15 text-accent-500'
+                      : 'border-white/10 text-white/40 hover:text-white'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <div className="text-2xs text-white/40 hidden sm:block">
+              💡 Credit follows fraud rules · Force bypasses them · Undo removes over-credit
+            </div>
           </div>
 
           <div className="rounded-2xl border border-white/[0.06] overflow-hidden bg-surface-100/40">
@@ -564,7 +595,7 @@ export default function CommissionPage() {
                     <th className="text-left px-4 py-3">Customer</th>
                     <th className="text-left px-4 py-3">Fraud Check</th>
                     <th className="text-left px-4 py-3">Commission</th>
-                    <th className="text-right px-4 py-3">Action</th>
+                    <th className="text-right px-4 py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -573,6 +604,9 @@ export default function CommissionPage() {
                       ? ((new Date(b.actualStartTime || b.completedAt) - new Date(b.createdAt)) / 60000).toFixed(1)
                       : '—';
                     const isCredited = b.commissionCredited && b.commissionAmount > 0;
+                    const gpsOK = b.bookingLocation?.distanceFromShop >= 200;
+                    const timeOK = gap >= 5;
+                    const fraudBlocked = !gpsOK || !timeOK;
 
                     return (
                       <tr key={b._id} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
@@ -591,10 +625,10 @@ export default function CommissionPage() {
                         </td>
                         <td className="px-4 py-3 text-2xs">
                           <div className="flex flex-col gap-0.5">
-                            <span className={b.bookingLocation?.distanceFromShop >= 200 ? 'text-success' : 'text-error'}>
+                            <span className={gpsOK ? 'text-success' : 'text-error'}>
                               📍 {b.bookingLocation?.distanceFromShop != null ? `${b.bookingLocation.distanceFromShop}m` : 'no gps'}
                             </span>
-                            <span className={gap >= 5 ? 'text-success' : 'text-error'}>⏱ {gap} min gap</span>
+                            <span className={timeOK ? 'text-success' : 'text-error'}>⏱ {gap} min gap</span>
                             {b.fraudReason && (
                               <span className="text-warning max-w-[160px] truncate" title={b.fraudReason}>
                                 {b.fraudReason}
@@ -617,17 +651,17 @@ export default function CommissionPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-2 flex-wrap">
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
                             {!b.commissionFraudFlag && (
                               <button
                                 onClick={() => setConfirmCreditBooking(b)}
                                 disabled={recalculatingId === b._id}
-                                className={`px-2.5 py-1.5 rounded-lg text-2xs font-bold border transition-colors flex items-center gap-1 disabled:opacity-40 ${
+                                className={`px-2 py-1.5 rounded-lg text-2xs font-bold border transition-colors flex items-center gap-1 disabled:opacity-40 ${
                                   isCredited
                                     ? 'bg-white/[0.04] text-white/50 border-white/10 hover:bg-white/[0.08]'
                                     : 'bg-accent-500/15 text-accent-500 border-accent-500/30 hover:bg-accent-500/25'
                                 }`}
-                                title={isCredited ? 'Sync display only (won\'t double-credit)' : 'Credit commission to shop owner wallet'}
+                                title={isCredited ? 'Sync display only (safe)' : 'Credit if all rules pass'}
                               >
                                 {recalculatingId === b._id ? (
                                   <Loader2 className="w-3 h-3 animate-spin" />
@@ -638,29 +672,46 @@ export default function CommissionPage() {
                               </button>
                             )}
 
-                            {/* ⭐ UNDO DUPLICATE — Only if credited */}
+                            {/* ⭐ FORCE CREDIT — Bypass fraud (Admin override) */}
+                            {!isCredited && !b.commissionFraudFlag && fraudBlocked && (
+                              <button
+                                onClick={() => setConfirmForceBooking(b)}
+                                disabled={forceCreditingId === b._id}
+                                className="px-2 py-1.5 rounded-lg text-2xs font-bold bg-info/10 text-info border border-info/30 hover:bg-info/20 transition-colors flex items-center gap-1 disabled:opacity-40"
+                                title="Bypass GPS/Time/Verified rules and credit manually"
+                              >
+                                {forceCreditingId === b._id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <ShieldCheck className="w-3 h-3" />
+                                )}
+                                Force
+                              </button>
+                            )}
+
+                            {/* ⭐ UNDO DUPE — Only on credited */}
                             {isCredited && !b.commissionFraudFlag && (
                               <button
                                 onClick={() => setConfirmUndoBooking(b)}
                                 disabled={undoingId === b._id}
-                                className="px-2.5 py-1.5 rounded-lg text-2xs font-semibold bg-warning/10 text-warning border border-warning/30 hover:bg-warning/20 transition-colors flex items-center gap-1 disabled:opacity-40"
-                                title="Remove one duplicate credit (if double-credited by accident)"
+                                className="px-2 py-1.5 rounded-lg text-2xs font-semibold bg-warning/10 text-warning border border-warning/30 hover:bg-warning/20 transition-colors flex items-center gap-1 disabled:opacity-40"
+                                title="Remove one over-credit amount"
                               >
                                 {undoingId === b._id ? (
                                   <Loader2 className="w-3 h-3 animate-spin" />
                                 ) : (
                                   <Undo2 className="w-3 h-3" />
                                 )}
-                                Undo Dupe
+                                Undo
                               </button>
                             )}
 
                             {!b.commissionFraudFlag && (
                               <button
                                 onClick={() => markFake(b)}
-                                className="px-2.5 py-1.5 rounded-lg text-2xs font-semibold bg-error/10 text-error border border-error/20 hover:bg-error/20 transition-colors"
+                                className="px-2 py-1.5 rounded-lg text-2xs font-semibold bg-error/10 text-error border border-error/20 hover:bg-error/20 transition-colors"
                               >
-                                Mark Fake
+                                Fake
                               </button>
                             )}
                           </div>
@@ -1022,15 +1073,15 @@ export default function CommissionPage() {
               </div>
               <h3 className="text-lg font-bold text-white">
                 {confirmCreditBooking.commissionCredited && confirmCreditBooking.commissionAmount > 0
-                  ? 'Sync Booking Display'
-                  : 'Confirm Commission Credit'}
+                  ? 'Sync Booking'
+                  : 'Credit Commission'}
               </h3>
             </div>
 
             <p className="text-sm text-white/70 leading-relaxed mb-4">
               {confirmCreditBooking.commissionCredited && confirmCreditBooking.commissionAmount > 0
-                ? <>This booking is already credited. Clicking Sync will refresh display only — <span className="font-bold text-warning">no duplicate ₹ will be added.</span></>
-                : <>Are you sure you want to credit commission for booking{' '}
+                ? <>Already credited. Sync will refresh display only — <span className="font-bold text-warning">no duplicate ₹ will be added.</span></>
+                : <>Credit commission if all fraud rules pass for booking{' '}
                     <span className="font-mono text-white font-bold">
                       #{confirmCreditBooking.queueNumber || confirmCreditBooking._id.slice(-6)}
                     </span>{' '}
@@ -1049,7 +1100,7 @@ export default function CommissionPage() {
             </div>
 
             <div className="p-3 rounded-xl bg-info/[0.08] border border-info/20 text-2xs text-info mb-4">
-              🔒 System is idempotent — same booking can never be credited twice.
+              🔒 Database-locked idempotent. Same booking can never be double-charged.
             </div>
 
             <div className="flex gap-3">
@@ -1078,6 +1129,63 @@ export default function CommissionPage() {
         </div>
       )}
 
+      {/* ⭐ FORCE CREDIT CONFIRMATION MODAL */}
+      {confirmForceBooking && (
+        <div className="fixed inset-0 z-[92] flex items-center justify-center p-4 animate-fade-in">
+          <div
+            className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            onClick={() => setConfirmForceBooking(null)}
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-info/40 bg-surface-100 p-6 shadow-glow-md animate-scale-in">
+            <div className="flex items-center gap-3 text-info mb-3">
+              <div className="p-2 rounded-xl bg-info/15 border border-info/30">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold text-white">Force Credit (Admin Override)</h3>
+            </div>
+
+            <p className="text-sm text-white/70 leading-relaxed mb-4">
+              This booking failed automatic fraud checks (GPS/time/verified). Force credit will{' '}
+              <span className="font-bold text-info">bypass all rules</span> and pay{' '}
+              <span className="text-white font-bold">{confirmForceBooking.shop?.name}</span> owner wallet.
+            </p>
+
+            <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs space-y-1.5 mb-4 text-white/60">
+              <div>Booking: <span className="font-mono text-white">#{confirmForceBooking.queueNumber || confirmForceBooking._id.slice(-6)}</span></div>
+              <div>Service: <span className="text-white font-medium">{confirmForceBooking.service?.name} ({money(confirmForceBooking.service?.price)})</span></div>
+              <div>Failed Reason: <span className="text-warning font-medium truncate">{confirmForceBooking.fraudReason || 'Auto rules failed'}</span></div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-warning/[0.08] border border-warning/20 text-2xs text-warning mb-5">
+              ⚠️ Use ONLY after manual review confirms this is a valid booking. Logged in Audit Log with your admin identity.
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmForceBooking(null)}
+                className="flex-1 py-2.5 rounded-xl border border-white/10 text-sm text-white/60 hover:bg-white/[0.04] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => executeForceCredit(confirmForceBooking)}
+                disabled={forceCreditingId === confirmForceBooking._id}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-info to-cyan-600 text-white text-sm font-bold shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {forceCreditingId === confirmForceBooking._id ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4" />
+                    Force Credit
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ⭐ UNDO DUPLICATE CONFIRMATION MODAL */}
       {confirmUndoBooking && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center p-4 animate-fade-in">
@@ -1094,18 +1202,18 @@ export default function CommissionPage() {
             </div>
 
             <p className="text-sm text-white/70 leading-relaxed mb-4">
-              This will remove <span className="font-bold text-warning">{money(confirmUndoBooking.commissionAmount)}</span> from{' '}
-              <span className="text-white font-bold">{confirmUndoBooking.shop?.name}</span>'s wallet.
+              Remove <span className="font-bold text-warning">{money(confirmUndoBooking.commissionAmount)}</span> from{' '}
+              <span className="text-white font-bold">{confirmUndoBooking.shop?.name}</span>'s wallet?
             </p>
 
             <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs space-y-1.5 mb-4 text-white/60">
               <div>Booking: <span className="font-mono text-white">#{confirmUndoBooking.queueNumber || confirmUndoBooking._id.slice(-6)}</span></div>
               <div>Currently Credited: <span className="text-success font-bold">{money(confirmUndoBooking.commissionAmount)}</span></div>
-              <div className="pt-1 border-t border-white/5 text-warning">After Undo: -{money(confirmUndoBooking.commissionAmount)} from owner wallet</div>
+              <div className="pt-1 border-t border-white/5 text-warning">After Undo: -{money(confirmUndoBooking.commissionAmount)} from wallet</div>
             </div>
 
             <div className="p-3 rounded-xl bg-warning/[0.08] border border-warning/20 text-2xs text-warning mb-5">
-              ⚠️ Use ONLY if a duplicate/over-credit happened. This action is logged in Audit Log with your admin identity.
+              ⚠️ Use ONLY if this booking has an over-credit (was credited multiple times by accident). Logged in Audit Log.
             </div>
 
             <div className="flex gap-3">
