@@ -1,60 +1,119 @@
 import { NextResponse } from 'next/server';
-import { MongoClient } from 'mongodb';
+import { cleanPhone, getLiveShops, searchShopsByLocation } from '@/lib/omni-data';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-api-key',
 };
 
 export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-let client;
-let clientPromise;
+async function handleBarberInfo(phoneInput, shopQueryInput, locationInput) {
+  const phone = cleanPhone(phoneInput);
+  const allShops = await getLiveShops();
 
-async function getDirectCollection(collectionName) {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error("MONGODB_URI missing");
-  const dbName = process.env.MONGODB_DB_NAME || 'quttr_qr';
-  if (!clientPromise) {
-    client = new MongoClient(uri);
-    clientPromise = client.connect();
+  // 1. Search by phone number
+  if (phone) {
+    const matchedShop = allShops.find((s) => cleanPhone(s.ownerPhone) === phone);
+    if (matchedShop) {
+      return NextResponse.json(
+        {
+          success: true,
+          is_registered: true,
+          shop_name: matchedShop.name,
+          owner_name: matchedShop.ownerName,
+          phone: matchedShop.ownerPhone,
+          city: matchedShop.city,
+          area: matchedShop.area,
+          starting_price: `₹${matchedShop.startingPrice}`,
+          is_active: true,
+          services: matchedShop.services,
+          message: `जी, आप '${matchedShop.name}' (${matchedShop.city}) के ओनर ${matchedShop.ownerName} के रूप में QUTTR ऐप पर एक्टिव हैं।`,
+        },
+        { headers: corsHeaders }
+      );
+    }
   }
-  const connectedClient = await clientPromise;
-  return connectedClient.db(dbName).collection(collectionName);
+
+  // 2. Search by shop name or location if provided
+  if (shopQueryInput || locationInput) {
+    const { matchedShops } = await searchShopsByLocation(locationInput, shopQueryInput);
+    if (matchedShops.length > 0) {
+      const shop = matchedShops[0];
+      return NextResponse.json(
+        {
+          success: true,
+          is_registered: true,
+          shop_name: shop.name,
+          owner_name: shop.ownerName,
+          phone: shop.ownerPhone,
+          city: shop.city,
+          area: shop.area,
+          starting_price: `₹${shop.startingPrice}`,
+          is_active: true,
+          services: shop.services,
+          message: `'${shop.name}' (${shop.ownerName}) QUTTR ऐप पर एक्टिव बार्बर शॉप है।`,
+        },
+        { headers: corsHeaders }
+      );
+    }
+  }
+
+  return NextResponse.json(
+    {
+      success: true,
+      is_registered: false,
+      message: 'बार्बर शॉप QUTTR सिस्टम में अभी रजिस्टर नहीं है।',
+    },
+    { headers: corsHeaders }
+  );
 }
 
-const normalizePhone = (phone) => phone ? phone.replace(/\D/g, '').slice(-10) : '';
-
 export async function GET(request) {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.OMNI_API_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
-  }
-
   try {
     const { searchParams } = new URL(request.url);
-    const rawPhone = searchParams.get('phone_number') || searchParams.get('phone');
-    const phone = normalizePhone(rawPhone);
+    const rawPhone =
+      searchParams.get('phone_number') ||
+      searchParams.get('phone') ||
+      searchParams.get('caller_number') ||
+      searchParams.get('caller_id') ||
+      '';
 
-    if (!phone) return NextResponse.json({ is_registered: false }, { headers: corsHeaders });
+    const shopQuery = searchParams.get('shop_name') || searchParams.get('shop') || '';
+    const location = searchParams.get('location') || searchParams.get('city') || '';
 
-    const shopsCol = await getDirectCollection('shops');
-    const shop = await shopsCol.findOne({ 'owner.phone': { $regex: new RegExp(phone + '$') } });
-
-    if (shop) {
-      return NextResponse.json({
-        is_registered: true,
-        shop_name: shop.name || 'Your Shop',
-        owner_name: shop.owner?.name || 'Owner',
-        is_active: shop.isActive && shop.approvalStatus === 'approved'
-      }, { headers: corsHeaders });
-    }
-
-    return NextResponse.json({ is_registered: false }, { headers: corsHeaders });
+    return await handleBarberInfo(rawPhone, shopQuery, location);
   } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500, headers: corsHeaders });
+    return NextResponse.json({ is_registered: false, error: err.message }, { headers: corsHeaders });
+  }
+}
+
+export async function POST(request) {
+  try {
+    let body = {};
+    try {
+      body = await request.json();
+    } catch (_) {}
+
+    const { searchParams } = new URL(request.url);
+
+    const rawPhone =
+      body.phone_number ||
+      body.phone ||
+      body.caller_number ||
+      body.caller_id ||
+      searchParams.get('phone_number') ||
+      searchParams.get('phone') ||
+      '';
+
+    const shopQuery = body.shop_name || body.shop || searchParams.get('shop_name') || '';
+    const location = body.location || body.city || searchParams.get('location') || '';
+
+    return await handleBarberInfo(rawPhone, shopQuery, location);
+  } catch (err) {
+    return NextResponse.json({ is_registered: false, error: err.message }, { headers: corsHeaders });
   }
 }

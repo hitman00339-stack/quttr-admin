@@ -1,92 +1,134 @@
 import { NextResponse } from 'next/server';
-import { MongoClient } from 'mongodb';
+import { searchShopsByLocation, getLiveShops } from '@/lib/omni-data';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-api-key',
 };
 
 export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-let client;
-let clientPromise;
+async function handleBarberQuery(districtInput, townInput) {
+  const district = (districtInput || '').trim();
+  const town = (townInput || '').trim();
 
-async function getDirectCollection(collectionName) {
-  try {
-    const uri = process.env.MONGODB_URI;
-    if (!uri) return null;
-    const dbName = process.env.MONGODB_DB_NAME || 'quttr_qr';
-    if (!clientPromise) {
-      client = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 });
-      clientPromise = client.connect();
-    }
-    const connectedClient = await clientPromise;
-    return connectedClient.db(dbName).collection(collectionName);
-  } catch (e) {
-    return null;
+  const { matchedShops, totalCount, locationName, isExactMatch } = await searchShopsByLocation(
+    district,
+    town
+  );
+
+  const topShops = matchedShops.slice(0, 3);
+  const shopSummaries = topShops.map((s) => ({
+    id: s.id,
+    name: s.name,
+    barber_name: s.ownerName,
+    area: s.area || s.city,
+    city: s.city,
+    phone: s.ownerPhone,
+    starting_price: `₹${s.startingPrice}`,
+    popular_services: s.services?.slice(0, 3)?.map((x) => `${x.name} (₹${x.price})`).join(', ') || 'हेयरकट, शेविंग',
+  }));
+
+  const barbersList = topShops.map((s) => `${s.name} (${s.ownerName})`).join(', ');
+
+  let spokenMessage = '';
+  if (isExactMatch && topShops.length > 0) {
+    const primaryShop = topShops[0];
+    const otherShopsText = topShops.length > 1 ? ` और '${topShops[1].name}'` : '';
+    spokenMessage = `जी, ${locationName} में हमारे पास ${totalCount} बार्बर दुकानें लिस्टेड हैं। जैसे कि '${primaryShop.name}' जिसके बार्बर ${primaryShop.ownerName} हैं (हेयरकट ₹${primaryShop.startingPrice} से शुरू)${otherShopsText}। आप QUTTR ऐप खोलकर तुरंत अपॉइंटमेंट बुक कर सकते हैं।`;
+  } else if (matchedShops.length > 0) {
+    const all = await getLiveShops();
+    const primaryShop = all[0];
+    spokenMessage = `जी, ${locationName} में हम अभी नई दुकानें जोड़ रहे हैं, लेकिन हमारे पास आसपास के इलाकों जैसे लखनऊ और सीतापुर में ${all.length} दुकानें उपलब्ध हैं, जैसे '${primaryShop.name}'। आप Google Play Store से QUTTR ऐप डाउनलोड करके अपने पसंदीदा बार्बर की बुकिंग कर सकते हैं।`;
+  } else {
+    spokenMessage = `जी, ${locationName} में दुकानें जोड़ने का काम चल रहा है। आप अपने एरिया के नाई को QUTTR ऐप से जुड़ने के लिए कह सकते हैं।`;
   }
+
+  return NextResponse.json(
+    {
+      success: true,
+      total_shops: totalCount,
+      location: locationName,
+      is_exact_match: isExactMatch,
+      shops: shopSummaries,
+      barbers_list: barbersList,
+      message: spokenMessage,
+    },
+    { headers: corsHeaders }
+  );
 }
 
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    const district = (searchParams.get('district') || searchParams.get('city') || '').trim();
-    const town = (searchParams.get('town') || searchParams.get('area') || searchParams.get('location') || '').trim();
+    const district =
+      searchParams.get('district') ||
+      searchParams.get('city') ||
+      searchParams.get('state') ||
+      '';
 
-    const shopsCol = await getDirectCollection('shops');
-    let totalShops = 0;
-    let totalShopsInDB = 0;
+    const town =
+      searchParams.get('town') ||
+      searchParams.get('area') ||
+      searchParams.get('location') ||
+      searchParams.get('locality') ||
+      searchParams.get('q') ||
+      '';
 
-    if (shopsCol) {
-      totalShopsInDB = await shopsCol.countDocuments({}).catch(() => 0);
-
-      const searchTerms = [district, town].filter(Boolean);
-
-      if (searchTerms.length > 0) {
-        const orConditions = searchTerms.flatMap(term => [
-          { 'address.city': { $regex: term, $options: 'i' } },
-          { 'address.district': { $regex: term, $options: 'i' } },
-          { 'address.town': { $regex: term, $options: 'i' } },
-          { 'address.area': { $regex: term, $options: 'i' } },
-          { 'address.addressLine': { $regex: term, $options: 'i' } },
-          { city: { $regex: term, $options: 'i' } },
-          { district: { $regex: term, $options: 'i' } },
-          { town: { $regex: term, $options: 'i' } },
-          { area: { $regex: term, $options: 'i' } },
-          { name: { $regex: term, $options: 'i' } }
-        ]);
-
-        totalShops = await shopsCol.countDocuments({ $or: orConditions }).catch(() => 0);
-      } else {
-        totalShops = totalShopsInDB;
-      }
-    }
-
-    const locName = town || district || 'आपके एरिया';
-    
-    let responseMsg = '';
-    if (totalShops > 0) {
-      responseMsg = `जी, ${locName} में हमारे पास ${totalShops} बार्बर शॉप्स लिस्टेड हैं। आप QUTTR ऐप डाउनलोड करके उनकी लिस्ट देख सकते हैं।`;
-    } else if (totalShopsInDB > 0) {
-      responseMsg = `अभी ${locName} में हम नई दुकानें जोड़ रहे हैं, लेकिन हमारे ऐप पर ${totalShopsInDB} से ज्यादा बार्बर दुकानें उपलब्ध हैं। आप Play Store से QUTTR ऐप देखकर जुड़ सकते हैं।`;
-    } else {
-      responseMsg = `अभी ${locName} में दुकानें जोड़ने का काम चल रहा है। आप अपने एरिया के नाई को कटर ऐप से जुड़ने की सलाह दे सकते हैं।`;
-    }
-
-    return NextResponse.json({
-      total_shops: totalShops,
-      location: locName,
-      message: responseMsg
-    }, { headers: corsHeaders });
-
+    return await handleBarberQuery(district, town);
   } catch (err) {
-    return NextResponse.json({
-      total_shops: 0,
-      location: 'आपके एरिया',
-      message: "आप Google Play Store पर QUTTR (कटर) सर्च करके अपने एरिया की बार्बर दुकानें देख सकते हैं।"
-    }, { headers: corsHeaders });
+    return NextResponse.json(
+      {
+        success: false,
+        total_shops: 0,
+        location: 'आपके एरिया',
+        message: 'आप Google Play Store पर QUTTR (कटर) सर्च करके अपने एरिया की बार्बर दुकानें देख सकते हैं।',
+      },
+      { headers: corsHeaders }
+    );
+  }
+}
+
+export async function POST(request) {
+  try {
+    let body = {};
+    try {
+      body = await request.json();
+    } catch (_) {}
+
+    const { searchParams } = new URL(request.url);
+
+    const district =
+      body.district ||
+      body.city ||
+      searchParams.get('district') ||
+      searchParams.get('city') ||
+      '';
+
+    const town =
+      body.town ||
+      body.area ||
+      body.location ||
+      body.locality ||
+      body.q ||
+      searchParams.get('town') ||
+      searchParams.get('area') ||
+      searchParams.get('location') ||
+      '';
+
+    return await handleBarberQuery(district, town);
+  } catch (err) {
+    return NextResponse.json(
+      {
+        success: false,
+        total_shops: 0,
+        location: 'आपके एरिया',
+        message: 'आप Google Play Store पर QUTTR (कटर) सर्च करके अपने एरिया की बार्बर दुकानें देख सकते हैं।',
+      },
+      { headers: corsHeaders }
+    );
   }
 }
