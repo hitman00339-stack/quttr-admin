@@ -42,13 +42,16 @@ export async function GET(request) {
     const rawPhone =
       searchParams.get('phone_number') ||
       searchParams.get('phone') ||
+      searchParams.get('to_number') ||
+      searchParams.get('to') ||
       searchParams.get('caller_number') ||
       searchParams.get('caller_id') ||
       searchParams.get('from') ||
-      searchParams.get('to') ||
       searchParams.get('customer_phone') ||
       searchParams.get('mobile') ||
       searchParams.get('number') ||
+      request.headers.get('x-to-number') ||
+      request.headers.get('x-call-to') ||
       '';
 
     return await handleCustomerInfo(rawPhone);
@@ -77,6 +80,7 @@ export async function POST(request) {
     const { searchParams } = new URL(request.url);
 
     const rawPhone =
+      body.to_number ||
       body.phone_number ||
       body.phone ||
       body.customer_phone ||
@@ -86,6 +90,7 @@ export async function POST(request) {
       body.to ||
       body.mobile ||
       body.number ||
+      searchParams.get('to_number') ||
       searchParams.get('phone_number') ||
       searchParams.get('phone') ||
       '';

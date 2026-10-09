@@ -59,6 +59,20 @@ export async function POST(request) {
       to_number: formattedPhone,
       phone_number: formattedPhone,
       to: formattedPhone,
+      call_context: {
+        customer_name: name,
+        user_name: name,
+        name: name,
+        phone: formattedPhone,
+        call_type,
+      },
+      dynamic_variables: {
+        customer_name: name,
+        user_name: name,
+        name: name,
+        phone: formattedPhone,
+        call_type,
+      },
       metadata: {
         call_type,
         user_name: name,

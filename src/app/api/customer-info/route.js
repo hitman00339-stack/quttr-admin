@@ -34,10 +34,14 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const rawPhone =
+      searchParams.get('to_number') ||
       searchParams.get('phone_number') ||
       searchParams.get('phone') ||
+      searchParams.get('to') ||
       searchParams.get('caller_number') ||
       searchParams.get('caller_id') ||
+      request.headers.get('x-to-number') ||
+      request.headers.get('x-call-to') ||
       '';
 
     return await handleRequest(rawPhone);
@@ -55,10 +59,13 @@ export async function POST(request) {
 
     const { searchParams } = new URL(request.url);
     const rawPhone =
+      body.to_number ||
       body.phone_number ||
       body.phone ||
+      body.to ||
       body.customer_phone ||
       body.caller_number ||
+      searchParams.get('to_number') ||
       searchParams.get('phone_number') ||
       searchParams.get('phone') ||
       '';
