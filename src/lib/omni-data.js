@@ -388,7 +388,8 @@ export async function getLiveShops() {
 // Transliteration / keyword mapping for UP towns & districts
 const ALIAS_MAP = {
   lucknow: ['lucknow', 'लखनउ', 'लखनऊ', 'kamta', 'कमता', 'gomti', 'गोमती', 'indira', 'इंदिरा', 'aliganj', 'अलीगंज', 'hazratganj'],
-  sitapur: ['sitapur', 'सीतापुर', 'arya nagar', 'आर्य नगर', 'nai basti', 'नई बस्ती'],
+  sitapur: ['sitapur', 'सीतापुर', 'khairabad', 'खैराबाद', 'khaira', 'खैरा', 'arya nagar', 'आर्य नगर', 'nai basti', 'नई बस्ती'],
+  khairabad: ['khairabad', 'खैराबाद', 'sitapur', 'सीतापुर'],
   sidhauli: ['sidhauli', 'सिधौली', 'bahadurpur', 'बहादुरपुर'],
   mahmudabad: ['mahmudabad', 'महमूदाबाद', 'sundoli', 'सुन्दोली'],
   lalpur: ['lalpur', 'लालपुर', 'baloiya', 'बलोइया'],

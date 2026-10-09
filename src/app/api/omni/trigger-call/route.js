@@ -20,7 +20,7 @@ const normalizePhone = (phone) => {
 export async function POST(request) {
   try {
     const body = await request.json();
-    let { phone, call_type = 'customer', name = '', agent_id } = body;
+    let { phone, call_type = 'customer', name = '', shop_name = '', owner_name = '', agent_id } = body;
 
     const formattedPhone = normalizePhone(phone);
     if (!formattedPhone || formattedPhone.length < 12) {
@@ -30,14 +30,28 @@ export async function POST(request) {
       );
     }
 
-    // Auto-resolve name if not passed or is generic 'Guest'
-    if (!name || name === 'Guest') {
-      const details = await lookupPersonalDetails(formattedPhone);
-      if (details.found && details.name) {
-        name = details.name;
-      } else {
-        name = 'Customer';
+    // Auto-resolve personal and shop details
+    const details = await lookupPersonalDetails(formattedPhone);
+
+    let greeting = '';
+    if (call_type === 'barber') {
+      if (!owner_name && details.found && details.userType === 'shop_owner') {
+        owner_name = details.name;
+        shop_name = shop_name || details.shopName;
       }
+      name = owner_name || name || (details.found ? details.name : 'Barber');
+      const cleanShop = shop_name || (details.found ? details.shopName : '');
+      greeting = `नमस्ते ${name && name !== 'Barber' ? `${name} जी` : 'जी'}, मैं रिया बोल रही हूँ कटर ऐप से। ${cleanShop ? `आप '${cleanShop}' के ओनर हैं ना? ` : 'आप हमारे ऐप पर रजिस्टर्ड बार्बर हैं ना? '}क्या आपसे एक मिनट बात हो सकती है?`;
+    } else {
+      // Customer mode
+      if (!name || name === 'Guest' || name === 'Customer') {
+        if (details.found && details.name) {
+          name = details.name;
+        } else {
+          name = 'Customer';
+        }
+      }
+      greeting = `नमस्ते ${name && name !== 'Customer' ? `${name} जी` : 'जी'}, मैं रिया बोल रही हूँ कटर ऐप से। बस आधा मिनट बात हो सकती है क्या आपसे?`;
     }
 
     const apiKey = process.env.OMNI_API_KEY || 'Ft1IcqSd6FMLouwsAFaMYjirRL93mJrsMPspYq7M8RI';
@@ -60,23 +74,29 @@ export async function POST(request) {
       phone_number: formattedPhone,
       to: formattedPhone,
       call_context: {
+        greeting,
         customer_name: name,
         user_name: name,
         name: name,
+        owner_name: owner_name || name,
+        shop_name: shop_name || '',
         phone: formattedPhone,
         call_type,
       },
       dynamic_variables: {
+        greeting,
         customer_name: name,
         user_name: name,
         name: name,
-        phone: formattedPhone,
+        owner_name: owner_name || name,
+        shop_name: shop_name || '',
         call_type,
       },
       metadata: {
         call_type,
         user_name: name,
         customer_name: name,
+        shop_name: shop_name || '',
         phone: formattedPhone,
       },
     };
@@ -117,7 +137,11 @@ export async function POST(request) {
       }
     }
 
-    // Save outbound call attempt to MongoDB
+    // Save outbound call summary to MongoDB
+    const summaryText = call_type === 'barber'
+      ? `Personalized barber feedback call dispatched to ${name} (${shop_name ? `Shop: ${shop_name}` : 'Registered Barber'}). Number: ${formattedPhone}. Status: ${apiSuccess ? 'Dispatched' : 'Queued'}.`
+      : `Customer outreach call dispatched to ${name} (${formattedPhone}). Pitch: Nearby barber booking & app intro. Status: ${apiSuccess ? 'Dispatched' : 'Queued'}.`;
+
     const callsCol = await getDirectMongoCollection('call_summaries');
     if (callsCol) {
       await callsCol
@@ -125,11 +149,12 @@ export async function POST(request) {
           phone: formattedPhone,
           name,
           callType: call_type,
-          category: 'triggered',
-          summary: apiSuccess
-            ? `Live outbound call triggered to ${formattedPhone}`
-            : `Call queued for ${formattedPhone} (${apiErrorMessage})`,
+          shopName: shop_name || '',
+          category: call_type === 'barber' ? 'barber_feedback' : 'customer_pitch',
+          summary: summaryText,
+          greetingUsed: greeting,
           dispatchId: callDispatchId,
+          status: apiSuccess ? 'dispatched' : 'queued',
           createdAt: new Date(),
         })
         .catch(() => {});
@@ -140,6 +165,10 @@ export async function POST(request) {
         success: true,
         phone: formattedPhone,
         customer_name: name,
+        shop_name: shop_name || '',
+        call_type,
+        greeting,
+        summary: summaryText,
         dispatchId: callDispatchId,
         apiSuccess,
         message: apiSuccess
