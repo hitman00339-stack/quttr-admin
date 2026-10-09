@@ -41,7 +41,7 @@ export async function POST(request) {
     }
 
     const apiKey = process.env.OMNI_API_KEY || 'Ft1IcqSd6FMLouwsAFaMYjirRL93mJrsMPspYq7M8RI';
-    const targetAgentId = agent_id || process.env.OMNI_AGENT_ID || '265721';
+    const targetAgentId = agent_id || process.env.OMNI_AGENT_ID || '265888';
 
     let apiSuccess = false;
     let callDispatchId = `call_${Date.now()}`;
