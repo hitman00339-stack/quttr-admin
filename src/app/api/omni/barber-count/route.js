@@ -32,44 +32,61 @@ async function getDirectCollection(collectionName) {
 
 export async function GET(request) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${process.env.OMNI_API_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
-    }
-
     const { searchParams } = new URL(request.url);
-    const district = (searchParams.get('district') || '').trim();
-    const town = (searchParams.get('town') || '').trim();
+    const district = (searchParams.get('district') || searchParams.get('city') || '').trim();
+    const town = (searchParams.get('town') || searchParams.get('area') || searchParams.get('location') || '').trim();
 
     const shopsCol = await getDirectCollection('shops');
-    let count = 0;
+    let totalShops = 0;
+    let totalShopsInDB = 0;
 
     if (shopsCol) {
-      const locationFilters = [];
-      if (district) {
-        locationFilters.push({ 'address.district': { $regex: district, $options: 'i' } });
-        locationFilters.push({ 'address.city': { $regex: district, $options: 'i' } });
-      }
-      if (town) {
-        locationFilters.push({ 'address.town': { $regex: town, $options: 'i' } });
-        locationFilters.push({ 'address.city': { $regex: town, $options: 'i' } });
-        locationFilters.push({ 'address.area': { $regex: town, $options: 'i' } });
-      }
+      totalShopsInDB = await shopsCol.countDocuments({}).catch(() => 0);
 
-      const query = locationFilters.length > 0 ? { $or: locationFilters } : {};
-      count = await shopsCol.countDocuments(query).catch(() => 0);
+      const searchTerms = [district, town].filter(Boolean);
+
+      if (searchTerms.length > 0) {
+        const orConditions = searchTerms.flatMap(term => [
+          { 'address.city': { $regex: term, $options: 'i' } },
+          { 'address.district': { $regex: term, $options: 'i' } },
+          { 'address.town': { $regex: term, $options: 'i' } },
+          { 'address.area': { $regex: term, $options: 'i' } },
+          { 'address.addressLine': { $regex: term, $options: 'i' } },
+          { city: { $regex: term, $options: 'i' } },
+          { district: { $regex: term, $options: 'i' } },
+          { town: { $regex: term, $options: 'i' } },
+          { area: { $regex: term, $options: 'i' } },
+          { name: { $regex: term, $options: 'i' } }
+        ]);
+
+        totalShops = await shopsCol.countDocuments({ $or: orConditions }).catch(() => 0);
+      } else {
+        totalShops = totalShopsInDB;
+      }
     }
 
-    const location = town || district || 'आपके एरिया';
-    const msg = count > 0 
-      ? `जी, ${location} में हमारे पास ${count} बार्बर शॉप्स लिस्टेड हैं। क्या आप ऐप डाउनलोड करने की जानकारी चाहते हैं?` 
-      : `अभी ${location} में हम दुकानें जोड़ रहे हैं। आप अपने बार्बर को कटर ऐप से जुड़ने के लिए कह सकते हैं।`;
+    const locName = town || district || 'आपके एरिया';
+    
+    let responseMsg = '';
+    if (totalShops > 0) {
+      responseMsg = `जी, ${locName} में हमारे पास ${totalShops} बार्बर शॉप्स लिस्टेड हैं। आप QUTTR ऐप डाउनलोड करके उनकी लिस्ट देख सकते हैं।`;
+    } else if (totalShopsInDB > 0) {
+      responseMsg = `अभी ${locName} में हम नई दुकानें जोड़ रहे हैं, लेकिन हमारे ऐप पर ${totalShopsInDB} से ज्यादा बार्बर दुकानें उपलब्ध हैं। आप Play Store से QUTTR ऐप देखकर जुड़ सकते हैं।`;
+    } else {
+      responseMsg = `अभी ${locName} में दुकानें जोड़ने का काम चल रहा है। आप अपने एरिया के नाई को कटर ऐप से जुड़ने की सलाह दे सकते हैं।`;
+    }
 
-    return NextResponse.json({ total_shops: count, message: msg }, { headers: corsHeaders });
+    return NextResponse.json({
+      total_shops: totalShops,
+      location: locName,
+      message: responseMsg
+    }, { headers: corsHeaders });
+
   } catch (err) {
     return NextResponse.json({
       total_shops: 0,
-      message: "जी, आप Google Play Store पर 'QUTTR' सर्च करके अपने एरिया की बार्बर दुकानें देख सकते हैं।"
+      location: 'आपके एरिया',
+      message: "आप Google Play Store पर QUTTR (कटर) सर्च करके अपने एरिया की बार्बर दुकानें देख सकते हैं।"
     }, { headers: corsHeaders });
   }
 }
