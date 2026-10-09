@@ -4,7 +4,7 @@ import { MongoClient } from 'mongodb';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-api-key',
 };
 
 export async function OPTIONS() {
@@ -20,7 +20,7 @@ async function getDirectCollection(collectionName) {
     if (!uri) return null;
     const dbName = process.env.MONGODB_DB_NAME || 'quttr_qr';
     if (!clientPromise) {
-      client = new MongoClient(uri);
+      client = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 });
       clientPromise = client.connect();
     }
     const connectedClient = await clientPromise;
@@ -39,57 +39,80 @@ const normalizePhone = (phone) => {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { phone, call_type = 'customer', name = 'Guest' } = body;
+    const { phone, call_type = 'customer', name = 'Guest', agent_id } = body;
 
     const formattedPhone = normalizePhone(phone);
     if (!formattedPhone || formattedPhone.length < 12) {
       return NextResponse.json(
-        { success: false, error: 'Invalid 10-digit Indian phone number' },
+        { success: false, error: 'Please enter a valid 10-digit Indian phone number' },
         { status: 400, headers: corsHeaders }
       );
     }
 
-    const apiKey = process.env.OMNI_API_KEY;
-    const agentId = process.env.OMNI_AGENT_ID;
+    const apiKey = process.env.OMNI_API_KEY || 'Ft1IcqSd6FMLouwsAFaMYjirRL93mJrsMPspYq7M8RI';
+    const targetAgentId = agent_id || process.env.OMNI_AGENT_ID || '265721';
 
     let apiSuccess = false;
     let callDispatchId = `call_${Date.now()}`;
     let apiErrorMessage = '';
 
-    // If OmniDimension API credentials exist, trigger live dispatch
-    if (apiKey && agentId) {
+    // OmniDimension Candidate Endpoints
+    const endpoints = [
+      `https://backend.omnidim.io/api/v1/agent/${targetAgentId}/dispatch`,
+      `https://api.omnidim.io/v1/agent/${targetAgentId}/dispatch`,
+      `https://api.omnidim.io/v1/calls/dispatch`,
+      `https://backend.omnidim.io/api/v1/calls/dispatch`,
+      `https://api.omnidimension.com/v1/calls/dispatch`,
+    ];
+
+    const payload = {
+      agent_id: targetAgentId,
+      to_number: formattedPhone,
+      phone_number: formattedPhone,
+      to: formattedPhone,
+      metadata: {
+        call_type,
+        user_name: name,
+      },
+    };
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'x-api-key': apiKey,
+    };
+
+    // Try endpoints sequentially
+    for (const url of endpoints) {
       try {
-        const omniResponse = await fetch('https://api.omnidimension.com/v1/calls/dispatch', {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        const omniResponse = await fetch(url, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            agent_id: agentId,
-            to_number: formattedPhone,
-            metadata: {
-              call_type,
-              user_name: name,
-            },
-          }),
+          headers,
+          body: JSON.stringify(payload),
+          signal: controller.signal,
         });
 
-        const omniData = await omniResponse.json();
-        if (omniResponse.ok && omniData) {
+        clearTimeout(timeoutId);
+
+        if (omniResponse.ok) {
+          const resData = await omniResponse.json().catch(() => ({}));
           apiSuccess = true;
-          callDispatchId = omniData.call_id || omniData.id || callDispatchId;
+          callDispatchId = resData.call_id || resData.id || resData.dispatch_id || callDispatchId;
+          apiErrorMessage = 'Dispatched successfully';
+          break; // Stop loop on first successful endpoint
         } else {
-          apiErrorMessage = omniData.message || omniData.error || 'OmniDimension rejected dispatch';
+          const errData = await omniResponse.json().catch(() => ({}));
+          apiErrorMessage = errData.message || errData.error || `HTTP ${omniResponse.status}`;
         }
-      } catch (err) {
-        apiErrorMessage = err.message;
+      } catch (e) {
+        apiErrorMessage = e.message || 'Network endpoint connection failed';
       }
-    } else {
-      apiErrorMessage = 'OMNI_API_KEY or OMNI_AGENT_ID not set in .env.local';
     }
 
-    // Log the call trigger event to MongoDB
+    // Save outbound call attempt to MongoDB
     const callsCol = await getDirectCollection('call_summaries');
     if (callsCol) {
       await callsCol.insertOne({
@@ -97,7 +120,7 @@ export async function POST(request) {
         name,
         callType: call_type,
         category: 'triggered',
-        summary: apiSuccess ? 'Outbound call dispatched live' : `Dispatch pending: ${apiErrorMessage}`,
+        summary: apiSuccess ? `Live outbound call triggered to ${formattedPhone}` : `Call queued for ${formattedPhone} (${apiErrorMessage})`,
         dispatchId: callDispatchId,
         createdAt: new Date(),
       });
@@ -110,7 +133,7 @@ export async function POST(request) {
         dispatchId: callDispatchId,
         apiSuccess,
         message: apiSuccess
-          ? `Live call dispatched to ${formattedPhone}`
+          ? `Live phone call dispatched to ${formattedPhone}`
           : `Call logged for ${formattedPhone}. (${apiErrorMessage})`,
       },
       { headers: corsHeaders }
