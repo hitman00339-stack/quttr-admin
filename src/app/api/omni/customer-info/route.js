@@ -1,14 +1,12 @@
 import { NextResponse } from 'next/server';
 import { MongoClient } from 'mongodb';
 
-// CORS Headers so OmniDimension dashboard can test directly from browser
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-// Handle Browser Preflight Check
 export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
@@ -17,21 +15,20 @@ let client;
 let clientPromise;
 
 async function getDirectCollection(collectionName) {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error("MONGODB_URI missing");
-  const dbName = process.env.MONGODB_DB_NAME || 'quttr_qr';
-  if (!clientPromise) {
-    client = new MongoClient(uri);
-    clientPromise = client.connect();
+  try {
+    const uri = process.env.MONGODB_URI;
+    if (!uri) return null;
+    const dbName = process.env.MONGODB_DB_NAME || 'quttr_qr';
+    if (!clientPromise) {
+      client = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 });
+      clientPromise = client.connect();
+    }
+    const connectedClient = await clientPromise;
+    return connectedClient.db(dbName).collection(collectionName);
+  } catch (e) {
+    return null;
   }
-  const connectedClient = await clientPromise;
-  return connectedClient.db(dbName).collection(collectionName);
 }
-
-const verifySecret = (req) => {
-  const authHeader = req.headers.get('authorization');
-  return authHeader === `Bearer ${process.env.OMNI_API_SECRET}`;
-};
 
 const normalizePhone = (phone) => {
   if (!phone) return '';
@@ -39,41 +36,51 @@ const normalizePhone = (phone) => {
 };
 
 export async function GET(request) {
-  if (!verifySecret(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
-  }
-
   try {
+    const authHeader = request.headers.get('authorization');
+    if (authHeader !== `Bearer ${process.env.OMNI_API_SECRET}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
+    }
+
     const { searchParams } = new URL(request.url);
     const rawPhone = searchParams.get('phone_number') || searchParams.get('phone');
-    const phone = normalizePhone(rawPhone);
+    const phone10 = normalizePhone(rawPhone);
 
-    if (!phone) {
-      return NextResponse.json(
-        { name: null, is_registered: false, user_type: 'guest' },
-        { headers: corsHeaders }
-      );
+    if (!phone10) {
+      return NextResponse.json({ name: null, is_registered: false, user_type: 'guest' }, { headers: corsHeaders });
     }
 
     const usersCol = await getDirectCollection('users');
-    const user = await usersCol.findOne({ phone: { $regex: new RegExp(phone + '$') } });
+    let user = null;
 
-    if (user) {
-      return NextResponse.json(
-        {
-          name: user.name || user.fullName || null,
-          is_registered: true,
-          user_type: 'customer'
-        },
-        { headers: corsHeaders }
-      );
+    if (usersCol) {
+      const phoneNum = parseInt(phone10, 10);
+      
+      // Search across phone, phoneNumber, mobile (String & Number formats)
+      user = await usersCol.findOne({
+        $or: [
+          { phone: { $regex: phone10 + '$' } },
+          { phoneNumber: { $regex: phone10 + '$' } },
+          { mobile: { $regex: phone10 + '$' } },
+          { phone: phoneNum },
+          { phoneNumber: phoneNum },
+          { mobile: phoneNum }
+        ]
+      }).catch(() => null);
     }
 
-    return NextResponse.json(
-      { name: null, is_registered: false, user_type: 'guest' },
-      { headers: corsHeaders }
-    );
+    if (user) {
+      const foundName = user.name || user.fullName || user.username || user.ownerName || null;
+      return NextResponse.json({
+        name: foundName,
+        is_registered: true,
+        user_type: 'customer',
+        message: foundName ? `User name is ${foundName}` : "Name not found"
+      }, { headers: corsHeaders });
+    }
+
+    return NextResponse.json({ name: null, is_registered: false, user_type: 'guest' }, { headers: corsHeaders });
   } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500, headers: corsHeaders });
+    return NextResponse.json({ name: null, is_registered: false, user_type: 'guest' }, { headers: corsHeaders });
   }
 }
