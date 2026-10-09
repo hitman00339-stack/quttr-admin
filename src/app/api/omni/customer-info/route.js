@@ -30,57 +30,84 @@ async function getDirectCollection(collectionName) {
   }
 }
 
-const normalizePhone = (phone) => {
-  if (!phone) return '';
-  return phone.replace(/\D/g, '').slice(-10);
-};
-
 export async function GET(request) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${process.env.OMNI_API_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
-    }
-
     const { searchParams } = new URL(request.url);
-    const rawPhone = searchParams.get('phone_number') || searchParams.get('phone');
-    const phone10 = normalizePhone(rawPhone);
 
-    if (!phone10) {
-      return NextResponse.json({ name: null, is_registered: false, user_type: 'guest' }, { headers: corsHeaders });
-    }
+    // Accept phone number from any parameter OmniDimension sends
+    const rawPhone =
+      searchParams.get('phone_number') ||
+      searchParams.get('phone') ||
+      searchParams.get('caller_number') ||
+      searchParams.get('caller_id') ||
+      searchParams.get('from') ||
+      searchParams.get('customer_phone') ||
+      '';
+
+    const digits = rawPhone.replace(/\D/g, '').slice(-10);
 
     const usersCol = await getDirectCollection('users');
-    let user = null;
+    const shopsCol = await getDirectCollection('shops');
 
-    if (usersCol) {
-      const phoneNum = parseInt(phone10, 10);
-      
-      // Search across phone, phoneNumber, mobile (String & Number formats)
-      user = await usersCol.findOne({
-        $or: [
-          { phone: { $regex: phone10 + '$' } },
-          { phoneNumber: { $regex: phone10 + '$' } },
-          { mobile: { $regex: phone10 + '$' } },
-          { phone: phoneNum },
-          { phoneNumber: phoneNum },
-          { mobile: phoneNum }
-        ]
-      }).catch(() => null);
+    let foundName = null;
+    let isRegistered = false;
+
+    if (digits && digits.length === 10) {
+      const numDigits = parseInt(digits, 10);
+      const regexPattern = digits + '$';
+
+      // 1. Search in users collection
+      if (usersCol) {
+        const user = await usersCol.findOne({
+          $or: [
+            { phone: { $regex: regexPattern } },
+            { phoneNumber: { $regex: regexPattern } },
+            { mobile: { $regex: regexPattern } },
+            { phone: numDigits },
+            { phoneNumber: numDigits },
+            { mobile: numDigits }
+          ]
+        }).catch(() => null);
+
+        if (user) {
+          foundName = user.name || user.fullName || user.username || user.first_name || null;
+          isRegistered = true;
+        }
+      }
+
+      // 2. If not found in users, check if caller is a shop owner
+      if (!foundName && shopsCol) {
+        const shop = await shopsCol.findOne({
+          $or: [
+            { 'owner.phone': { $regex: regexPattern } },
+            { 'owner.phone': numDigits },
+            { phone: { $regex: regexPattern } }
+          ]
+        }).catch(() => null);
+
+        if (shop) {
+          foundName = shop.owner?.name || shop.name || null;
+          isRegistered = true;
+        }
+      }
     }
 
-    if (user) {
-      const foundName = user.name || user.fullName || user.username || user.ownerName || null;
-      return NextResponse.json({
-        name: foundName,
-        is_registered: true,
-        user_type: 'customer',
-        message: foundName ? `User name is ${foundName}` : "Name not found"
-      }, { headers: corsHeaders });
-    }
+    return NextResponse.json({
+      name: foundName,
+      customer_name: foundName,
+      is_registered: isRegistered,
+      user_type: isRegistered ? 'registered_user' : 'guest',
+      message: foundName
+        ? `Customer is registered. Name: ${foundName}`
+        : 'Customer is a guest user.'
+    }, { headers: corsHeaders });
 
-    return NextResponse.json({ name: null, is_registered: false, user_type: 'guest' }, { headers: corsHeaders });
   } catch (err) {
-    return NextResponse.json({ name: null, is_registered: false, user_type: 'guest' }, { headers: corsHeaders });
+    return NextResponse.json({
+      name: null,
+      is_registered: false,
+      user_type: 'guest',
+      message: 'Guest user'
+    }, { headers: corsHeaders });
   }
 }
