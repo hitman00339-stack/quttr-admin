@@ -228,6 +228,9 @@ export default function CallingDashboard() {
                 <span>AI Agent Name:</span> <strong className="text-brand-400">Riya (रिया)</strong>
               </div>
               <div className="flex justify-between p-2 rounded bg-white/5">
+                <span>Agent ID:</span> <strong className="text-accent-500 font-mono">265888</strong>
+              </div>
+              <div className="flex justify-between p-2 rounded bg-white/5">
                 <span>Brand Pronunciation:</span> <strong className="text-brand-400">कटर (Katar)</strong>
               </div>
               <div className="flex justify-between p-2 rounded bg-white/5">
