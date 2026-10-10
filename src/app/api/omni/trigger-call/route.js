@@ -34,6 +34,8 @@ export async function POST(request) {
     const details = await lookupPersonalDetails(formattedPhone);
 
     let greeting = '';
+    const variationIdx = body.variation_index !== undefined ? Number(body.variation_index) : -1;
+
     if (call_type === 'barber') {
       if (!owner_name && details.found && details.userType === 'shop_owner') {
         owner_name = details.name;
@@ -41,7 +43,18 @@ export async function POST(request) {
       }
       name = owner_name || name || (details.found ? details.name : 'Barber');
       const cleanShop = shop_name || (details.found ? details.shopName : '');
-      greeting = `नमस्ते ${name && name !== 'Barber' ? `${name} जी` : 'जी'}, मैं रिया बोल रही हूँ कटर ऐप से। ${cleanShop ? `आप '${cleanShop}' के ओनर हैं ना? ` : 'आप हमारे ऐप पर रजिस्टर्ड बार्बर हैं ना? '}क्या आपसे एक मिनट बात हो सकती है?`;
+      const titleName = (name && name !== 'Barber') ? `${name} जी` : 'जी';
+
+      const barberVariations = [
+        `नमस्ते ${titleName}, मैं रिया बोल रही हूँ कटर ऐप से। ${cleanShop ? `आप '${cleanShop}' के ओनर हैं ना? ` : 'आप हमारे ऐप पर रजिस्टर्ड बार्बर हैं ना? '}क्या आपसे एक मिनट बात हो सकती है?`,
+        `हाँजी नमस्ते ${titleName}! रिया बात कर रही हूँ कटर ऐप से। ${cleanShop ? `'${cleanShop}' को लेकर ` : ''}बस एक मिनट आपका ज़रूरी फ़ीडबैक लेना था, क्या बात हो सकती है?`,
+        `हेलो ${titleName}, नमस्ते! मैं कटर ऐप की टीम से रिया बोल रही हूँ। ${cleanShop ? `आपकी शॉप '${cleanShop}' के बारे में ` : ''}बस आधा मिनट बात करनी थी, क्या आप फ्री हैं?`,
+        `अरे नमस्ते ${titleName}! कटर ऐप से रिया। ${cleanShop ? `'${cleanShop}' कैसी चल रही है? ` : ''}बस एक मिनट आपसे बात हो सकती है क्या?`,
+        `नमस्ते ${titleName}! मैं रिया बोल रही हूँ कटर ऐप से। ${cleanShop ? `आपकी शॉप '${cleanShop}' हमारे ऐप पर लिस्टेड है, ` : ''}बस एक छोटा सा फ़ीडबैक चाहिए था, क्या दो मिनट बात हो सकती है?`
+      ];
+
+      const selectedIdx = variationIdx >= 0 ? (variationIdx % barberVariations.length) : Math.floor(Math.random() * barberVariations.length);
+      greeting = barberVariations[selectedIdx];
     } else {
       // Customer mode
       if (!name || name === 'Guest' || name === 'Customer') {
@@ -51,7 +64,19 @@ export async function POST(request) {
           name = 'Customer';
         }
       }
-      greeting = `नमस्ते ${name && name !== 'Customer' ? `${name} जी` : 'जी'}, मैं रिया बोल रही हूँ कटर ऐप से। बस आधा मिनट बात हो सकती है क्या आपसे?`;
+      const titleName = (name && name !== 'Customer') ? `${name} जी` : 'जी';
+
+      const customerVariations = [
+        `नमस्ते ${titleName}, मैं रिया बोल रही हूँ कटर ऐप से। बस आधा मिनट बात हो सकती है क्या आपसे?`,
+        `हाँजी नमस्ते ${titleName}! रिया बात कर रही हूँ कटर ऐप से, उम्मीद है आप अच्छे होंगे। क्या बस तीस सेकंड बात हो सकती है?`,
+        `नमस्ते ${titleName}! मैं कटर ऐप की टीम से रिया। आपका बस एक मिनट समय चाहिए था, क्या बात हो सकती है?`,
+        `हेलो ${titleName}, नमस्ते! मैं रिया बोल रही हूँ कटर ऐप से। क्या आप फ्री हैं, बस एक मिनट कुछ ज़रूरी जानकारी देनी थी?`,
+        `अरे नमस्ते ${titleName}! रिया बात कर रही हूँ कटर ऐप से। अगर आप फ्री हों तो क्या आधा मिनट बात कर सकते हैं?`,
+        `नमस्ते ${titleName}! रिया बोल रही हूँ कटर सैलून बुकिंग ऐप से। आशा है सब बढ़िया होगा, क्या एक मिनट बात हो सकती है आपसे?`
+      ];
+
+      const selectedIdx = variationIdx >= 0 ? (variationIdx % customerVariations.length) : Math.floor(Math.random() * customerVariations.length);
+      greeting = customerVariations[selectedIdx];
     }
 
     const apiKey = process.env.OMNI_API_KEY || 'Ft1IcqSd6FMLouwsAFaMYjirRL93mJrsMPspYq7M8RI';
