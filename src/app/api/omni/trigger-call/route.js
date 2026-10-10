@@ -57,14 +57,14 @@ export async function POST(request) {
       greeting = barberVariations[selectedIdx];
     } else {
       // Customer mode
-      if (!name || name === 'Guest' || name === 'Customer') {
-        if (details.found && details.name) {
+      if (!name || name === 'Guest' || name === 'Customer' || name === 'User') {
+        if (details.found && details.name && details.name !== 'Customer' && details.name !== 'Guest') {
           name = details.name;
         } else {
-          name = 'Customer';
+          name = '';
         }
       }
-      const titleName = (name && name !== 'Customer') ? `${name} जी` : '';
+      const titleName = name ? `${name} जी` : '';
 
       const customerVariations = [
         titleName ? `हेलो ${titleName}? क्या मेरी आवाज़ आ रही है आपको?` : `हेलो? क्या मेरी आवाज़ आ रही है आपको?`,
@@ -150,7 +150,7 @@ export async function POST(request) {
         if (omniResponse.ok) {
           const resData = await omniResponse.json().catch(() => ({}));
           apiSuccess = true;
-          callDispatchId = resData.call_id || resData.id || resData.dispatch_id || callDispatchId;
+          callDispatchId = resData.requestId || resData.call_id || resData.id || resData.dispatch_id || callDispatchId;
           apiErrorMessage = 'Dispatched successfully';
           break;
         } else {
@@ -163,16 +163,17 @@ export async function POST(request) {
     }
 
     // Save outbound call summary to MongoDB
+    const displayName = name || (call_type === 'barber' ? 'Barber' : 'User');
     const summaryText = call_type === 'barber'
-      ? `Personalized barber feedback call dispatched to ${name} (${shop_name ? `Shop: ${shop_name}` : 'Registered Barber'}). Number: ${formattedPhone}. Status: ${apiSuccess ? 'Dispatched' : 'Queued'}.`
-      : `Customer outreach call dispatched to ${name} (${formattedPhone}). Pitch: Nearby barber booking & app intro. Status: ${apiSuccess ? 'Dispatched' : 'Queued'}.`;
+      ? `Personalized barber feedback call dispatched to ${displayName} (${shop_name ? `Shop: ${shop_name}` : 'Registered Barber'}). Number: ${formattedPhone}. Status: ${apiSuccess ? 'Dispatched' : 'Queued'}.`
+      : `Customer outreach call dispatched to ${displayName} (${formattedPhone}). Pitch: Nearby barber booking & app intro. Status: ${apiSuccess ? 'Dispatched' : 'Queued'}.`;
 
     const callsCol = await getDirectMongoCollection('call_summaries');
     if (callsCol) {
       await callsCol
         .insertOne({
           phone: formattedPhone,
-          name,
+          name: name || '',
           callType: call_type,
           shopName: shop_name || '',
           category: call_type === 'barber' ? 'barber_feedback' : 'customer_pitch',
@@ -187,9 +188,9 @@ export async function POST(request) {
 
     return NextResponse.json(
       {
-        success: true,
+        success: apiSuccess,
         phone: formattedPhone,
-        customer_name: name,
+        customer_name: name || '',
         shop_name: shop_name || '',
         call_type,
         greeting,
@@ -197,8 +198,9 @@ export async function POST(request) {
         dispatchId: callDispatchId,
         apiSuccess,
         message: apiSuccess
-          ? `Live phone call dispatched to ${name} (${formattedPhone})`
-          : `Call logged for ${name} (${formattedPhone}). (${apiErrorMessage})`,
+          ? `Live phone call dispatched to ${displayName} (${formattedPhone})`
+          : `Call dispatch failed: ${apiErrorMessage}`,
+        error: apiSuccess ? undefined : apiErrorMessage,
       },
       { headers: corsHeaders }
     );

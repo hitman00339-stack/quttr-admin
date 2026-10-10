@@ -6,7 +6,8 @@ import {
   Phone, PhoneCall, Users, Store, FileText, BarChart3, HelpCircle,
   Send, Play, Pause, RefreshCw, CheckCircle2, AlertCircle, Layers,
   CheckSquare, Square, Clock, ShieldCheck, ChevronRight, Volume2,
-  MessageSquare, Download, Filter, Search, X, Shuffle, ArrowRight
+  MessageSquare, Download, Filter, Search, X, Shuffle, ArrowRight,
+  SkipForward
 } from 'lucide-react';
 
 export default function CallingDashboard() {
@@ -40,6 +41,7 @@ export default function CallingDashboard() {
   const [selectedBarberIds, setSelectedBarberIds] = useState(new Set());
   const [isCampaignRunning, setIsCampaignRunning] = useState(false);
   const [isCampaignPaused, setIsCampaignPaused] = useState(false);
+  const [campaignPacingSeconds, setCampaignPacingSeconds] = useState(20);
   const [campaignProgress, setCampaignProgress] = useState({
     current: 0,
     total: 0,
@@ -47,12 +49,19 @@ export default function CallingDashboard() {
     phone: '',
     status: '',
     elapsedSec: 0,
+    remainingSec: 0,
   });
   const [campaignLogs, setCampaignLogs] = useState([]);
 
   // Campaign control refs
   const campaignStopRequestedRef = useRef(false);
   const campaignPauseRef = useRef(false);
+  const campaignSkipCurrentRef = useRef(false);
+
+  const handleSkipCurrentCall = () => {
+    campaignSkipCurrentRef.current = true;
+    toast.info('Skipping delay, dialing next contact immediately...');
+  };
 
   // Manual Bulk Queue state
   const [manualBulkNumbers, setManualBulkNumbers] = useState('');
@@ -193,17 +202,33 @@ export default function CallingDashboard() {
   };
 
   // ═════════════════════════════════════════════════════════════════════
-  // SAFE SEQUENTIAL QUEUE: WAITS UNTIL PREVIOUS CALL FULLY ENDS
+  // SMART RESPONSIVE PACING QUEUE WITH INSTANT SKIP & ZERO SKIPPED NUMBERS
   // ═════════════════════════════════════════════════════════════════════
 
-  const waitForCallCompletion = async (phone, targetLabel, maxWaitSec = 140) => {
+  const waitForCallCompletion = async (phone, targetLabel, maxPacingSec = campaignPacingSeconds) => {
     const startTs = Date.now();
-    // Wait initial 6 seconds for call setup/ringing before polling
-    await new Promise((r) => setTimeout(r, 6000));
+    campaignSkipCurrentRef.current = false;
+    let finalStatus = 'Dispatched';
+    let finalDuration = 0;
+    let finalSummary = 'Call dispatched';
+    let finalRecordingUrl = '';
+    let pollCount = 0;
 
-    while (Date.now() - startTs < maxWaitSec * 1000) {
+    while (Date.now() - startTs < maxPacingSec * 1000) {
       if (campaignStopRequestedRef.current) {
-        return { ended: true, status: 'canceled', duration: Math.round((Date.now() - startTs) / 1000) };
+        return { ended: true, status: 'Canceled', duration: Math.round((Date.now() - startTs) / 1000) };
+      }
+
+      // If admin clicks "Dial Next Now" / Skip
+      if (campaignSkipCurrentRef.current) {
+        const elapsed = Math.round((Date.now() - startTs) / 1000);
+        return {
+          ended: true,
+          status: finalStatus,
+          duration: finalDuration || elapsed,
+          summary: finalSummary,
+          recordingUrl: finalRecordingUrl,
+        };
       }
 
       // Handle pause
@@ -212,36 +237,48 @@ export default function CallingDashboard() {
       }
 
       const elapsed = Math.round((Date.now() - startTs) / 1000);
+      const remaining = Math.max(0, maxPacingSec - elapsed);
+
       setCampaignProgress((prev) => ({
         ...prev,
         elapsedSec: elapsed,
-        status: `Call in progress with ${targetLabel}... (${elapsed}s elapsed)`,
+        remainingSec: remaining,
+        status: `Call active with ${targetLabel}... Next call dials in ${remaining}s`,
       }));
 
-      try {
-        const res = await fetch(`/api/admin/calling/status?phone=${encodeURIComponent(phone)}`);
-        const json = await res.json();
-
-        if (json.success && json.found) {
-          if (json.hasEnded) {
+      // Check status from OmniDimension every 4s after initial 6s
+      pollCount++;
+      if (pollCount % 4 === 0 && elapsed >= 6) {
+        try {
+          const res = await fetch(`/api/admin/calling/status?phone=${encodeURIComponent(phone)}`);
+          const json = await res.json();
+          if (json.success && json.found && json.hasEnded) {
+            finalStatus = json.status === 'completed' ? 'Completed' : (json.status === 'no-answer' ? 'No Answer' : json.status);
+            finalDuration = json.durationSeconds || elapsed;
+            finalSummary = json.summary || 'Call finished';
+            finalRecordingUrl = json.recordingUrl || '';
             return {
               ended: true,
-              status: json.status || 'completed',
-              duration: json.durationSeconds || elapsed,
-              summary: json.summary || '',
-              recordingUrl: json.recordingUrl || '',
+              status: finalStatus,
+              duration: finalDuration,
+              summary: finalSummary,
+              recordingUrl: finalRecordingUrl,
             };
           }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
 
-      // Poll every 3.5 seconds
-      await new Promise((r) => setTimeout(r, 3500));
+      await new Promise((r) => setTimeout(r, 1000));
     }
 
-    // Fallback if timeout reached
     const totalElapsed = Math.round((Date.now() - startTs) / 1000);
-    return { ended: true, status: 'completed', duration: totalElapsed, summary: 'Call finished' };
+    return {
+      ended: true,
+      status: finalStatus,
+      duration: finalDuration || totalElapsed,
+      summary: finalSummary,
+      recordingUrl: finalRecordingUrl,
+    };
   };
 
   // Start Sequential Barber Feedback Campaign
@@ -256,9 +293,10 @@ export default function CallingDashboard() {
     setIsCampaignPaused(false);
     campaignStopRequestedRef.current = false;
     campaignPauseRef.current = false;
+    campaignSkipCurrentRef.current = false;
     setCampaignLogs([]);
 
-    toast.success(`Starting campaign for ${queue.length} barbers sequentially (no skipping)...`);
+    toast.success(`Starting campaign for ${queue.length} barbers (pacing: ${campaignPacingSeconds}s)...`);
 
     for (let i = 0; i < queue.length; i++) {
       if (campaignStopRequestedRef.current) {
@@ -266,7 +304,6 @@ export default function CallingDashboard() {
         break;
       }
 
-      // Check pause
       while (campaignPauseRef.current && !campaignStopRequestedRef.current) {
         await new Promise((r) => setTimeout(r, 1000));
       }
@@ -279,6 +316,7 @@ export default function CallingDashboard() {
         phone: b.phone,
         status: `Dialing ${b.ownerName}...`,
         elapsedSec: 0,
+        remainingSec: campaignPacingSeconds,
       });
 
       const tId = toast.loading(`[${i + 1}/${queue.length}] Dialing ${b.ownerName} (${b.shopName})...`);
@@ -299,25 +337,24 @@ export default function CallingDashboard() {
         const json = await res.json();
 
         if (json.success) {
-          toast.loading(`[${i + 1}/${queue.length}] Call active with ${b.ownerName}. Waiting for completion...`, { id: tId });
+          toast.loading(`[${i + 1}/${queue.length}] Call placed to ${b.ownerName}. Next in ${campaignPacingSeconds}s...`, { id: tId });
 
-          // WAIT UNTIL CALL ACTUALLY FINISHES!
-          const result = await waitForCallCompletion(b.phone, b.ownerName);
+          const result = await waitForCallCompletion(b.phone, b.ownerName, campaignPacingSeconds);
 
           const logEntry = {
             target: `${b.ownerName} (${b.shopName})`,
             phone: b.phone,
             status: result.status === 'completed' ? 'Completed' : (result.status === 'no-answer' ? 'No Answer' : result.status),
             duration: `${result.duration}s`,
-            summary: result.summary || json.summary || 'Call finished',
+            summary: result.summary || json.summary || 'Call dispatched',
             recordingUrl: result.recordingUrl,
             time: new Date().toLocaleTimeString(),
           };
           setCampaignLogs((prev) => [logEntry, ...prev]);
 
-          toast.success(`[${i + 1}/${queue.length}] Call ended with ${b.ownerName} (${result.duration}s)`, { id: tId });
+          toast.success(`[${i + 1}/${queue.length}] Finished with ${b.ownerName}`, { id: tId });
         } else {
-          toast.error(`[${i + 1}/${queue.length}] Failed to dial ${b.ownerName}: ${json.error}`, { id: tId });
+          toast.error(`[${i + 1}/${queue.length}] Failed to dial ${b.ownerName}: ${json.error || 'Trunk error'}`, { id: tId });
           setCampaignLogs((prev) => [
             {
               target: `${b.ownerName} (${b.shopName})`,
@@ -329,18 +366,14 @@ export default function CallingDashboard() {
             },
             ...prev,
           ]);
+          await new Promise((r) => setTimeout(r, 1500));
         }
       } catch (e) {
         toast.error(`[${i + 1}/${queue.length}] Network error: ${b.ownerName}`, { id: tId });
       }
 
-      // Small 4-second breather so trunk is 100% clear before next dial
       if (i < queue.length - 1 && !campaignStopRequestedRef.current) {
-        setCampaignProgress((prev) => ({
-          ...prev,
-          status: 'Call ended. Cool-down 4s before dialing next barber...',
-        }));
-        await new Promise((r) => setTimeout(r, 4000));
+        await new Promise((r) => setTimeout(r, 2000));
       }
     }
 
@@ -362,9 +395,10 @@ export default function CallingDashboard() {
     setIsCampaignPaused(false);
     campaignStopRequestedRef.current = false;
     campaignPauseRef.current = false;
+    campaignSkipCurrentRef.current = false;
     setCampaignLogs([]);
 
-    toast.success(`Starting campaign for ${queue.length} customers sequentially (no skipping)...`);
+    toast.success(`Starting campaign for ${queue.length} customers (pacing: ${campaignPacingSeconds}s)...`);
 
     for (let i = 0; i < queue.length; i++) {
       if (campaignStopRequestedRef.current) {
@@ -372,7 +406,6 @@ export default function CallingDashboard() {
         break;
       }
 
-      // Check pause
       while (campaignPauseRef.current && !campaignStopRequestedRef.current) {
         await new Promise((r) => setTimeout(r, 1000));
       }
@@ -385,6 +418,7 @@ export default function CallingDashboard() {
         phone: u.phone,
         status: `Dialing customer ${u.name}...`,
         elapsedSec: 0,
+        remainingSec: campaignPacingSeconds,
       });
 
       const tId = toast.loading(`[${i + 1}/${queue.length}] Dialing ${u.name}...`);
@@ -403,37 +437,43 @@ export default function CallingDashboard() {
         const json = await res.json();
 
         if (json.success) {
-          toast.loading(`[${i + 1}/${queue.length}] Call active with ${u.name}. Waiting for call to end...`, { id: tId });
+          toast.loading(`[${i + 1}/${queue.length}] Call placed to ${u.name}. Next in ${campaignPacingSeconds}s...`, { id: tId });
 
-          // WAIT UNTIL CALL ACTUALLY FINISHES!
-          const result = await waitForCallCompletion(u.phone, u.name);
+          const result = await waitForCallCompletion(u.phone, u.name, campaignPacingSeconds);
 
           const logEntry = {
             target: u.name,
             phone: u.phone,
             status: result.status === 'completed' ? 'Completed' : (result.status === 'no-answer' ? 'No Answer' : result.status),
             duration: `${result.duration}s`,
-            summary: result.summary || json.summary || 'Call finished',
+            summary: result.summary || json.summary || 'Call dispatched',
             recordingUrl: result.recordingUrl,
             time: new Date().toLocaleTimeString(),
           };
           setCampaignLogs((prev) => [logEntry, ...prev]);
 
-          toast.success(`[${i + 1}/${queue.length}] Call ended with ${u.name} (${result.duration}s)`, { id: tId });
+          toast.success(`[${i + 1}/${queue.length}] Finished with ${u.name}`, { id: tId });
         } else {
-          toast.error(`[${i + 1}/${queue.length}] Failed: ${u.name}`, { id: tId });
+          toast.error(`[${i + 1}/${queue.length}] Failed: ${u.name} (${json.error || 'Trunk error'})`, { id: tId });
+          setCampaignLogs((prev) => [
+            {
+              target: u.name,
+              phone: u.phone,
+              status: 'Failed',
+              duration: '0s',
+              summary: json.error || 'Failed to place call',
+              time: new Date().toLocaleTimeString(),
+            },
+            ...prev,
+          ]);
+          await new Promise((r) => setTimeout(r, 1500));
         }
       } catch (e) {
         toast.error(`[${i + 1}/${queue.length}] Error: ${u.name}`, { id: tId });
       }
 
-      // 4-second breather between calls
       if (i < queue.length - 1 && !campaignStopRequestedRef.current) {
-        setCampaignProgress((prev) => ({
-          ...prev,
-          status: 'Call ended. Cool-down 4s before dialing next customer...',
-        }));
-        await new Promise((r) => setTimeout(r, 4000));
+        await new Promise((r) => setTimeout(r, 2000));
       }
     }
 
@@ -457,6 +497,7 @@ export default function CallingDashboard() {
   const handleStopCampaign = () => {
     campaignStopRequestedRef.current = true;
     campaignPauseRef.current = false;
+    campaignSkipCurrentRef.current = false;
     setIsCampaignPaused(false);
     toast.info('Stopping campaign...');
   };
@@ -478,20 +519,26 @@ export default function CallingDashboard() {
     setIsCampaignRunning(true);
     campaignStopRequestedRef.current = false;
     campaignPauseRef.current = false;
+    campaignSkipCurrentRef.current = false;
     setCampaignLogs([]);
-    toast.success(`Starting queue of ${uniqueNumbers.length} numbers sequentially...`);
+    toast.success(`Starting queue of ${uniqueNumbers.length} numbers (pacing: ${campaignPacingSeconds}s)...`);
 
     for (let i = 0; i < uniqueNumbers.length; i++) {
       if (campaignStopRequestedRef.current) break;
+
+      while (campaignPauseRef.current && !campaignStopRequestedRef.current) {
+        await new Promise((r) => setTimeout(r, 1000));
+      }
 
       const num = uniqueNumbers[i];
       setCampaignProgress({
         current: i + 1,
         total: uniqueNumbers.length,
-        currentTarget: `Number ${num}`,
+        currentTarget: `Number +91${num}`,
         phone: num,
         status: `Dialing +91${num}...`,
         elapsedSec: 0,
+        remainingSec: campaignPacingSeconds,
       });
 
       const tId = toast.loading(`[${i + 1}/${uniqueNumbers.length}] Calling ${num}...`);
@@ -509,28 +556,40 @@ export default function CallingDashboard() {
         const json = await res.json();
 
         if (json.success) {
-          const result = await waitForCallCompletion(num, num);
+          const result = await waitForCallCompletion(num, `+91${num}`, campaignPacingSeconds);
           setCampaignLogs((prev) => [
             {
               target: `+91${num}`,
               phone: num,
               status: result.status,
               duration: `${result.duration}s`,
-              summary: result.summary || 'Call completed',
+              summary: result.summary || 'Call dispatched',
               time: new Date().toLocaleTimeString(),
             },
             ...prev,
           ]);
-          toast.success(`[${i + 1}/${uniqueNumbers.length}] Ended with ${num} (${result.duration}s)`, { id: tId });
+          toast.success(`[${i + 1}/${uniqueNumbers.length}] Finished with ${num}`, { id: tId });
         } else {
-          toast.error(`Failed ${num}`, { id: tId });
+          toast.error(`Failed ${num}: ${json.error || 'Trunk error'}`, { id: tId });
+          setCampaignLogs((prev) => [
+            {
+              target: `+91${num}`,
+              phone: num,
+              status: 'Failed',
+              duration: '0s',
+              summary: json.error || 'Failed to place call',
+              time: new Date().toLocaleTimeString(),
+            },
+            ...prev,
+          ]);
+          await new Promise((r) => setTimeout(r, 1500));
         }
       } catch (e) {
         toast.error(`Error ${num}`, { id: tId });
       }
 
       if (i < uniqueNumbers.length - 1 && !campaignStopRequestedRef.current) {
-        await new Promise((r) => setTimeout(r, 4000));
+        await new Promise((r) => setTimeout(r, 2000));
       }
     }
 
@@ -855,8 +914,31 @@ export default function CallingDashboard() {
               </div>
 
               <div className="flex items-center gap-2.5 flex-wrap">
+                {/* Pacing Speed Selector */}
+                <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs">
+                  <Clock className="w-3.5 h-3.5 text-brand-400" />
+                  <span className="text-white/60">Pacing:</span>
+                  <select
+                    value={campaignPacingSeconds}
+                    onChange={(e) => setCampaignPacingSeconds(Number(e.target.value))}
+                    disabled={isCampaignRunning}
+                    className="bg-transparent text-brand-300 font-semibold outline-none cursor-pointer"
+                  >
+                    <option value={15} className="bg-slate-900">Fast (15s)</option>
+                    <option value={20} className="bg-slate-900">Normal (20s)</option>
+                    <option value={30} className="bg-slate-900">Relaxed (30s)</option>
+                  </select>
+                </div>
+
                 {isCampaignRunning ? (
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleSkipCurrentCall}
+                      className="btn-outline border-brand-500/40 text-brand-300 hover:bg-brand-500/10 flex items-center gap-1.5 px-3 py-2 text-xs font-semibold"
+                      title="Skip delay and dial next barber immediately"
+                    >
+                      <SkipForward className="w-3.5 h-3.5 text-brand-400" /> Dial Next Now
+                    </button>
                     <button
                       onClick={togglePauseCampaign}
                       className="btn-outline flex items-center gap-1.5 px-3 py-2 text-xs"
@@ -887,7 +969,7 @@ export default function CallingDashboard() {
             {/* Campaign In-Progress Status Card */}
             {isCampaignRunning && (
               <div className="p-4 rounded-lg bg-brand-500/15 border border-brand-500/40 space-y-3">
-                <div className="flex justify-between text-sm font-bold text-brand-300">
+                <div className="flex justify-between items-center text-sm font-bold text-brand-300">
                   <span className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping inline-block" />
                     Calling Barber: {campaignProgress.currentTarget}
@@ -900,9 +982,17 @@ export default function CallingDashboard() {
                     style={{ width: `${(campaignProgress.current / campaignProgress.total) * 100}%` }}
                   />
                 </div>
-                <div className="flex justify-between items-center text-xs text-white/80">
+                <div className="flex justify-between items-center text-xs text-white/80 flex-wrap gap-2">
                   <span className="font-mono text-emerald-300">{campaignProgress.status}</span>
-                  <span className="text-2xs text-white/60">Phone: {campaignProgress.phone}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xs text-white/60">Phone: {campaignProgress.phone}</span>
+                    <button
+                      onClick={handleSkipCurrentCall}
+                      className="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-2.5 py-1 rounded text-2xs flex items-center gap-1 shadow transition-all active:scale-95"
+                    >
+                      <SkipForward className="w-3 h-3" /> Dial Next Now
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1013,8 +1103,31 @@ export default function CallingDashboard() {
               </div>
 
               <div className="flex items-center gap-2.5 flex-wrap">
+                {/* Pacing Speed Selector */}
+                <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs">
+                  <Clock className="w-3.5 h-3.5 text-brand-400" />
+                  <span className="text-white/60">Pacing:</span>
+                  <select
+                    value={campaignPacingSeconds}
+                    onChange={(e) => setCampaignPacingSeconds(Number(e.target.value))}
+                    disabled={isCampaignRunning}
+                    className="bg-transparent text-brand-300 font-semibold outline-none cursor-pointer"
+                  >
+                    <option value={15} className="bg-slate-900">Fast (15s)</option>
+                    <option value={20} className="bg-slate-900">Normal (20s)</option>
+                    <option value={30} className="bg-slate-900">Relaxed (30s)</option>
+                  </select>
+                </div>
+
                 {isCampaignRunning ? (
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleSkipCurrentCall}
+                      className="btn-outline border-brand-500/40 text-brand-300 hover:bg-brand-500/10 flex items-center gap-1.5 px-3 py-2 text-xs font-semibold"
+                      title="Skip delay and dial next customer immediately"
+                    >
+                      <SkipForward className="w-3.5 h-3.5 text-brand-400" /> Dial Next Now
+                    </button>
                     <button
                       onClick={togglePauseCampaign}
                       className="btn-outline flex items-center gap-1.5 px-3 py-2 text-xs"
@@ -1045,7 +1158,7 @@ export default function CallingDashboard() {
             {/* Campaign Progress Bar */}
             {isCampaignRunning && (
               <div className="p-4 rounded-lg bg-brand-500/15 border border-brand-500/40 space-y-3">
-                <div className="flex justify-between text-sm font-bold text-brand-300">
+                <div className="flex justify-between items-center text-sm font-bold text-brand-300">
                   <span className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping inline-block" />
                     Calling Customer: {campaignProgress.currentTarget}
@@ -1058,9 +1171,17 @@ export default function CallingDashboard() {
                     style={{ width: `${(campaignProgress.current / campaignProgress.total) * 100}%` }}
                   />
                 </div>
-                <div className="flex justify-between items-center text-xs text-white/80">
+                <div className="flex justify-between items-center text-xs text-white/80 flex-wrap gap-2">
                   <span className="font-mono text-emerald-300">{campaignProgress.status}</span>
-                  <span className="text-2xs text-white/60">Phone: {campaignProgress.phone}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xs text-white/60">Phone: {campaignProgress.phone}</span>
+                    <button
+                      onClick={handleSkipCurrentCall}
+                      className="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-2.5 py-1 rounded text-2xs flex items-center gap-1 shadow transition-all active:scale-95"
+                    >
+                      <SkipForward className="w-3 h-3" /> Dial Next Now
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1172,13 +1293,87 @@ export default function CallingDashboard() {
             />
           </div>
 
-          <button
-            disabled={isCampaignRunning}
-            onClick={handleStartManualCampaign}
-            className="btn-primary flex items-center gap-2 px-6 py-2.5"
-          >
-            <Play className="w-4 h-4" /> {isCampaignRunning ? 'Campaign in Progress...' : 'Start Manual Queue Campaign'}
-          </button>
+          <div className="flex items-center gap-3 pt-2 flex-wrap">
+            {/* Pacing Speed Selector */}
+            <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs">
+              <Clock className="w-3.5 h-3.5 text-brand-400" />
+              <span className="text-white/60">Pacing:</span>
+              <select
+                value={campaignPacingSeconds}
+                onChange={(e) => setCampaignPacingSeconds(Number(e.target.value))}
+                disabled={isCampaignRunning}
+                className="bg-transparent text-brand-300 font-semibold outline-none cursor-pointer"
+              >
+                <option value={15} className="bg-slate-900">Fast (15s)</option>
+                <option value={20} className="bg-slate-900">Normal (20s)</option>
+                <option value={30} className="bg-slate-900">Relaxed (30s)</option>
+              </select>
+            </div>
+
+            {isCampaignRunning ? (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSkipCurrentCall}
+                  className="btn-outline border-brand-500/40 text-brand-300 hover:bg-brand-500/10 flex items-center gap-1.5 px-3 py-2 text-xs font-semibold"
+                  title="Skip delay and dial next number immediately"
+                >
+                  <SkipForward className="w-3.5 h-3.5 text-brand-400" /> Dial Next Now
+                </button>
+                <button
+                  onClick={togglePauseCampaign}
+                  className="btn-outline flex items-center gap-1.5 px-3 py-2 text-xs"
+                >
+                  {isCampaignPaused ? <Play className="w-3.5 h-3.5 text-emerald-400" /> : <Pause className="w-3.5 h-3.5 text-yellow-400" />}
+                  {isCampaignPaused ? 'Resume Campaign' : 'Pause Campaign'}
+                </button>
+                <button
+                  onClick={handleStopCampaign}
+                  className="btn-outline border-red-500/40 text-red-400 hover:bg-red-500/10 flex items-center gap-1.5 px-3 py-2 text-xs"
+                >
+                  <X className="w-3.5 h-3.5" /> Stop Campaign
+                </button>
+              </div>
+            ) : (
+              <button
+                disabled={isCampaignRunning}
+                onClick={handleStartManualCampaign}
+                className="btn-primary flex items-center gap-2 px-6 py-2.5"
+              >
+                <Play className="w-4 h-4" /> Start Manual Queue Campaign
+              </button>
+            )}
+          </div>
+
+          {/* Campaign Progress Bar */}
+          {isCampaignRunning && (
+            <div className="p-4 rounded-lg bg-brand-500/15 border border-brand-500/40 space-y-3 mt-4">
+              <div className="flex justify-between items-center text-sm font-bold text-brand-300">
+                <span className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                  Calling: {campaignProgress.currentTarget}
+                </span>
+                <span>{campaignProgress.current} of {campaignProgress.total}</span>
+              </div>
+              <div className="w-full bg-white/10 rounded-full h-2">
+                <div
+                  className="bg-brand-500 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${(campaignProgress.current / (campaignProgress.total || 1)) * 100}%` }}
+                />
+              </div>
+              <div className="flex justify-between items-center text-xs text-white/80 flex-wrap gap-2">
+                <span className="font-mono text-emerald-300">{campaignProgress.status}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xs text-white/60">Phone: {campaignProgress.phone}</span>
+                  <button
+                    onClick={handleSkipCurrentCall}
+                    className="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-2.5 py-1 rounded text-2xs flex items-center gap-1 shadow transition-all active:scale-95"
+                  >
+                    <SkipForward className="w-3 h-3" /> Dial Next Now
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
