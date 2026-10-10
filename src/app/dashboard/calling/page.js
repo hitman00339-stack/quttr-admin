@@ -41,7 +41,7 @@ export default function CallingDashboard() {
   const [selectedBarberIds, setSelectedBarberIds] = useState(new Set());
   const [isCampaignRunning, setIsCampaignRunning] = useState(false);
   const [isCampaignPaused, setIsCampaignPaused] = useState(false);
-  const [campaignPacingSeconds, setCampaignPacingSeconds] = useState(20);
+  const [trunkCooldownSeconds, setTrunkCooldownSeconds] = useState(4);
   const [campaignProgress, setCampaignProgress] = useState({
     current: 0,
     total: 0,
@@ -49,7 +49,6 @@ export default function CallingDashboard() {
     phone: '',
     status: '',
     elapsedSec: 0,
-    remainingSec: 0,
   });
   const [campaignLogs, setCampaignLogs] = useState([]);
 
@@ -202,19 +201,22 @@ export default function CallingDashboard() {
   };
 
   // ═════════════════════════════════════════════════════════════════════
-  // SMART RESPONSIVE PACING QUEUE WITH INSTANT SKIP & ZERO SKIPPED NUMBERS
+  // SAFE SEQUENTIAL QUEUE: WAITS UNTIL USER HANGS UP BEFORE NEXT CALL
   // ═════════════════════════════════════════════════════════════════════
 
-  const waitForCallCompletion = async (phone, targetLabel, maxPacingSec = campaignPacingSeconds) => {
+  const waitForCallCompletion = async (phone, targetLabel, maxWaitSec = 180) => {
     const startTs = Date.now();
     campaignSkipCurrentRef.current = false;
-    let finalStatus = 'Dispatched';
+    let finalStatus = 'Completed';
     let finalDuration = 0;
-    let finalSummary = 'Call dispatched';
+    let finalSummary = 'Call finished';
     let finalRecordingUrl = '';
     let pollCount = 0;
 
-    while (Date.now() - startTs < maxPacingSec * 1000) {
+    // Initial 4 seconds for telephony setup and carrier ringing
+    await new Promise((r) => setTimeout(r, 4000));
+
+    while (Date.now() - startTs < maxWaitSec * 1000) {
       if (campaignStopRequestedRef.current) {
         return { ended: true, status: 'Canceled', duration: Math.round((Date.now() - startTs) / 1000) };
       }
@@ -237,20 +239,18 @@ export default function CallingDashboard() {
       }
 
       const elapsed = Math.round((Date.now() - startTs) / 1000);
-      const remaining = Math.max(0, maxPacingSec - elapsed);
 
       setCampaignProgress((prev) => ({
         ...prev,
         elapsedSec: elapsed,
-        remainingSec: remaining,
-        status: `Call active with ${targetLabel}... Next call dials in ${remaining}s`,
+        status: `🟢 Call active with ${targetLabel}... (${elapsed}s) · Waiting for user to hang up...`,
       }));
 
-      // Check status from OmniDimension every 4s after initial 6s
+      // Poll OmniDimension status every 3 seconds to check if call terminated
       pollCount++;
-      if (pollCount % 4 === 0 && elapsed >= 6) {
+      if (pollCount % 3 === 0) {
         try {
-          const res = await fetch(`/api/admin/calling/status?phone=${encodeURIComponent(phone)}`);
+          const res = await fetch(`/api/admin/calling/status?phone=${encodeURIComponent(phone)}&since=${startTs}`);
           const json = await res.json();
           if (json.success && json.found && json.hasEnded) {
             finalStatus = json.status === 'completed' ? 'Completed' : (json.status === 'no-answer' ? 'No Answer' : json.status);
@@ -296,7 +296,7 @@ export default function CallingDashboard() {
     campaignSkipCurrentRef.current = false;
     setCampaignLogs([]);
 
-    toast.success(`Starting campaign for ${queue.length} barbers (pacing: ${campaignPacingSeconds}s)...`);
+    toast.success(`Starting campaign for ${queue.length} barbers (waiting for each call to end)...`);
 
     for (let i = 0; i < queue.length; i++) {
       if (campaignStopRequestedRef.current) {
@@ -314,9 +314,8 @@ export default function CallingDashboard() {
         total: queue.length,
         currentTarget: `${b.ownerName} (${b.shopName})`,
         phone: b.phone,
-        status: `Dialing ${b.ownerName}...`,
+        status: `📞 Dialing ${b.ownerName}...`,
         elapsedSec: 0,
-        remainingSec: campaignPacingSeconds,
       });
 
       const tId = toast.loading(`[${i + 1}/${queue.length}] Dialing ${b.ownerName} (${b.shopName})...`);
@@ -337,22 +336,23 @@ export default function CallingDashboard() {
         const json = await res.json();
 
         if (json.success) {
-          toast.loading(`[${i + 1}/${queue.length}] Call placed to ${b.ownerName}. Next in ${campaignPacingSeconds}s...`, { id: tId });
+          toast.loading(`[${i + 1}/${queue.length}] Call connected with ${b.ownerName}. Monitoring call...`, { id: tId });
 
-          const result = await waitForCallCompletion(b.phone, b.ownerName, campaignPacingSeconds);
+          // WAIT UNTIL CALL ACTUALLY FINISHES (USER HANGS UP OR NO ANSWER)!
+          const result = await waitForCallCompletion(b.phone, b.ownerName, 180);
 
           const logEntry = {
             target: `${b.ownerName} (${b.shopName})`,
             phone: b.phone,
             status: result.status === 'completed' ? 'Completed' : (result.status === 'no-answer' ? 'No Answer' : result.status),
             duration: `${result.duration}s`,
-            summary: result.summary || json.summary || 'Call dispatched',
+            summary: result.summary || json.summary || 'Call finished',
             recordingUrl: result.recordingUrl,
             time: new Date().toLocaleTimeString(),
           };
           setCampaignLogs((prev) => [logEntry, ...prev]);
 
-          toast.success(`[${i + 1}/${queue.length}] Finished with ${b.ownerName}`, { id: tId });
+          toast.success(`[${i + 1}/${queue.length}] Call ended with ${b.ownerName} (${result.duration}s)`, { id: tId });
         } else {
           toast.error(`[${i + 1}/${queue.length}] Failed to dial ${b.ownerName}: ${json.error || 'Trunk error'}`, { id: tId });
           setCampaignLogs((prev) => [
@@ -372,8 +372,13 @@ export default function CallingDashboard() {
         toast.error(`[${i + 1}/${queue.length}] Network error: ${b.ownerName}`, { id: tId });
       }
 
+      // Cool-down before dialing next barber so trunk line clears completely
       if (i < queue.length - 1 && !campaignStopRequestedRef.current) {
-        await new Promise((r) => setTimeout(r, 2000));
+        setCampaignProgress((prev) => ({
+          ...prev,
+          status: `Trunk cool-down ${trunkCooldownSeconds}s before dialing next barber...`,
+        }));
+        await new Promise((r) => setTimeout(r, trunkCooldownSeconds * 1000));
       }
     }
 
@@ -398,7 +403,7 @@ export default function CallingDashboard() {
     campaignSkipCurrentRef.current = false;
     setCampaignLogs([]);
 
-    toast.success(`Starting campaign for ${queue.length} customers (pacing: ${campaignPacingSeconds}s)...`);
+    toast.success(`Starting campaign for ${queue.length} customers (waiting for each call to end)...`);
 
     for (let i = 0; i < queue.length; i++) {
       if (campaignStopRequestedRef.current) {
@@ -416,9 +421,8 @@ export default function CallingDashboard() {
         total: queue.length,
         currentTarget: u.name,
         phone: u.phone,
-        status: `Dialing customer ${u.name}...`,
+        status: `📞 Dialing customer ${u.name}...`,
         elapsedSec: 0,
-        remainingSec: campaignPacingSeconds,
       });
 
       const tId = toast.loading(`[${i + 1}/${queue.length}] Dialing ${u.name}...`);
@@ -437,22 +441,23 @@ export default function CallingDashboard() {
         const json = await res.json();
 
         if (json.success) {
-          toast.loading(`[${i + 1}/${queue.length}] Call placed to ${u.name}. Next in ${campaignPacingSeconds}s...`, { id: tId });
+          toast.loading(`[${i + 1}/${queue.length}] Call connected with ${u.name}. Monitoring call...`, { id: tId });
 
-          const result = await waitForCallCompletion(u.phone, u.name, campaignPacingSeconds);
+          // WAIT UNTIL CALL ACTUALLY FINISHES (USER HANGS UP OR NO ANSWER)!
+          const result = await waitForCallCompletion(u.phone, u.name, 180);
 
           const logEntry = {
             target: u.name,
             phone: u.phone,
             status: result.status === 'completed' ? 'Completed' : (result.status === 'no-answer' ? 'No Answer' : result.status),
             duration: `${result.duration}s`,
-            summary: result.summary || json.summary || 'Call dispatched',
+            summary: result.summary || json.summary || 'Call finished',
             recordingUrl: result.recordingUrl,
             time: new Date().toLocaleTimeString(),
           };
           setCampaignLogs((prev) => [logEntry, ...prev]);
 
-          toast.success(`[${i + 1}/${queue.length}] Finished with ${u.name}`, { id: tId });
+          toast.success(`[${i + 1}/${queue.length}] Call ended with ${u.name} (${result.duration}s)`, { id: tId });
         } else {
           toast.error(`[${i + 1}/${queue.length}] Failed: ${u.name} (${json.error || 'Trunk error'})`, { id: tId });
           setCampaignLogs((prev) => [
@@ -472,8 +477,13 @@ export default function CallingDashboard() {
         toast.error(`[${i + 1}/${queue.length}] Error: ${u.name}`, { id: tId });
       }
 
+      // Cool-down before dialing next customer so trunk line clears completely
       if (i < queue.length - 1 && !campaignStopRequestedRef.current) {
-        await new Promise((r) => setTimeout(r, 2000));
+        setCampaignProgress((prev) => ({
+          ...prev,
+          status: `Trunk cool-down ${trunkCooldownSeconds}s before dialing next customer...`,
+        }));
+        await new Promise((r) => setTimeout(r, trunkCooldownSeconds * 1000));
       }
     }
 
@@ -521,7 +531,7 @@ export default function CallingDashboard() {
     campaignPauseRef.current = false;
     campaignSkipCurrentRef.current = false;
     setCampaignLogs([]);
-    toast.success(`Starting queue of ${uniqueNumbers.length} numbers (pacing: ${campaignPacingSeconds}s)...`);
+    toast.success(`Starting queue of ${uniqueNumbers.length} numbers (waiting for each call to end)...`);
 
     for (let i = 0; i < uniqueNumbers.length; i++) {
       if (campaignStopRequestedRef.current) break;
@@ -536,9 +546,8 @@ export default function CallingDashboard() {
         total: uniqueNumbers.length,
         currentTarget: `Number +91${num}`,
         phone: num,
-        status: `Dialing +91${num}...`,
+        status: `📞 Dialing +91${num}...`,
         elapsedSec: 0,
-        remainingSec: campaignPacingSeconds,
       });
 
       const tId = toast.loading(`[${i + 1}/${uniqueNumbers.length}] Calling ${num}...`);
@@ -556,19 +565,23 @@ export default function CallingDashboard() {
         const json = await res.json();
 
         if (json.success) {
-          const result = await waitForCallCompletion(num, `+91${num}`, campaignPacingSeconds);
+          toast.loading(`[${i + 1}/${uniqueNumbers.length}] Connected with ${num}. Monitoring call...`, { id: tId });
+
+          // WAIT UNTIL CALL ACTUALLY FINISHES (USER HANGS UP OR NO ANSWER)!
+          const result = await waitForCallCompletion(num, `+91${num}`, 180);
+
           setCampaignLogs((prev) => [
             {
               target: `+91${num}`,
               phone: num,
               status: result.status,
               duration: `${result.duration}s`,
-              summary: result.summary || 'Call dispatched',
+              summary: result.summary || 'Call finished',
               time: new Date().toLocaleTimeString(),
             },
             ...prev,
           ]);
-          toast.success(`[${i + 1}/${uniqueNumbers.length}] Finished with ${num}`, { id: tId });
+          toast.success(`[${i + 1}/${uniqueNumbers.length}] Call ended with ${num} (${result.duration}s)`, { id: tId });
         } else {
           toast.error(`Failed ${num}: ${json.error || 'Trunk error'}`, { id: tId });
           setCampaignLogs((prev) => [
@@ -588,8 +601,13 @@ export default function CallingDashboard() {
         toast.error(`Error ${num}`, { id: tId });
       }
 
+      // Cool-down before dialing next number so trunk line clears completely
       if (i < uniqueNumbers.length - 1 && !campaignStopRequestedRef.current) {
-        await new Promise((r) => setTimeout(r, 2000));
+        setCampaignProgress((prev) => ({
+          ...prev,
+          status: `Trunk cool-down ${trunkCooldownSeconds}s before dialing next number...`,
+        }));
+        await new Promise((r) => setTimeout(r, trunkCooldownSeconds * 1000));
       }
     }
 
@@ -914,19 +932,19 @@ export default function CallingDashboard() {
               </div>
 
               <div className="flex items-center gap-2.5 flex-wrap">
-                {/* Pacing Speed Selector */}
+                {/* Trunk Line Cool-down Selector */}
                 <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs">
                   <Clock className="w-3.5 h-3.5 text-brand-400" />
-                  <span className="text-white/60">Pacing:</span>
+                  <span className="text-white/60">Trunk Cool-down:</span>
                   <select
-                    value={campaignPacingSeconds}
-                    onChange={(e) => setCampaignPacingSeconds(Number(e.target.value))}
+                    value={trunkCooldownSeconds}
+                    onChange={(e) => setTrunkCooldownSeconds(Number(e.target.value))}
                     disabled={isCampaignRunning}
                     className="bg-transparent text-brand-300 font-semibold outline-none cursor-pointer"
                   >
-                    <option value={15} className="bg-slate-900">Fast (15s)</option>
-                    <option value={20} className="bg-slate-900">Normal (20s)</option>
-                    <option value={30} className="bg-slate-900">Relaxed (30s)</option>
+                    <option value={3} className="bg-slate-900">3s (Fast)</option>
+                    <option value={4} className="bg-slate-900">4s (Normal)</option>
+                    <option value={6} className="bg-slate-900">6s (Safe Line Release)</option>
                   </select>
                 </div>
 
@@ -1103,19 +1121,19 @@ export default function CallingDashboard() {
               </div>
 
               <div className="flex items-center gap-2.5 flex-wrap">
-                {/* Pacing Speed Selector */}
+                {/* Trunk Line Cool-down Selector */}
                 <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs">
                   <Clock className="w-3.5 h-3.5 text-brand-400" />
-                  <span className="text-white/60">Pacing:</span>
+                  <span className="text-white/60">Trunk Cool-down:</span>
                   <select
-                    value={campaignPacingSeconds}
-                    onChange={(e) => setCampaignPacingSeconds(Number(e.target.value))}
+                    value={trunkCooldownSeconds}
+                    onChange={(e) => setTrunkCooldownSeconds(Number(e.target.value))}
                     disabled={isCampaignRunning}
                     className="bg-transparent text-brand-300 font-semibold outline-none cursor-pointer"
                   >
-                    <option value={15} className="bg-slate-900">Fast (15s)</option>
-                    <option value={20} className="bg-slate-900">Normal (20s)</option>
-                    <option value={30} className="bg-slate-900">Relaxed (30s)</option>
+                    <option value={3} className="bg-slate-900">3s (Fast)</option>
+                    <option value={4} className="bg-slate-900">4s (Normal)</option>
+                    <option value={6} className="bg-slate-900">6s (Safe Line Release)</option>
                   </select>
                 </div>
 
@@ -1294,19 +1312,19 @@ export default function CallingDashboard() {
           </div>
 
           <div className="flex items-center gap-3 pt-2 flex-wrap">
-            {/* Pacing Speed Selector */}
+            {/* Trunk Line Cool-down Selector */}
             <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs">
               <Clock className="w-3.5 h-3.5 text-brand-400" />
-              <span className="text-white/60">Pacing:</span>
+              <span className="text-white/60">Trunk Cool-down:</span>
               <select
-                value={campaignPacingSeconds}
-                onChange={(e) => setCampaignPacingSeconds(Number(e.target.value))}
+                value={trunkCooldownSeconds}
+                onChange={(e) => setTrunkCooldownSeconds(Number(e.target.value))}
                 disabled={isCampaignRunning}
                 className="bg-transparent text-brand-300 font-semibold outline-none cursor-pointer"
               >
-                <option value={15} className="bg-slate-900">Fast (15s)</option>
-                <option value={20} className="bg-slate-900">Normal (20s)</option>
-                <option value={30} className="bg-slate-900">Relaxed (30s)</option>
+                <option value={3} className="bg-slate-900">3s (Fast)</option>
+                <option value={4} className="bg-slate-900">4s (Normal)</option>
+                <option value={6} className="bg-slate-900">6s (Safe Line Release)</option>
               </select>
             </div>
 
