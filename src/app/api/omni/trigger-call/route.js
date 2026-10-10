@@ -43,14 +43,14 @@ export async function POST(request) {
       }
       name = owner_name || name || (details.found ? details.name : 'Barber');
       const cleanShop = shop_name || (details.found ? details.shopName : '');
-      const titleName = (name && name !== 'Barber') ? `${name} जी` : 'जी';
+      const titleName = (name && name !== 'Barber') ? `${name} जी` : '';
 
       const barberVariations = [
-        `हेलो? नमस्ते ${titleName}, क्या मेरी आवाज़ आ रही है आपको?`,
-        `हेलो ${titleName}? हाँजी, क्या मेरी आवाज़ साफ़ आ रही है आपको?`,
-        `हेलो? नमस्ते ${titleName}, सुन पा रहे हैं ना आप मुझे?`,
-        `हेलो ${titleName}! रिया बात कर रही हूँ, क्या मेरी आवाज़ आ रही है आपको?`,
-        `हेलो? हाँजी नमस्ते ${titleName}, आवाज़ आ रही है ना आपको?`
+        titleName ? `हेलो ${titleName}? क्या मेरी आवाज़ आ रही है आपको?` : `हेलो? क्या मेरी आवाज़ आ रही है आपको?`,
+        titleName ? `हेलो? हाँजी ${titleName}, क्या मेरी आवाज़ साफ़ आ रही है आपको?` : `हेलो? क्या मेरी आवाज़ साफ़ आ रही है आपको?`,
+        titleName ? `हेलो ${titleName}? सुन पा रहे हैं ना आप मुझे?` : `हेलो? सुन पा रहे हैं ना आप मुझे?`,
+        titleName ? `हेलो ${titleName}! क्या मेरी आवाज़ आ रही है आपको?` : `हेलो? आवाज़ आ रही है ना आपको?`,
+        `हेलो? हाँजी, आवाज़ आ रही है ना आपको?`
       ];
 
       const selectedIdx = variationIdx >= 0 ? (variationIdx % barberVariations.length) : Math.floor(Math.random() * barberVariations.length);
@@ -64,15 +64,15 @@ export async function POST(request) {
           name = 'Customer';
         }
       }
-      const titleName = (name && name !== 'Customer') ? `${name} जी` : 'जी';
+      const titleName = (name && name !== 'Customer') ? `${name} जी` : '';
 
       const customerVariations = [
-        `हेलो? नमस्ते ${titleName}, क्या मेरी आवाज़ आ रही है आपको?`,
-        `हेलो ${titleName}? हाँजी, क्या मेरी आवाज़ साफ़ आ रही है आपको?`,
-        `हेलो? नमस्ते ${titleName}, सुन पा रहे हैं आप मुझे?`,
-        `हेलो ${titleName}! मेरी आवाज़ आ रही है ना आपको?`,
-        `हेलो? हाँजी नमस्ते ${titleName}, आवाज़ आ रही है आपको?`,
-        `हेलो ${titleName}? रिया बात कर रही हूँ, क्या मेरी आवाज़ आ रही है आपको?`
+        titleName ? `हेलो ${titleName}? क्या मेरी आवाज़ आ रही है आपको?` : `हेलो? क्या मेरी आवाज़ आ रही है आपको?`,
+        titleName ? `हेलो? हाँजी ${titleName}, क्या मेरी आवाज़ साफ़ आ रही है आपको?` : `हेलो? क्या मेरी आवाज़ साफ़ आ रही है आपको?`,
+        titleName ? `हेलो ${titleName}? सुन पा रहे हैं आप मुझे?` : `हेलो? सुन पा रहे हैं आप मुझे?`,
+        titleName ? `हेलो ${titleName}! मेरी आवाज़ आ रही है ना आपको?` : `हेलो? मेरी आवाज़ आ रही है ना आपको?`,
+        `हेलो? हाँजी, आवाज़ आ रही है आपको?`,
+        `हेलो? क्या मेरी आवाज़ साफ़ आ रही है आपको?`
       ];
 
       const selectedIdx = variationIdx >= 0 ? (variationIdx % customerVariations.length) : Math.floor(Math.random() * customerVariations.length);
