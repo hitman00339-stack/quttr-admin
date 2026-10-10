@@ -1113,7 +1113,7 @@ export default function CallingDashboard() {
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Users className="w-5 h-5 text-accent-500" /> Sequential Customer Outreach Campaign
+                  <Users className="w-5 h-5 text-accent-500" /> Sequential Customer Calling (सैलून बुकिंग कैंपेन)
                 </h2>
                 <p className="text-xs text-white/60 mt-1">
                   Calls customers one-by-one to pitch barber booking on Quttr. Each call runs to completion before the next one starts.
@@ -1553,7 +1553,7 @@ export default function CallingDashboard() {
                                     : 'bg-blue-500/10 text-blue-300 border border-blue-500/20'
                                 }`}
                               >
-                                {isBarber ? 'Barber Feedback' : 'Customer Outreach'}
+                                {isBarber ? 'Barber Feedback' : 'Customer Pitch (सैलून बुकिंग)'}
                               </span>
                             </div>
 

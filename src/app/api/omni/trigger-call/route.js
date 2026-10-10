@@ -156,7 +156,7 @@ export async function POST(request) {
     const displayName = name || (call_type === 'barber' ? 'Barber' : 'User');
     const summaryText = call_type === 'barber'
       ? `Personalized barber feedback call dispatched to ${displayName} (${shop_name ? `Shop: ${shop_name}` : 'Registered Barber'}). Number: ${formattedPhone}. Status: ${apiSuccess ? 'Dispatched' : 'Queued'}.`
-      : `Customer outreach call dispatched to ${displayName} (${formattedPhone}). Pitch: Nearby barber booking & app intro. Status: ${apiSuccess ? 'Dispatched' : 'Queued'}.`;
+      : `Customer call dispatched to ${displayName} (${formattedPhone}). Pitch: QUTTR app intro, zero-waiting salon booking & rate check. Status: ${apiSuccess ? 'Dispatched' : 'Queued'}.`;
 
     const callsCol = await getDirectMongoCollection('call_summaries');
     if (callsCol) {
