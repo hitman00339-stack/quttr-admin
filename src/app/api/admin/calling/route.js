@@ -2,10 +2,19 @@ import { NextResponse } from 'next/server';
 import { getCollection } from '@/lib/mongodb';
 import { getLiveShops, VERIFIED_SHOPS } from '@/lib/omni-data';
 
+function getIstDateKey(date) {
+  try {
+    return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }); // YYYY-MM-DD
+  } catch (_) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+}
+
 function parseOmniDate(str) {
   if (!str) {
     const now = new Date();
-    return { startTime: now, dateKey: now.toISOString().slice(0, 10) };
+    return { startTime: now, dateKey: getIstDateKey(now) };
   }
   const parts = str.trim().split(' ');
   if (parts.length === 2) {
@@ -14,36 +23,42 @@ function parseOmniDate(str) {
     const [hh, mm, ss] = tPart.split(':').map(Number);
     // OmniDimension logs are UTC
     const dateObj = new Date(Date.UTC(y, m - 1, d, hh, mm, ss || 0));
-    const pad = (n) => String(n).padStart(2, '0');
-    const dateKey = `${y}-${pad(m)}-${pad(d)}`;
-    return { startTime: dateObj, dateKey };
+    return { startTime: dateObj, dateKey: getIstDateKey(dateObj) };
   }
   const dateObj = new Date(str);
+  const valid = isNaN(dateObj.getTime()) ? new Date() : dateObj;
   return {
-    startTime: isNaN(dateObj.getTime()) ? new Date() : dateObj,
-    dateKey: dateObj.toISOString().slice(0, 10),
+    startTime: valid,
+    dateKey: getIstDateKey(valid),
   };
 }
 
 function formatTimeOnly(date) {
   if (!date) return '';
-  // Format as readable AM/PM
-  let h = date.getUTCHours();
-  const m = String(date.getUTCMinutes()).padStart(2, '0');
-  const s = String(date.getUTCSeconds()).padStart(2, '0');
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  h = h % 12 || 12;
-  return `${h}:${m}:${s} ${ampm}`;
+  try {
+    return date.toLocaleTimeString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+  } catch (_) {
+    let h = date.getHours();
+    const m = String(date.getMinutes()).padStart(2, '0');
+    const s = String(date.getSeconds()).padStart(2, '0');
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${m}:${s} ${ampm}`;
+  }
 }
 
 function getDayLabel(dateKey) {
   const now = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  const todayKey = `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}`;
-  
+  const todayKey = getIstDateKey(now);
   const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const yesterdayKey = `${yesterday.getUTCFullYear()}-${pad(yesterday.getUTCMonth() + 1)}-${pad(yesterday.getUTCDate())}`;
-
+  const yesterdayKey = getIstDateKey(yesterday);
+  
   if (dateKey === todayKey) return 'Today';
   if (dateKey === yesterdayKey) return 'Yesterday';
 
@@ -122,9 +137,12 @@ export async function GET(request) {
     const callsCol = await getCollection('call_summaries').catch(() => null);
 
     const processedLogs = [];
+    const omniPhonesProcessed = new Set();
 
     for (const r of omniCalls) {
       const phoneDigits = String(r.to_number || '').replace(/\D/g, '').slice(-10);
+      if (phoneDigits) omniPhonesProcessed.add(phoneDigits);
+
       const { startTime, dateKey } = parseOmniDate(r.time_of_call);
       const durationSec = r.call_duration_in_seconds || 0;
       const endTime = new Date(startTime.getTime() + durationSec * 1000);
@@ -184,7 +202,7 @@ export async function GET(request) {
 
       processedLogs.push(logItem);
 
-      // Upsert to MongoDB asynchronously
+      // Upsert to MongoDB and remove old temporary placeholders for this phone
       if (callsCol) {
         callsCol
           .updateOne(
@@ -193,6 +211,12 @@ export async function GET(request) {
             { upsert: true }
           )
           .catch(() => {});
+        if (phoneDigits) {
+          callsCol.deleteMany({
+            omniCallId: { $exists: false },
+            phone: { $regex: phoneDigits }
+          }).catch(() => {});
+        }
       }
     }
 
@@ -205,11 +229,32 @@ export async function GET(request) {
         .toArray()
         .catch(() => []);
 
-      dbLogs.forEach((dbItem) => {
+      const nowMs = Date.now();
+      for (const dbItem of dbLogs) {
+        const dbPhoneDigits = String(dbItem.phone || '').replace(/\D/g, '').slice(-10);
+        // Do NOT duplicate if an OmniDimension log for this phone number is already processed!
+        if (dbPhoneDigits && omniPhonesProcessed.has(dbPhoneDigits)) {
+          callsCol.deleteOne({ _id: dbItem._id }).catch(() => {});
+          continue;
+        }
+
         const cDate = dbItem.createdAt ? new Date(dbItem.createdAt) : new Date();
-        const pad = (n) => String(n).padStart(2, '0');
-        const dateKey = `${cDate.getUTCFullYear()}-${pad(cDate.getUTCMonth() + 1)}-${pad(cDate.getUTCDate())}`;
+        const ageMs = nowMs - cDate.getTime();
+        const dateKey = getIstDateKey(cDate);
         const startedAtStr = formatTimeOnly(cDate);
+
+        // If older than 2 minutes and not in Omni logs, carrier never connected (unanswered/dropped)
+        let currentStatus = dbItem.status || 'dispatched';
+        let runTillText = `Dispatched at ${startedAtStr}`;
+        let summaryText = dbItem.summary || 'Outbound call dispatched';
+
+        if (ageMs > 2 * 60 * 1000 && currentStatus === 'dispatched') {
+          currentStatus = 'no-answer';
+          runTillText = `Dialed at ${startedAtStr} (No answer / Carrier dropped)`;
+          summaryText = 'Outbound call attempt dialed, but carrier received no answer or dropped before connection.';
+        } else if (currentStatus === 'dispatched') {
+          runTillText = `Dialing in progress (Started ${startedAtStr})`;
+        }
 
         processedLogs.push({
           omniCallId: `db_${dbItem._id}`,
@@ -217,22 +262,22 @@ export async function GET(request) {
           name: dbItem.name || 'Direct Contact',
           shopName: dbItem.shopName || '',
           callType: dbItem.callType || 'customer',
-          status: dbItem.status || 'dispatched',
+          status: currentStatus,
           durationSeconds: dbItem.durationSeconds || 0,
           durationFormatted: `${dbItem.durationSeconds || 0}s`,
           startTime: cDate.toISOString(),
           endTime: cDate.toISOString(),
           startedAtStr,
           endedAtStr: startedAtStr,
-          runTillText: `Dispatched at ${startedAtStr}`,
+          runTillText,
           dateKey,
           dayLabel: getDayLabel(dateKey),
           recordingUrl: dbItem.recordingUrl || '',
-          summary: dbItem.summary || 'Outbound call dispatched',
+          summary: summaryText,
           transcript: dbItem.transcript || '',
           createdAt: cDate,
         });
-      });
+      }
     }
 
     // Sort by startTime descending

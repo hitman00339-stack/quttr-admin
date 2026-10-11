@@ -213,8 +213,8 @@ export default function CallingDashboard() {
     let finalRecordingUrl = '';
     let pollCount = 0;
 
-    // Initial 4 seconds for telephony setup and carrier ringing
-    await new Promise((r) => setTimeout(r, 4000));
+    // Initial 3 seconds for telephony setup and carrier ringing
+    await new Promise((r) => setTimeout(r, 3000));
 
     while (Date.now() - startTs < maxWaitSec * 1000) {
       if (campaignStopRequestedRef.current) {
@@ -243,32 +243,45 @@ export default function CallingDashboard() {
       setCampaignProgress((prev) => ({
         ...prev,
         elapsedSec: elapsed,
-        status: `🟢 Call active with ${targetLabel}... (${elapsed}s) · Waiting for user to hang up...`,
+        status: `🟢 Call active with ${targetLabel}... (${elapsed}s) · Monitoring call...`,
       }));
 
-      // Poll OmniDimension status every 3 seconds to check if call terminated
+      // Poll OmniDimension status every 2.5 seconds to check if call terminated
       pollCount++;
-      if (pollCount % 3 === 0) {
+      if (pollCount % 2 === 0) {
         try {
           const res = await fetch(`/api/admin/calling/status?phone=${encodeURIComponent(phone)}&since=${startTs}`);
           const json = await res.json();
-          if (json.success && json.found && json.hasEnded) {
-            finalStatus = json.status === 'completed' ? 'Completed' : (json.status === 'no-answer' ? 'No Answer' : json.status);
-            finalDuration = json.durationSeconds || elapsed;
-            finalSummary = json.summary || 'Call finished';
-            finalRecordingUrl = json.recordingUrl || '';
-            return {
-              ended: true,
-              status: finalStatus,
-              duration: finalDuration,
-              summary: finalSummary,
-              recordingUrl: finalRecordingUrl,
-            };
+          if (json.success && json.found) {
+            if (json.hasEnded) {
+              finalStatus = json.status === 'completed' ? 'Completed' : (json.status === 'no-answer' ? 'No Answer' : (json.status || 'Ended'));
+              finalDuration = json.durationSeconds || elapsed;
+              finalSummary = json.summary || (finalStatus === 'No Answer' ? 'Call unanswered / missed' : 'Call finished');
+              finalRecordingUrl = json.recordingUrl || '';
+              return {
+                ended: true,
+                status: finalStatus,
+                duration: finalDuration,
+                summary: finalSummary,
+                recordingUrl: finalRecordingUrl,
+              };
+            }
           }
         } catch (_) {}
       }
 
-      await new Promise((r) => setTimeout(r, 1000));
+      // Safety: If phone has been ringing for > 55 seconds with 0 audio duration, telecom carrier has timed out
+      if (elapsed > 55 && finalDuration === 0) {
+        return {
+          ended: true,
+          status: 'No Answer',
+          duration: 0,
+          summary: 'Carrier ringing timed out without answer',
+          recordingUrl: '',
+        };
+      }
+
+      await new Promise((r) => setTimeout(r, 1200));
     }
 
     const totalElapsed = Math.round((Date.now() - startTs) / 1000);

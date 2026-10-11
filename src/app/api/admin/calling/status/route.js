@@ -47,21 +47,7 @@ export async function GET(request) {
     // Find the latest call matching this specific phone number
     const matchingCall = logs.find((c) => {
       const cDigits = String(c.to_number || '').replace(/\D/g, '').slice(-10);
-      if (cDigits !== digits) return false;
-
-      // Verify call time is recent (within 10s of dispatch or after dispatch)
-      if (c.time_of_call) {
-        const parts = String(c.time_of_call).trim().split(' ');
-        if (parts.length === 2) {
-          const [dPart, tPart] = parts;
-          const [m, d, y] = dPart.split('/').map(Number);
-          const [hh, mm, ss] = tPart.split(':').map(Number);
-          const callUtcMs = Date.UTC(y, m - 1, d, hh, mm, ss || 0);
-          // If call happened before sinceMs - 30 seconds buffer, ignore older calls
-          if (callUtcMs < sinceMs - 30000) return false;
-        }
-      }
-      return true;
+      return cDigits === digits;
     });
 
     if (!matchingCall) {
@@ -75,8 +61,8 @@ export async function GET(request) {
     }
 
     const statusStr = String(matchingCall.call_status || '').toLowerCase();
-    const terminalStatuses = ['completed', 'no-answer', 'busy', 'failed', 'canceled', 'voicemail'];
-    const hasEnded = terminalStatuses.includes(statusStr);
+    const terminalStatuses = ['completed', 'no-answer', 'busy', 'failed', 'canceled', 'voicemail', 'rejected'];
+    const hasEnded = terminalStatuses.includes(statusStr) || matchingCall.hangup_reason;
 
     const recordingUrl = matchingCall.internal_recording_url || (matchingCall.recording_url ? `https://omnidim.io${matchingCall.recording_url}` : '');
 
@@ -92,6 +78,7 @@ export async function GET(request) {
       summary: matchingCall.sentiment_analysis_details || '',
       recordingUrl,
       timeOfCall: matchingCall.time_of_call,
+      hangupReason: matchingCall.hangup_reason || '',
     }, { headers: corsHeaders });
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message, isLive: true, hasEnded: false }, { status: 500, headers: corsHeaders });
