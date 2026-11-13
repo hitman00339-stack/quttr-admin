@@ -9,13 +9,14 @@ import {
   Sparkles, ChevronRight,
   AlertCircle, UserCheck, ShoppingBag,
   QrCode, Megaphone, Image as ImageIcon,
-  Wallet, PhoneCall,
+  Wallet, PhoneCall, PhoneIncoming,
 } from 'lucide-react';
 import { authService } from '../../services/auth';
 
 const navigation = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'AI Calling', href: '/dashboard/calling', icon: PhoneCall, badge: 'AI' },
+  { name: 'AI Feedback Calls', href: '/dashboard/calling', icon: PhoneCall, badge: 'FEEDBACK' },
+  { name: 'Booking Calls', href: '/dashboard/booking-calling', icon: PhoneIncoming, badge: 'AI-CALL' },
   { name: 'Approvals', href: '/dashboard/approvals', icon: AlertCircle, highlight: true },
   { name: 'Shops', href: '/dashboard/shops', icon: Store },
   { name: 'Staff', href: '/dashboard/staff', icon: UserCheck },

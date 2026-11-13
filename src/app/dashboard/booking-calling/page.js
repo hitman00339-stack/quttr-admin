@@ -1,0 +1,604 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import {
+  PhoneCall,
+  PhoneIncoming,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  AlertTriangle,
+  RotateCw,
+  Search,
+  Filter,
+  ShieldAlert,
+  ChevronRight,
+  X,
+  Volume2,
+  ToggleLeft,
+  ToggleRight,
+  Store,
+  Layers,
+  ArrowUpDown,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import { authService } from '../../../services/auth';
+
+export default function BookingCallingDashboard() {
+  // ─── Auth State ─────────────────────────────────────────────────────────────
+  const [admin, setAdmin] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  // ─── Data & View States ─────────────────────────────────────────────────────
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [sessions, setSessions] = useState([]);
+  const [kpis, setKpis] = useState({
+    totalDispatched: 0,
+    acceptedCount: 0,
+    declinedCount: 0,
+    acceptanceRate: 0,
+    avgDurationSeconds: 0,
+    avgRetryCount: 0,
+  });
+
+  // ─── Filter States ──────────────────────────────────────────────────────────
+  const [decisionFilter, setDecisionFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
+  const [selectedShopId, setSelectedShopId] = useState('');
+
+  // ─── Config & Toggles ───────────────────────────────────────────────────────
+  const [callingConfig, setCallingConfig] = useState({
+    globalCallingEnabled: true,
+    shopCallingOverrides: {},
+  });
+  const [updatingConfig, setUpdatingConfig] = useState(false);
+  const [newOverrideShopId, setNewOverrideShopId] = useState('');
+  const [newOverrideEnabled, setNewOverrideEnabled] = useState(true);
+
+  // ─── Modal / Detail State ───────────────────────────────────────────────────
+  const [selectedSession, setSelectedSession] = useState(null);
+
+  // ─── Check Admin Role on Mount ──────────────────────────────────────────────
+  useEffect(() => {
+    const currentAdmin = authService.getCurrentAdmin();
+    if (currentAdmin) {
+      setAdmin(currentAdmin);
+      const role = (currentAdmin.role || '').toLowerCase();
+      setIsAdmin(role === 'admin' || currentAdmin.isAdmin === true);
+    }
+    setAuthChecked(true);
+  }, []);
+
+  // ─── Fetch Config & Sessions ────────────────────────────────────────────────
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('quttr_admin_token') : '';
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      };
+
+      // 1. Fetch System Calling Config
+      try {
+        const cfgRes = await fetch('/api/omni/booking/config', { headers });
+        if (cfgRes.ok) {
+          const cfgData = await cfgRes.json();
+          if (cfgData.success && cfgData.config) {
+            setCallingConfig(cfgData.config);
+          }
+        }
+      } catch (_) {}
+
+      // 2. Fetch Sessions List
+      const queryParams = new URLSearchParams();
+      if (decisionFilter !== 'all') queryParams.set('decision', decisionFilter);
+      if (selectedShopId) queryParams.set('shopId', selectedShopId);
+      queryParams.set('limit', '100');
+
+      const sessRes = await fetch(`/api/omni/booking/sessions?${queryParams.toString()}`, { headers });
+      if (!sessRes.ok) {
+        throw new Error(`HTTP ${sessRes.status}: Failed to retrieve booking calls`);
+      }
+
+      const sessData = await sessRes.json();
+      if (!sessData.success) {
+        throw new Error(sessData.error || 'Server rejected request');
+      }
+
+      const rawSessions = sessData.sessions || [];
+      setSessions(rawSessions);
+
+      // Compute or retrieve KPIs
+      const total = rawSessions.length;
+      const accepted = rawSessions.filter((s) => s.decision === 'accepted').length;
+      const declined = rawSessions.filter((s) => s.decision === 'declined').length;
+      const totalDuration = rawSessions.reduce((acc, s) => acc + (s.durationSeconds || 0), 0);
+      const totalRetries = rawSessions.reduce((acc, s) => acc + (s.retryCount || 0), 0);
+
+      setKpis({
+        totalDispatched: sessData.kpis?.totalDispatched ?? total,
+        acceptedCount: sessData.kpis?.acceptedCount ?? accepted,
+        declinedCount: sessData.kpis?.declinedCount ?? declined,
+        acceptanceRate: total > 0 ? Math.round((accepted / total) * 100) : 0,
+        avgDurationSeconds: total > 0 ? Math.round(totalDuration / total) : 0,
+        avgRetryCount: total > 0 ? Number((totalRetries / total).toFixed(1)) : 0,
+      });
+    } catch (err) {
+      setError(err.message || 'Error loading booking call sessions');
+    } finally {
+      setLoading(false);
+    }
+  }, [decisionFilter, selectedShopId]);
+
+  useEffect(() => {
+    if (authChecked && isAdmin) {
+      fetchData();
+    }
+  }, [authChecked, isAdmin, fetchData]);
+
+  // ─── Toggle Handlers ────────────────────────────────────────────────────────
+  const handleToggleGlobal = async () => {
+    if (!isAdmin) return;
+    setUpdatingConfig(true);
+    const nextVal = !callingConfig.globalCallingEnabled;
+    try {
+      const token = localStorage.getItem('quttr_admin_token') || '';
+      const res = await fetch('/api/omni/booking/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ globalCallingEnabled: nextVal }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCallingConfig((prev) => ({ ...prev, globalCallingEnabled: nextVal }));
+        toast.success(`Global AI Booking Calling ${nextVal ? 'ENABLED' : 'DISABLED'}`);
+      } else {
+        toast.error(data.error || 'Failed to update global toggle');
+      }
+    } catch (e) {
+      toast.error('Network error updating calling configuration');
+    } finally {
+      setUpdatingConfig(false);
+    }
+  };
+
+  const handleSaveShopOverride = async () => {
+    if (!isAdmin || !newOverrideShopId.trim()) return;
+    setUpdatingConfig(true);
+    try {
+      const token = localStorage.getItem('quttr_admin_token') || '';
+      const res = await fetch('/api/omni/booking/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ shopId: newOverrideShopId.trim(), enabled: newOverrideEnabled }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCallingConfig((prev) => ({
+          ...prev,
+          shopCallingOverrides: { ...prev.shopCallingOverrides, [newOverrideShopId.trim()]: newOverrideEnabled },
+        }));
+        toast.success(`Shop ${newOverrideShopId.trim()} AI_CALL set to ${newOverrideEnabled ? 'ON' : 'OFF'}`);
+        setNewOverrideShopId('');
+      } else {
+        toast.error(data.error || 'Failed to update shop toggle');
+      }
+    } catch (e) {
+      toast.error('Failed to update shop override');
+    } finally {
+      setUpdatingConfig(false);
+    }
+  };
+
+  // ─── Filtered Sessions ──────────────────────────────────────────────────────
+  const filteredSessions = sessions.filter((s) => {
+    if (searchTerm) {
+      const q = searchTerm.toLowerCase();
+      const matchBooking = (s.bookingId || '').toLowerCase().includes(q);
+      const matchCustomer = (s.customerName || '').toLowerCase().includes(q);
+      const matchBarber = (s.barberName || '').toLowerCase().includes(q);
+      const matchPhone = (s.destinationPhone || '').includes(q);
+      if (!matchBooking && !matchCustomer && !matchBarber && !matchPhone) return false;
+    }
+    if (dateFilter && s.createdAt) {
+      const dateStr = new Date(s.createdAt).toISOString().slice(0, 10);
+      if (dateStr !== dateFilter) return false;
+    }
+    return true;
+  });
+
+  // ─── Non-Admin Access Guard ─────────────────────────────────────────────────
+  if (authChecked && !isAdmin) {
+    return (
+      <div className="p-8 max-w-4xl mx-auto">
+        <div className="bg-red-950/40 border border-red-500/30 rounded-xl p-8 text-center space-y-4">
+          <div className="w-14 h-14 bg-red-900/60 text-red-400 rounded-full flex items-center justify-center mx-auto">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-white">Access Restricted: Admin Privilege Required</h2>
+          <p className="text-sm text-gray-400 max-w-md mx-auto">
+            Booking-Acceptance Voice Calling and AI telephony controls are restricted to primary system administrators.
+            Your current account role does not have permission to view or modify calling queues.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* ── Header ───────────────────────────────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/[0.08] pb-6">
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center">
+              <PhoneIncoming className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-white tracking-tight">Booking-Acceptance AI Calling</h1>
+              <p className="text-xs text-gray-400">
+                Autonomous voice call dispatch for barber booking confirmation (OmniDimension AI)
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Global On/Off Toggle */}
+        <div className="flex items-center gap-4 bg-surface-100/60 border border-white/[0.08] rounded-xl px-4 py-2.5">
+          <div className="text-right">
+            <div className="text-xs font-semibold text-white">Global Dispatch</div>
+            <div className="text-2xs text-gray-400">
+              {callingConfig.globalCallingEnabled ? 'Calls active' : 'Calls paused'}
+            </div>
+          </div>
+          <button
+            onClick={handleToggleGlobal}
+            disabled={updatingConfig}
+            className={`p-1 rounded-lg transition-colors ${
+              callingConfig.globalCallingEnabled ? 'text-teal-400 hover:text-teal-300' : 'text-gray-500 hover:text-gray-400'
+            }`}
+            title="Toggle global calling"
+          >
+            {callingConfig.globalCallingEnabled ? (
+              <ToggleRight className="w-8 h-8" />
+            ) : (
+              <ToggleLeft className="w-8 h-8" />
+            )}
+          </button>
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            className="p-2 text-gray-400 hover:text-white border border-white/[0.08] rounded-lg transition-colors"
+            title="Refresh logs"
+          >
+            <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* ── KPI Cards ────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="p-4 bg-surface-100/50 border border-white/[0.06] rounded-xl">
+          <div className="text-xs text-gray-400 font-medium">Total Dispatched</div>
+          <div className="text-2xl font-black text-white mt-1">{kpis.totalDispatched}</div>
+          <div className="text-2xs text-gray-500 mt-1">Calls initiated by AI</div>
+        </div>
+        <div className="p-4 bg-surface-100/50 border border-white/[0.06] rounded-xl">
+          <div className="text-xs text-gray-400 font-medium">Acceptance Rate</div>
+          <div className="text-2xl font-black text-teal-400 mt-1">{kpis.acceptanceRate}%</div>
+          <div className="text-2xs text-gray-500 mt-1">
+            {kpis.acceptedCount} accepted / {kpis.declinedCount} declined
+          </div>
+        </div>
+        <div className="p-4 bg-surface-100/50 border border-white/[0.06] rounded-xl">
+          <div className="text-xs text-gray-400 font-medium">Avg Duration</div>
+          <div className="text-2xl font-black text-white mt-1">{kpis.avgDurationSeconds}s</div>
+          <div className="text-2xs text-gray-500 mt-1">Carrier talk time</div>
+        </div>
+        <div className="p-4 bg-surface-100/50 border border-white/[0.06] rounded-xl">
+          <div className="text-xs text-gray-400 font-medium">Avg Retries</div>
+          <div className="text-2xl font-black text-amber-400 mt-1">{kpis.avgRetryCount}</div>
+          <div className="text-2xs text-gray-500 mt-1">Max 2 per appointment</div>
+        </div>
+      </div>
+
+      {/* ── Per-Shop AI_CALL Overrides Section ─────────────────────────────────── */}
+      <div className="p-4 bg-surface-100/40 border border-white/[0.06] rounded-xl space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-semibold text-white">
+            <Store className="w-4 h-4 text-teal-400" />
+            <span>Per-Shop AI_CALL Overrides</span>
+          </div>
+          <span className="text-2xs text-gray-400">
+            {Object.keys(callingConfig.shopCallingOverrides || {}).length} configured
+          </span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            placeholder="Enter Shop ID (e.g. 6aa7b540...)"
+            value={newOverrideShopId}
+            onChange={(e) => setNewOverrideShopId(e.target.value)}
+            className="bg-black/40 border border-white/[0.1] rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-teal-500"
+          />
+          <select
+            value={newOverrideEnabled ? 'true' : 'false'}
+            onChange={(e) => setNewOverrideEnabled(e.target.value === 'true')}
+            className="bg-black/40 border border-white/[0.1] rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-teal-500"
+          >
+            <option value="true">AI Call: ENABLED</option>
+            <option value="false">AI Call: DISABLED</option>
+          </select>
+          <button
+            onClick={handleSaveShopOverride}
+            disabled={updatingConfig || !newOverrideShopId.trim()}
+            className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-colors"
+          >
+            Save Override
+          </button>
+        </div>
+
+        {Object.entries(callingConfig.shopCallingOverrides || {}).length > 0 && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {Object.entries(callingConfig.shopCallingOverrides).map(([shopId, isEnabled]) => (
+              <span
+                key={shopId}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-surface-200/60 border border-white/[0.08] rounded-md text-2xs text-gray-300"
+              >
+                <span className="font-mono">{shopId.slice(-6)}</span>
+                <span className={isEnabled ? 'text-teal-400 font-bold' : 'text-red-400 font-bold'}>
+                  {isEnabled ? 'ON' : 'OFF'}
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Filters & Search Toolbar ─────────────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-3 bg-surface-100/30 p-3 rounded-xl border border-white/[0.06]">
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <div className="relative flex-1 md:w-64">
+            <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search booking, barber, phone..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 bg-black/40 border border-white/[0.1] rounded-lg text-xs text-white placeholder-gray-500 focus:outline-none focus:border-teal-500"
+            />
+          </div>
+          <input
+            type="date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="bg-black/40 border border-white/[0.1] rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-teal-500"
+            title="Filter by date"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+          <div className="flex items-center gap-1 text-xs text-gray-400">
+            <Filter className="w-3.5 h-3.5" />
+            <span>Decision:</span>
+          </div>
+          <select
+            value={decisionFilter}
+            onChange={(e) => setDecisionFilter(e.target.value)}
+            className="bg-black/40 border border-white/[0.1] rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-teal-500"
+          >
+            <option value="all">All Outcomes</option>
+            <option value="accepted">Accepted</option>
+            <option value="declined">Declined</option>
+            <option value="pending">Pending</option>
+            <option value="unclear">Unclear</option>
+          </select>
+        </div>
+      </div>
+
+      {/* ── 4 Distinct States: Loading / Error / Empty / Populated Table ──────── */}
+      {loading ? (
+        // State 1: LOADING
+        <div className="space-y-3 p-8 bg-surface-100/20 border border-white/[0.06] rounded-xl">
+          <div className="flex items-center justify-center gap-3 text-teal-400">
+            <RotateCw className="w-5 h-5 animate-spin" />
+            <span className="text-sm font-medium">Loading booking call sessions...</span>
+          </div>
+          <div className="space-y-2 pt-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-10 bg-white/[0.02] rounded-lg animate-pulse" />
+            ))}
+          </div>
+        </div>
+      ) : error ? (
+        // State 2: ERROR
+        <div className="p-8 bg-red-950/30 border border-red-500/30 rounded-xl text-center space-y-3">
+          <div className="w-10 h-10 bg-red-900/40 text-red-400 rounded-full flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+          <div className="text-sm font-bold text-white">Failed to load booking calls</div>
+          <div className="text-xs text-gray-400 max-w-md mx-auto">{error}</div>
+          <button
+            onClick={fetchData}
+            className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold rounded-lg transition-colors"
+          >
+            Retry Connection
+          </button>
+        </div>
+      ) : filteredSessions.length === 0 ? (
+        // State 3: EMPTY
+        <div className="p-12 bg-surface-100/20 border border-white/[0.06] rounded-xl text-center space-y-3">
+          <div className="w-12 h-12 bg-gray-800/60 text-gray-400 rounded-full flex items-center justify-center mx-auto">
+            <PhoneCall className="w-6 h-6" />
+          </div>
+          <div className="text-sm font-bold text-white">No booking calls found</div>
+          <p className="text-xs text-gray-500 max-w-sm mx-auto">
+            {searchTerm || decisionFilter !== 'all' || dateFilter
+              ? 'No records match your selected filters. Try resetting the search or filter options.'
+              : 'Outbound voice calls dispatched to barbers for slot acceptance will appear here in real time.'}
+          </p>
+        </div>
+      ) : (
+        // State 4: POPULATED TABLE
+        <div className="overflow-x-auto bg-surface-100/30 border border-white/[0.06] rounded-xl">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-white/[0.08] bg-black/20 text-gray-400">
+                <th className="py-3 px-4 font-semibold">Booking ID</th>
+                <th className="py-3 px-4 font-semibold">Customer</th>
+                <th className="py-3 px-4 font-semibold">Barber</th>
+                <th className="py-3 px-4 font-semibold">Shop</th>
+                <th className="py-3 px-4 font-semibold">Call Status</th>
+                <th className="py-3 px-4 font-semibold">Decision</th>
+                <th className="py-3 px-4 font-semibold text-center">Retries</th>
+                <th className="py-3 px-4 font-semibold">Created At</th>
+                <th className="py-3 px-4 font-semibold">Provider Call ID</th>
+                <th className="py-3 px-4 font-semibold text-right">Details</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.04]">
+              {filteredSessions.map((s) => {
+                const dec = s.decision || 'pending';
+                let badgeClass = 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
+                if (dec === 'accepted') badgeClass = 'bg-teal-500/10 text-teal-400 border-teal-500/20';
+                if (dec === 'declined') badgeClass = 'bg-red-500/10 text-red-400 border-red-500/20';
+                if (dec === 'unclear') badgeClass = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+
+                return (
+                  <tr
+                    key={s._id || s.providerCallId}
+                    onClick={() => setSelectedSession(s)}
+                    className="hover:bg-white/[0.03] transition-colors cursor-pointer"
+                  >
+                    <td className="py-3 px-4 font-mono font-medium text-white">{s.bookingId || 'N/A'}</td>
+                    <td className="py-3 px-4 text-gray-200">{s.customerName || 'N/A'}</td>
+                    <td className="py-3 px-4 text-gray-200">
+                      <div>{s.barberName || 'Barber'}</div>
+                      <div className="text-2xs text-gray-500">{s.destinationPhone}</div>
+                    </td>
+                    <td className="py-3 px-4 text-gray-400">{s.shopName || s.shopId?.slice(-6) || 'Main'}</td>
+                    <td className="py-3 px-4">
+                      <span className="capitalize text-gray-300">{s.sessionStatus || 'completed'}</span>
+                      {s.failureReason && (
+                        <div className="text-2xs text-red-400 truncate max-w-[140px]">{s.failureReason}</div>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-2xs font-semibold ${badgeClass}`}>
+                        {dec === 'accepted' && <CheckCircle2 className="w-3 h-3" />}
+                        {dec === 'declined' && <XCircle className="w-3 h-3" />}
+                        {dec === 'pending' && <Clock className="w-3 h-3" />}
+                        <span className="capitalize">{dec}</span>
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-center font-mono text-gray-300">
+                      {s.retryCount ?? 0} / {s.maxRetries ?? 2}
+                    </td>
+                    <td className="py-3 px-4 text-gray-400 text-2xs whitespace-nowrap">
+                      {s.createdAt ? new Date(s.createdAt).toLocaleString('en-IN') : 'N/A'}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-2xs text-gray-500 truncate max-w-[120px]">
+                      {s.providerCallId || 'N/A'}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <ChevronRight className="w-4 h-4 text-gray-500 inline-block" />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── Detail View Modal (Row Click) ────────────────────────────────────── */}
+      {selectedSession && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface-100 border border-white/[0.1] rounded-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-4">
+              <div>
+                <h3 className="text-lg font-bold text-white">Call Session Details</h3>
+                <p className="text-xs font-mono text-gray-400">ID: {selectedSession.providerCallId || selectedSession._id}</p>
+              </div>
+              <button
+                onClick={() => setSelectedSession(null)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/[0.05]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Session Metadata Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+              <div className="p-3 bg-black/40 rounded-lg">
+                <span className="text-gray-500">Booking ID</span>
+                <div className="text-white font-mono mt-0.5">{selectedSession.bookingId || 'N/A'}</div>
+              </div>
+              <div className="p-3 bg-black/40 rounded-lg">
+                <span className="text-gray-500">Decision</span>
+                <div className="text-teal-400 font-bold capitalize mt-0.5">{selectedSession.decision || 'pending'}</div>
+              </div>
+              <div className="p-3 bg-black/40 rounded-lg">
+                <span className="text-gray-500">Decision Source</span>
+                <div className="text-white capitalize mt-0.5">{selectedSession.decisionSource || 'none'}</div>
+              </div>
+              <div className="p-3 bg-black/40 rounded-lg">
+                <span className="text-gray-500">Barber</span>
+                <div className="text-white mt-0.5">{selectedSession.barberName} ({selectedSession.destinationPhone})</div>
+              </div>
+              <div className="p-3 bg-black/40 rounded-lg">
+                <span className="text-gray-500">Customer</span>
+                <div className="text-white mt-0.5">{selectedSession.customerName}</div>
+              </div>
+              <div className="p-3 bg-black/40 rounded-lg">
+                <span className="text-gray-500">Talk Duration</span>
+                <div className="text-white mt-0.5">{selectedSession.durationSeconds || 0} seconds</div>
+              </div>
+            </div>
+
+            {/* Transcript Snippet */}
+            {selectedSession.transcriptSnippet && (
+              <div className="space-y-1">
+                <span className="text-xs text-gray-400 font-medium">Voice Transcript Snippet:</span>
+                <div className="p-3 bg-black/50 border border-white/[0.06] rounded-lg text-xs text-gray-300 font-sans">
+                  &ldquo;{selectedSession.transcriptSnippet}&rdquo;
+                </div>
+              </div>
+            )}
+
+            {/* Webhook Payloads Timeline */}
+            <div className="space-y-2">
+              <span className="text-xs text-gray-400 font-medium">
+                Webhook Event Timeline ({selectedSession.webhookPayloads?.length || 0} events):
+              </span>
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {selectedSession.webhookPayloads && selectedSession.webhookPayloads.length > 0 ? (
+                  selectedSession.webhookPayloads.map((wh, idx) => (
+                    <div key={idx} className="p-2.5 bg-black/30 border border-white/[0.04] rounded-lg text-2xs space-y-1">
+                      <div className="flex items-center justify-between text-gray-400">
+                        <span className="font-mono text-teal-400">{wh.event}</span>
+                        <span>{wh.receivedAt ? new Date(wh.receivedAt).toLocaleTimeString() : ''}</span>
+                      </div>
+                      <pre className="text-gray-500 overflow-x-auto p-1 bg-black/40 rounded">
+                        {JSON.stringify(wh.payload, null, 2)}
+                      </pre>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-2xs text-gray-500 italic p-2">No webhook raw events recorded yet.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+

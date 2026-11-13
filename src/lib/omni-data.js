@@ -322,11 +322,111 @@ export function cleanPhone(raw) {
 let mongoClient = null;
 let mongoClientPromise = null;
 
+// In-memory fallback collection for local dev / sandbox when remote MongoDB Atlas is offline or unreachable
+const inMemoryCollections = new Map();
+
+function createInMemoryCollection(collectionName) {
+  if (!inMemoryCollections.has(collectionName)) {
+    inMemoryCollections.set(collectionName, []);
+  }
+  const store = inMemoryCollections.get(collectionName);
+
+  return {
+    async findOne(query = {}) {
+      return (
+        store.find((doc) => {
+          return Object.entries(query).every(([k, v]) => {
+            if (k === '_id') return String(doc._id) === String(v);
+            return doc[k] === v;
+          });
+        }) || null
+      );
+    },
+    async insertOne(doc) {
+      const record = { ...doc, _id: doc._id || `mem_${Date.now()}_${Math.random().toString(36).substring(2, 7)}` };
+      store.push(record);
+      return { insertedId: record._id, acknowledged: true };
+    },
+    async updateOne(filter = {}, update = {}) {
+      const idx = store.findIndex((doc) => {
+        return Object.entries(filter).every(([k, v]) => {
+          if (k === '_id') return String(doc._id) === String(v);
+          return doc[k] === v;
+        });
+      });
+      if (idx === -1) return { matchedCount: 0, modifiedCount: 0 };
+      const doc = store[idx];
+      if (update.$set) {
+        Object.assign(doc, update.$set);
+      }
+      if (update.$push) {
+        for (const [key, val] of Object.entries(update.$push)) {
+          if (!Array.isArray(doc[key])) doc[key] = [];
+          doc[key].push(val);
+        }
+      }
+      return { matchedCount: 1, modifiedCount: 1 };
+    },
+    async countDocuments(query = {}) {
+      if (!query || Object.keys(query).length === 0) return store.length;
+      return store.filter((doc) => {
+        return Object.entries(query).every(([k, v]) => {
+          if (k === '_id') return String(doc._id) === String(v);
+          return doc[k] === v;
+        });
+      }).length;
+    },
+    find(query = {}) {
+      let filtered = store.filter((doc) => {
+        return Object.entries(query).every(([k, v]) => {
+          if (k === '_id') return String(doc._id) === String(v);
+          return doc[k] === v;
+        });
+      });
+      let sortKey = null;
+      let sortDir = -1;
+      let skipCount = 0;
+      let limitCount = filtered.length;
+
+      const cursor = {
+        sort(sortObj = {}) {
+          const keys = Object.keys(sortObj);
+          if (keys.length > 0) {
+            sortKey = keys[0];
+            sortDir = sortObj[sortKey] === 1 ? 1 : -1;
+          }
+          return cursor;
+        },
+        skip(n) {
+          skipCount = Math.max(0, n);
+          return cursor;
+        },
+        limit(n) {
+          limitCount = Math.max(0, n);
+          return cursor;
+        },
+        async toArray() {
+          let res = [...filtered];
+          if (sortKey) {
+            res.sort((a, b) => {
+              if (a[sortKey] < b[sortKey]) return -1 * sortDir;
+              if (a[sortKey] > b[sortKey]) return 1 * sortDir;
+              return 0;
+            });
+          }
+          return res.slice(skipCount, skipCount + limitCount);
+        },
+      };
+      return cursor;
+    },
+  };
+}
+
 export async function getDirectMongoCollection(collectionName) {
   try {
     const uri = process.env.MONGODB_URI;
-    if (!uri || uri.includes('<username>') || uri.includes('cluster0.mongodb.net')) {
-      return null;
+    if (!uri || uri.includes('<username>')) {
+      return createInMemoryCollection(collectionName);
     }
     const dbName = process.env.MONGODB_DB_NAME || 'quttr_qr';
     if (!mongoClientPromise) {
@@ -334,10 +434,10 @@ export async function getDirectMongoCollection(collectionName) {
       mongoClientPromise = mongoClient.connect().catch(() => null);
     }
     const connected = await mongoClientPromise;
-    if (!connected) return null;
+    if (!connected) return createInMemoryCollection(collectionName);
     return connected.db(dbName).collection(collectionName);
   } catch (e) {
-    return null;
+    return createInMemoryCollection(collectionName);
   }
 }
 
