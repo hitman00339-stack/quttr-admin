@@ -9,7 +9,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://quttr-backend.onrend
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 30000,
+  timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -60,7 +60,20 @@ api.interceptors.request.use(
 // ─── Response Interceptor ─────────────────────
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
+
+    // Auto-retry once on network timeout/disconnect (common during Render free-tier cold starts)
+    if (originalRequest && !originalRequest._retry && (!error.response || error.code === 'ECONNABORTED')) {
+      originalRequest._retry = true;
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        return await api(originalRequest);
+      } catch (retryError) {
+        error = retryError;
+      }
+    }
+
     const isNetworkError = !error?.response;
     const message = error?.response?.data?.message || (isNetworkError ? 'Backend waking up (free tier) — please retry in 5s' : 'Something went wrong');
     const status = error?.response?.status;
