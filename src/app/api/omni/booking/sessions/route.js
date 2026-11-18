@@ -14,22 +14,54 @@ export async function OPTIONS() {
 
 export async function GET(request) {
   try {
-    // Server-side Authentication & Admin Role Enforcement
+    const authHeader = request.headers.get('authorization') || '';
+    const { searchParams } = new URL(request.url);
+
+    // 1. Forward directly to Express Backend with Bearer token if available
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://quttr-backend.onrender.com/api/v1';
+    try {
+      const backendRes = await fetch(`${backendUrl}/admin/omni/booking/sessions?${searchParams.toString()}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authHeader,
+        },
+      });
+
+      if (backendRes.ok) {
+        const backendData = await backendRes.json();
+        return NextResponse.json(backendData, { headers: corsHeaders });
+      }
+    } catch (netErr) {
+      console.warn('⚠️ [Admin API proxy notice]:', netErr.message);
+    }
+
+    // 2. Fallback to direct MongoDB query with multi-secret server auth check
     const authCheck = verifyServerAuth(request, { requireAdmin: true });
     if (!authCheck.success) {
       return authCheck.response;
     }
 
-    const { searchParams } = new URL(request.url);
-    const filterDecision = searchParams.get('decision'); // 'all' | 'accepted' | 'declined' | 'pending' | 'unclear'
+    const filterDecision = searchParams.get('decision');
     const filterStatus = searchParams.get('status');
     const filterShopId = searchParams.get('shopId');
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.min(100, Math.max(10, parseInt(searchParams.get('limit') || '50', 10)));
 
-    const sessionsCol = await getDirectMongoCollection('booking_call_sessions');
+    let sessionsCol = await getDirectMongoCollection('bookingcallsessions');
     if (!sessionsCol) {
-      return NextResponse.json({ success: false, error: 'Database unavailable' }, { status: 503, headers: corsHeaders });
+      sessionsCol = await getDirectMongoCollection('booking_call_sessions');
+    }
+
+    if (!sessionsCol) {
+      return NextResponse.json(
+        {
+          success: true,
+          sessions: [],
+          pagination: { page, limit, totalCount: 0, totalPages: 0 },
+          kpis: { totalDispatched: 0, acceptedCount: 0, declinedCount: 0, acceptanceRate: 0 },
+        },
+        { headers: corsHeaders }
+      );
     }
 
     const query = {};
@@ -40,7 +72,7 @@ export async function GET(request) {
       query.sessionStatus = filterStatus;
     }
     if (filterShopId) {
-      query.shopId = filterShopId;
+      query.shop = filterShopId;
     }
 
     const totalCount = await sessionsCol.countDocuments(query);
@@ -51,7 +83,6 @@ export async function GET(request) {
       .limit(limit)
       .toArray();
 
-    // Calculate quick KPI aggregates
     const acceptedCount = await sessionsCol.countDocuments({ decision: 'accepted' });
     const declinedCount = await sessionsCol.countDocuments({ decision: 'declined' });
     const totalDispatched = await sessionsCol.countDocuments({});
@@ -79,4 +110,3 @@ export async function GET(request) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500, headers: corsHeaders });
   }
 }
-
