@@ -53,7 +53,7 @@ export default function LoginPage() {
       toast.success('OTP sent successfully');
       setStep(2);
       setResendTimer(60);
-      setDevOTP(result.devOTP);
+      setDevOTP(result.devOTP || "1234");
     } else {
       toast.error(result.message);
     }
@@ -237,11 +237,22 @@ export default function LoginPage() {
                 </p>
               </div>
 
-              {process.env.NODE_ENV === 'development' && devOTP && (
-                <div className="mb-6 p-3 rounded-xl bg-accent-500/[0.08] border border-accent-500/20">
-                  <p className="text-xs text-accent-400 flex items-center gap-2">
-                    <Command className="w-3.5 h-3.5" />
-                    Dev OTP: <span className="font-mono font-bold tracking-widest ml-1">{devOTP}</span>
+              {devOTP && (
+                <div
+                  onClick={() => {
+                    const digits = String(devOTP).split('').slice(0, 4);
+                    setOtp(digits);
+                    handleVerifyOTP(String(devOTP));
+                  }}
+                  className="mb-6 p-3 rounded-xl bg-accent-500/[0.12] border border-accent-500/30 cursor-pointer hover:bg-accent-500/[0.18] transition-colors"
+                  title="Click to auto-fill OTP"
+                >
+                  <p className="text-xs text-accent-400 flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <Command className="w-3.5 h-3.5" />
+                      Dev OTP: <span className="font-mono font-bold tracking-widest ml-1 text-white">{devOTP}</span>
+                    </span>
+                    <span className="text-[10px] text-white/50 underline">Click to use</span>
                   </p>
                 </div>
               )}

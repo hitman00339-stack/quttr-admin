@@ -61,22 +61,25 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    const message = error?.response?.data?.message || 'Something went wrong';
+    const isNetworkError = !error?.response;
+    const message = error?.response?.data?.message || (isNetworkError ? 'Backend waking up (free tier) — please retry in 5s' : 'Something went wrong');
     const status = error?.response?.status;
 
     if (status === 401) {
-      const currentPath = window.location.pathname;
+      const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
       if (currentPath !== '/login' && !currentPath.includes('/auth')) {
         setAuthToken(null);
         setAdminData(null);
         toast.error('Session expired. Please login again.');
         setTimeout(() => {
-          window.location.href = '/login';
+          if (typeof window !== 'undefined') window.location.href = '/login';
         }, 1000);
       }
     }
 
-    if (status !== 401 && !error?.config?.suppressToast) {
+    // Don't duplicate toast on login send-otp since login page handles it explicitly
+    const isAuthSendOtp = error?.config?.url?.includes('/admin/auth/send-otp');
+    if (status !== 401 && !error?.config?.suppressToast && !isAuthSendOtp) {
       toast.error(message);
     }
 
