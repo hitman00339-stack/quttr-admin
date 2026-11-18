@@ -237,7 +237,7 @@ export default function LoginPage() {
                 </p>
               </div>
 
-              {devOTP && (
+              {process.env.NODE_ENV === 'development' && devOTP && (
                 <div className="mb-6 p-3 rounded-xl bg-accent-500/[0.08] border border-accent-500/20">
                   <p className="text-xs text-accent-400 flex items-center gap-2">
                     <Command className="w-3.5 h-3.5" />
