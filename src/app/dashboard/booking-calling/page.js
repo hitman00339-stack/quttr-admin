@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authService } from '../../../services/auth';
+import { shopsService } from '../../../services/shops';
 
 export default function BookingCallingDashboard() {
   // ─── Auth State ─────────────────────────────────────────────────────────────
@@ -57,6 +58,12 @@ export default function BookingCallingDashboard() {
   const [updatingConfig, setUpdatingConfig] = useState(false);
   const [newOverrideShopId, setNewOverrideShopId] = useState('');
   const [newOverrideEnabled, setNewOverrideEnabled] = useState(true);
+
+  // ─── Shop-wise Calling Controls State ───────────────────────────────────────
+  const [shops, setShops] = useState([]);
+  const [shopsLoading, setShopsLoading] = useState(false);
+  const [updatingShopId, setUpdatingShopId] = useState(null);
+  const [shopFilterTerm, setShopFilterTerm] = useState('');
 
   // ─── Modal / Detail State ───────────────────────────────────────────────────
   const [selectedSession, setSelectedSession] = useState(null);
@@ -112,6 +119,19 @@ export default function BookingCallingDashboard() {
 
       const rawSessions = sessData.sessions || [];
       setSessions(rawSessions);
+
+      // 3. Fetch Shops List for Shop-wise Calling Controls
+      setShopsLoading(true);
+      try {
+        const shopsRes = await shopsService.getAll({ limit: 100 });
+        if (shopsRes.success && shopsRes.shops) {
+          setShops(shopsRes.shops);
+        }
+      } catch (shopErr) {
+        console.warn('Failed to fetch shops for calling control:', shopErr);
+      } finally {
+        setShopsLoading(false);
+      }
 
       // Compute or retrieve KPIs
       const total = rawSessions.length;
@@ -192,6 +212,37 @@ export default function BookingCallingDashboard() {
       toast.error('Failed to update shop override');
     } finally {
       setUpdatingConfig(false);
+    }
+  };
+
+  const handleUpdateShopMode = async (shopId, newMode) => {
+    if (!isAdmin) return;
+    setUpdatingShopId(shopId);
+    try {
+      const res = await shopsService.updateBookingMode(shopId, newMode);
+      if (res.success) {
+        toast.success(`Booking Mode set to ${newMode.toUpperCase()}! ✅`);
+        setShops((prev) =>
+          prev.map((s) =>
+            s._id === shopId
+              ? {
+                  ...s,
+                  adminOverrideMode: newMode,
+                  bookingPreferences: {
+                    ...(s.bookingPreferences || {}),
+                    adminOverrideMode: newMode,
+                  },
+                }
+              : s
+          )
+        );
+      } else {
+        toast.error(res.message || 'Failed to update shop mode');
+      }
+    } catch (err) {
+      toast.error('Network error updating shop mode');
+    } finally {
+      setUpdatingShopId(null);
     }
   };
 
@@ -307,58 +358,130 @@ export default function BookingCallingDashboard() {
         </div>
       </div>
 
-      {/* ── Per-Shop AI_CALL Overrides Section ─────────────────────────────────── */}
-      <div className="p-4 bg-surface-100/40 border border-white/[0.06] rounded-xl space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm font-semibold text-white">
-            <Store className="w-4 h-4 text-teal-400" />
-            <span>Per-Shop AI_CALL Overrides</span>
+      {/* ── Per-Shop AI_CALL Overrides & Control Section ────────────────────────── */}
+      <div className="p-4 bg-surface-100/40 border border-white/[0.06] rounded-xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
+          <div className="flex items-center gap-2">
+            <Store className="w-5 h-5 text-teal-400" />
+            <div>
+              <div className="text-sm font-semibold text-white">Shop-Wise Booking Acceptance Controls</div>
+              <div className="text-2xs text-gray-400">Admin override to enforce AI Call or App Mode per barber shop</div>
+            </div>
           </div>
-          <span className="text-2xs text-gray-400">
-            {Object.keys(callingConfig.shopCallingOverrides || {}).length} configured
-          </span>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Filter shops..."
+                value={shopFilterTerm}
+                onChange={(e) => setShopFilterTerm(e.target.value)}
+                className="pl-8 pr-3 py-1 bg-black/40 border border-white/[0.1] rounded-lg text-xs text-white placeholder-gray-500 focus:outline-none focus:border-teal-500"
+              />
+            </div>
+            <button
+              onClick={fetchData}
+              disabled={shopsLoading}
+              className="p-1.5 text-gray-400 hover:text-white border border-white/[0.08] rounded-lg transition-colors"
+              title="Refresh shops"
+            >
+              <RotateCw className={`w-3.5 h-3.5 ${shopsLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="text"
-            placeholder="Enter Shop ID (e.g. 6aa7b540...)"
-            value={newOverrideShopId}
-            onChange={(e) => setNewOverrideShopId(e.target.value)}
-            className="bg-black/40 border border-white/[0.1] rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-teal-500"
-          />
-          <select
-            value={newOverrideEnabled ? 'true' : 'false'}
-            onChange={(e) => setNewOverrideEnabled(e.target.value === 'true')}
-            className="bg-black/40 border border-white/[0.1] rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-teal-500"
-          >
-            <option value="true">AI Call: ENABLED</option>
-            <option value="false">AI Call: DISABLED</option>
-          </select>
-          <button
-            onClick={handleSaveShopOverride}
-            disabled={updatingConfig || !newOverrideShopId.trim()}
-            className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-colors"
-          >
-            Save Override
-          </button>
-        </div>
+        {/* Shops Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-white/[0.06] text-gray-400">
+                <th className="pb-2 font-medium">Shop</th>
+                <th className="pb-2 font-medium">Phone Numbers</th>
+                <th className="pb-2 font-medium">Shop Preference</th>
+                <th className="pb-2 font-medium">Admin Enforced Mode</th>
+                <th className="pb-2 font-medium text-right">Effective Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.04]">
+              {shops
+                .filter((s) => {
+                  if (!shopFilterTerm) return true;
+                  const term = shopFilterTerm.toLowerCase();
+                  return (
+                    (s.name || '').toLowerCase().includes(term) ||
+                    (s.phone || '').includes(term) ||
+                    (s.address?.city || '').toLowerCase().includes(term) ||
+                    (s._id || '').includes(term)
+                  );
+                })
+                .slice(0, 20)
+                .map((shop) => {
+                  const shopPref = shop.bookingPreferences?.acceptanceMode || 'app';
+                  const adminMode = shop.adminOverrideMode || shop.bookingPreferences?.adminOverrideMode || 'default';
+                  const effectiveMode = (adminMode !== 'default' && adminMode !== 'none') ? adminMode : shopPref;
+                  const isUpdating = updatingShopId === shop._id;
 
-        {Object.entries(callingConfig.shopCallingOverrides || {}).length > 0 && (
-          <div className="flex flex-wrap gap-2 pt-1">
-            {Object.entries(callingConfig.shopCallingOverrides).map(([shopId, isEnabled]) => (
-              <span
-                key={shopId}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-surface-200/60 border border-white/[0.08] rounded-md text-2xs text-gray-300"
-              >
-                <span className="font-mono">{shopId.slice(-6)}</span>
-                <span className={isEnabled ? 'text-teal-400 font-bold' : 'text-red-400 font-bold'}>
-                  {isEnabled ? 'ON' : 'OFF'}
-                </span>
-              </span>
-            ))}
-          </div>
-        )}
+                  return (
+                    <tr key={shop._id} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="py-2.5 pr-3">
+                        <div className="font-semibold text-white">{shop.name || 'Unnamed Shop'}</div>
+                        <div className="text-2xs text-gray-400">{shop.address?.city || 'Location N/A'} • ID: {shop._id.slice(-6)}</div>
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        <div className="text-gray-300 font-mono">{shop.bookingPreferences?.aiCallPhone || shop.phone || 'No phone'}</div>
+                        {shop.bookingPreferences?.aiCallPhone && shop.bookingPreferences.aiCallPhone !== shop.phone && (
+                          <div className="text-2xs text-teal-400">AI: {shop.bookingPreferences.aiCallPhone}</div>
+                        )}
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-2xs font-bold uppercase ${
+                          shopPref === 'ai_call' ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                        }`}>
+                          {shopPref === 'ai_call' ? 'AI Voice Call' : 'In-App'}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        <select
+                          value={adminMode}
+                          disabled={isUpdating}
+                          onChange={(e) => handleUpdateShopMode(shop._id, e.target.value)}
+                          className={`bg-black/60 border rounded-lg px-2.5 py-1 text-xs font-medium focus:outline-none focus:border-teal-500 ${
+                            adminMode === 'ai_call'
+                              ? 'border-teal-500/50 text-teal-300'
+                              : adminMode === 'app'
+                              ? 'border-blue-500/50 text-blue-300'
+                              : 'border-white/[0.12] text-gray-300'
+                          }`}
+                        >
+                          <option value="default">DEFAULT (Shop Decides)</option>
+                          <option value="ai_call">FORCE: AI Voice Call</option>
+                          <option value="app">FORCE: In-App Push</option>
+                        </select>
+                        {isUpdating && <RotateCw className="w-3 h-3 text-teal-400 inline-block ml-2 animate-spin" />}
+                      </td>
+                      <td className="py-2.5 text-right font-medium">
+                        <span className={`inline-flex items-center gap-1 text-2xs font-bold px-2 py-0.5 rounded ${
+                          effectiveMode === 'ai_call'
+                            ? 'bg-teal-950 text-teal-400 border border-teal-800'
+                            : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${effectiveMode === 'ai_call' ? 'bg-teal-400 animate-pulse' : 'bg-gray-400'}`}></span>
+                          {effectiveMode === 'ai_call' ? 'LIVE CALLS' : 'IN-APP'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              {shops.length === 0 && (
+                <tr>
+                  <td colSpan="5" className="py-4 text-center text-gray-500">
+                    {shopsLoading ? 'Loading shops...' : 'No shops found'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* ── Filters & Search Toolbar ─────────────────────────────────────────── */}
