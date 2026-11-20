@@ -599,13 +599,17 @@ export default function BookingCallingDashboard() {
                     onClick={() => setSelectedSession(s)}
                     className="hover:bg-white/[0.03] transition-colors cursor-pointer"
                   >
-                    <td className="py-3 px-4 font-mono font-medium text-white">{s.bookingId || 'N/A'}</td>
-                    <td className="py-3 px-4 text-gray-200">{s.customerName || 'N/A'}</td>
+                    <td className="py-3 px-4 font-mono font-medium text-white">
+                      {s.bookingId || s.queue?.queueNumber || (s.queue?._id ? `Q-${s.queue._id.slice(-4).toUpperCase()}` : null) || (s._id ? s._id.slice(-6).toUpperCase() : 'N/A')}
+                    </td>
                     <td className="py-3 px-4 text-gray-200">
-                      <div>{s.barberName || 'Barber'}</div>
+                      {s.customerName || s.customer?.name || s.queue?.walkInCustomer?.name || s.queue?.customer?.name || 'Customer'}
+                    </td>
+                    <td className="py-3 px-4 text-gray-200">
+                      <div>{s.barberName || s.assignedUser?.name || 'Barber'}</div>
                       <div className="text-2xs text-gray-500">{s.destinationPhone}</div>
                     </td>
-                    <td className="py-3 px-4 text-gray-400">{s.shopName || s.shopId?.slice(-6) || 'Main'}</td>
+                    <td className="py-3 px-4 text-gray-400">{s.shopName || s.shop?.name || s.shopId?.slice(-6) || 'Main'}</td>
                     <td className="py-3 px-4">
                       <span className="capitalize text-gray-300">{s.sessionStatus || 'completed'}</span>
                       {s.failureReason && (
@@ -661,7 +665,9 @@ export default function BookingCallingDashboard() {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
               <div className="p-3 bg-black/40 rounded-lg">
                 <span className="text-gray-500">Booking ID</span>
-                <div className="text-white font-mono mt-0.5">{selectedSession.bookingId || 'N/A'}</div>
+                <div className="text-white font-mono mt-0.5">
+                  {selectedSession.bookingId || selectedSession.queue?.queueNumber || (selectedSession._id ? selectedSession._id.slice(-6).toUpperCase() : 'N/A')}
+                </div>
               </div>
               <div className="p-3 bg-black/40 rounded-lg">
                 <span className="text-gray-500">Decision</span>
@@ -673,15 +679,25 @@ export default function BookingCallingDashboard() {
               </div>
               <div className="p-3 bg-black/40 rounded-lg">
                 <span className="text-gray-500">Barber</span>
-                <div className="text-white mt-0.5">{selectedSession.barberName} ({selectedSession.destinationPhone})</div>
+                <div className="text-white mt-0.5">
+                  {selectedSession.barberName || selectedSession.assignedUser?.name || 'Barber'} ({selectedSession.destinationPhone})
+                </div>
               </div>
               <div className="p-3 bg-black/40 rounded-lg">
                 <span className="text-gray-500">Customer</span>
-                <div className="text-white mt-0.5">{selectedSession.customerName}</div>
+                <div className="text-white mt-0.5">
+                  {selectedSession.customerName || selectedSession.customer?.name || selectedSession.queue?.walkInCustomer?.name || selectedSession.queue?.customer?.name || 'Customer'}
+                </div>
+              </div>
+              <div className="p-3 bg-black/40 rounded-lg">
+                <span className="text-gray-500">Shop</span>
+                <div className="text-white mt-0.5">
+                  {selectedSession.shopName || selectedSession.shop?.name || 'Shop'}
+                </div>
               </div>
               <div className="p-3 bg-black/40 rounded-lg">
                 <span className="text-gray-500">Talk Duration</span>
-                <div className="text-white mt-0.5">{selectedSession.durationSeconds || 0} seconds</div>
+                <div className="text-white mt-0.5">{selectedSession.durationSeconds || selectedSession.callDurationSeconds || 0} seconds</div>
               </div>
             </div>
 

@@ -76,12 +76,47 @@ export async function GET(request) {
     }
 
     const totalCount = await sessionsCol.countDocuments(query);
-    const sessions = await sessionsCol
+    const rawSessions = await sessionsCol
       .find(query)
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
       .toArray();
+
+    const sessions = rawSessions.map((s) => {
+      const bookingId =
+        s.bookingId ||
+        (s.queue ? `Q-${s.queue.toString().slice(-4).toUpperCase()}` : null) ||
+        (s._id ? s._id.toString().slice(-6).toUpperCase() : 'N/A');
+
+      const customerName =
+        s.customerName ||
+        (typeof s.customer === 'object' ? s.customer?.name : null) ||
+        'Customer';
+
+      const barberName =
+        s.barberName ||
+        (typeof s.assignedUser === 'object' ? s.assignedUser?.name : null) ||
+        'Barber';
+
+      const shopName =
+        s.shopName ||
+        (typeof s.shop === 'object' ? s.shop?.name : null) ||
+        'Shop';
+
+      const shopId = (typeof s.shop === 'object' ? s.shop?._id?.toString() : s.shop?.toString()) || s.shopId;
+      const durationSeconds = s.callDurationSeconds || s.durationSeconds || 0;
+
+      return {
+        ...s,
+        bookingId,
+        customerName,
+        barberName,
+        shopName,
+        shopId,
+        durationSeconds,
+      };
+    });
 
     const acceptedCount = await sessionsCol.countDocuments({ decision: 'accepted' });
     const declinedCount = await sessionsCol.countDocuments({ decision: 'declined' });

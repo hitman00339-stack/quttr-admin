@@ -114,7 +114,16 @@ export const shopsService = {
   // Update shop booking acceptance mode override (Admin control)
   updateBookingMode: async (id, mode) => {
     try {
-      const response = await api.put(`/admin/shops/${id}/booking-mode`, { adminOverrideMode: mode });
+      const response = await api.put(`/admin/shops/${id}/mode`, { mode, adminOverrideMode: mode });
+      return { success: true, ...response.data };
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || 'Failed to update booking mode' };
+    }
+  },
+
+  updateShopMode: async (id, mode) => {
+    try {
+      const response = await api.put(`/admin/shops/${id}/mode`, { mode, adminOverrideMode: mode });
       return { success: true, ...response.data };
     } catch (error) {
       return { success: false, message: error.response?.data?.message || 'Failed to update booking mode' };
