@@ -80,7 +80,7 @@ export async function POST(request) {
     }
 
     const apiKey = process.env.OMNI_API_KEY || 'Ft1IcqSd6FMLouwsAFaMYjirRL93mJrsMPspYq7M8RI';
-    const targetAgentId = agent_id || process.env.OMNI_AGENT_ID || '282318';
+    const targetAgentId = agent_id || process.env.OMNI_AGENT_ID || '287023';
     const officialCallerId = process.env.OMNIDIM_CALLER_ID || '+919429492250';
 
     let apiSuccess = false;
@@ -101,10 +101,18 @@ export async function POST(request) {
       source_number: officialCallerId,
       callType: body.callType || 'announcement',
       call_type: body.callType || 'announcement',
+      barberName: owner_name || name || 'नाई',
+      barber_name: owner_name || name || 'नाई',
+      shopName: shop_name || 'सैलून',
+      shop_name: shop_name || 'सैलून',
       call_context: {
         greeting,
         call_type: body.callType || 'announcement',
         callType: body.callType || 'announcement',
+        barberName: owner_name || name || 'नाई',
+        barber_name: owner_name || name || 'नाई',
+        shopName: shop_name || 'सैलून',
+        shop_name: shop_name || 'सैलून',
         official_caller_id: officialCallerId,
         call_goal: call_type === 'barber'
           ? `Feedback & business check with salon owner ${owner_name || name} (${shop_name || 'Salon'}) on QUTTR ('कटर') app`
@@ -122,6 +130,10 @@ export async function POST(request) {
       },
       dynamic_variables: {
         greeting,
+        barberName: owner_name || name || 'नाई',
+        barber_name: owner_name || name || 'नाई',
+        shopName: shop_name || 'सैलून',
+        shop_name: shop_name || 'सैलून',
         customer_name: name || '',
         user_name: name || '',
         name: name || '',

@@ -633,7 +633,7 @@ export default function CallingDashboard() {
               <PhoneCall className="w-7 h-7 text-brand-500" />
               OmniDimension AI Calling Center
             </h1>
-            <span className="chip-primary text-xs font-mono font-bold">Agent 282318</span>
+            <span className="chip-primary text-xs font-mono font-bold">Agent 287023 (V3)</span>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
               Caller ID: +91 94294 92250
             </span>
@@ -680,7 +680,7 @@ export default function CallingDashboard() {
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-base font-extrabold text-white">AI Voice Broadcast Campaign</h2>
               <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                Agent 282318
+                Agent 287023 (V3)
               </span>
               <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                 +91 94294 92250
@@ -913,13 +913,13 @@ export default function CallingDashboard() {
                 <span>AI Voice Assistant:</span> <strong className="text-brand-400">Riya (रिया)</strong>
               </div>
               <div className="flex justify-between p-2.5 rounded bg-white/5">
-                <span>Active Agent ID:</span> <strong className="text-accent-500 font-mono">282318</strong>
+                <span>Active Agent ID:</span> <strong className="text-accent-500 font-mono">287023 (Production V3)</strong>
               </div>
               <div className="flex justify-between p-2.5 rounded bg-white/5">
                 <span>Caller ID:</span> <strong className="text-emerald-400 font-mono">+91 94294 92250</strong>
               </div>
               <div className="flex justify-between p-2.5 rounded bg-white/5">
-                <span>Brand Pronunciation:</span> <strong className="text-brand-400">कटर (Katar / Cutter)</strong>
+                <span>Brand Pronunciation:</span> <strong className="text-brand-400">कटर (Cutter)</strong>
               </div>
               <div className="flex justify-between p-2.5 rounded bg-white/5">
                 <span>Early Interruption Handling:</span> <strong className="text-emerald-400">Active (Completes Pitch)</strong>
