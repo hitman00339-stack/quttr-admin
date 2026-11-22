@@ -7,24 +7,55 @@ import {
   Send, Play, Pause, RefreshCw, CheckCircle2, AlertCircle, Layers,
   CheckSquare, Square, Clock, ShieldCheck, ChevronRight, Volume2,
   MessageSquare, Download, Filter, Search, X, Shuffle, ArrowRight,
-  SkipForward, Loader2
+  SkipForward, Loader2, Activity
 } from 'lucide-react';
 import api from '../../../services/api';
+import BroadcastTrackerModal from '../../../components/BroadcastTrackerModal';
 
 export default function CallingDashboard() {
-  // Broadcast AI Call Campaign Modal State
+  // Broadcast AI Call Campaign State & Live Tracker
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+  const [showTrackerModal, setShowTrackerModal] = useState(false);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
+  const [campaignStatus, setCampaignStatus] = useState(null);
+  const [isActionLoading, setIsActionLoading] = useState(false);
+
+  const pollBroadcastStatus = async () => {
+    try {
+      const res = await api.get('/admin/broadcast-status');
+      if (res?.data?.success && res?.data?.data) {
+        setCampaignStatus(res.data.data);
+      }
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    pollBroadcastStatus();
+  }, []);
+
+  useEffect(() => {
+    let timer = null;
+    if (showTrackerModal || campaignStatus?.isActive) {
+      timer = setInterval(pollBroadcastStatus, 2000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [showTrackerModal, campaignStatus?.isActive]);
 
   const handleBroadcastAiCall = async () => {
     setIsBroadcasting(true);
     try {
       const res = await api.post('/admin/broadcast-ai-call');
       setShowBroadcastModal(false);
+      setShowTrackerModal(true);
       const barbers = res?.data?.barbers || [];
       if (barbers.length === 0) {
         toast('No active barbers found to call.', { icon: 'ℹ️' });
         return;
+      }
+      if (res?.data?.status) {
+        setCampaignStatus(res.data.status);
       }
       toast.success(res?.data?.message || `Broadcast AI call campaign initiated for ${barbers.length} active barbers!`, { duration: 6000 });
       if (typeof fetchCallingData === 'function') {
@@ -34,6 +65,21 @@ export default function CallingDashboard() {
       toast.error(err?.response?.data?.message || err?.message || 'Failed to start broadcast', { duration: 6000 });
     } finally {
       setIsBroadcasting(false);
+    }
+  };
+
+  const handleCampaignControl = async (action) => {
+    setIsActionLoading(true);
+    try {
+      const res = await api.post('/admin/broadcast-control', { action });
+      if (res?.data?.data) {
+        setCampaignStatus(res.data.data);
+      }
+      toast.success(res?.data?.message || `Campaign ${action}ed`);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || `Failed to ${action} campaign`);
+    } finally {
+      setIsActionLoading(false);
     }
   };
   const [activeTab, setActiveTab] = useState('launcher'); // launcher | call_barbers | call_users | bulk | logs | analytics | missing | inactive
@@ -671,6 +717,22 @@ export default function CallingDashboard() {
             </span>
             <PhoneCall className="w-4 h-4 text-black stroke-[2.5]" />
             <span>📞 AI Call All Barbers</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowTrackerModal(true)}
+            className="flex items-center gap-2 bg-surface-300/80 hover:bg-surface-400 text-white font-semibold text-xs px-3.5 py-2.5 rounded-xl border border-white/[0.08] transition-all cursor-pointer shadow-md"
+            title="Open Live Broadcast Tracker & Feed"
+          >
+            <Activity className="w-4 h-4 text-amber-400" />
+            <span>Live Tracker</span>
+            {campaignStatus?.isActive && (
+              <span className="relative flex h-2 w-2 ml-0.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+            )}
           </button>
 
           <button
@@ -1779,6 +1841,19 @@ export default function CallingDashboard() {
           </div>
         </div>
       )}
+      {/* ── Live AI Broadcast Campaign Tracker Modal ─────────────── */}
+      <BroadcastTrackerModal
+        isOpen={showTrackerModal}
+        onClose={() => setShowTrackerModal(false)}
+        campaignStatus={campaignStatus}
+        onRefresh={pollBroadcastStatus}
+        onControl={handleCampaignControl}
+        isActionLoading={isActionLoading}
+        onStartNew={() => {
+          setShowTrackerModal(false);
+          setShowBroadcastModal(true);
+        }}
+      />
     </div>
   );
 }
