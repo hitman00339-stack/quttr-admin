@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import {
   TrendingUp, TrendingDown, Users, Store, Calendar,
   DollarSign, Activity, ArrowUpRight, Clock, CheckCircle2,
-  Sparkles, ArrowRight, PhoneCall, Loader2, AlertCircle,
-  Radio, Volume2, ShieldCheck,
+  Sparkles, ArrowRight,
 } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, XAxis, Tooltip, CartesianGrid } from 'recharts';
 import api from '../../services/api';
@@ -13,29 +12,6 @@ import api from '../../services/api';
 export default function DashboardPage() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
-  const [isBroadcasting, setIsBroadcasting] = useState(false);
-  const [toastMessage, setToastMessage] = useState(null);
-
-  const handleBroadcastAiCall = async () => {
-    setIsBroadcasting(true);
-    try {
-      const res = await api.post('/admin/broadcast-ai-call');
-      setShowBroadcastModal(false);
-      setToastMessage({
-        type: 'success',
-        text: res.data?.message || 'Broadcast AI call campaign initiated successfully!',
-      });
-    } catch (err) {
-      setToastMessage({
-        type: 'error',
-        text: err.response?.data?.message || 'Failed to trigger broadcast call',
-      });
-    } finally {
-      setIsBroadcasting(false);
-      setTimeout(() => setToastMessage(null), 8000);
-    }
-  };
 
   useEffect(() => {
     loadStats();
@@ -106,88 +82,13 @@ export default function DashboardPage() {
           <p className="text-body text-white/60 mt-1">Here's what's happening with QUTTR today.</p>
         </div>
 
-        {/* Primary Action Button */}
         <div className="flex items-center gap-3">
-          <button
-            id="btn-ai-call-all-barbers"
-            type="button"
-            onClick={() => setShowBroadcastModal(true)}
-            className="flex items-center gap-2.5 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-black font-extrabold text-sm px-5 py-2.5 rounded-xl shadow-lg shadow-amber-500/25 active:scale-95 transition-all cursor-pointer border border-amber-300/40"
-          >
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-black opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-black"></span>
-            </span>
-            <PhoneCall className="w-4 h-4 text-black stroke-[2.5]" />
-            <span>📞 AI Call All Barbers</span>
-          </button>
           <button className="btn-outline">
             <Sparkles className="w-4 h-4" />
             What's new
           </button>
         </div>
       </div>
-
-      {/* ── Featured Broadcast Banner ────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/15 via-surface-200/90 to-amber-500/5 p-5 shadow-xl backdrop-blur-sm">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-        <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center flex-shrink-0 shadow-lg shadow-amber-500/10">
-              <PhoneCall className="w-6 h-6 text-amber-400" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-extrabold bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                  <Radio className="w-3 h-3 text-amber-400 animate-pulse" />
-                  VOICE BROADCAST SYSTEM
-                </span>
-                <span className="text-2xs font-mono font-semibold text-white/50">
-                  Caller ID: <strong className="text-amber-300">+91 94294 92250</strong>
-                </span>
-              </div>
-              <h2 className="text-base font-bold text-white mt-1">Broadcast Launch Announcement to All Barbers</h2>
-              <p className="text-xs text-white/60 mt-0.5">
-                Riya will place automated calls to every active barber with the official announcement and prompt app update.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowBroadcastModal(true)}
-            className="flex-shrink-0 flex items-center gap-2 bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-md shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
-          >
-            <Volume2 className="w-4 h-4 text-black stroke-[2.5]" />
-            Launch Announcement Campaign
-          </button>
-        </div>
-      </div>
-
-      {/* ── Toast Alert ────────────────────────────────────────────── */}
-      {toastMessage && (
-        <div
-          className={`p-4 rounded-xl text-sm flex items-center justify-between border ${
-            toastMessage.type === 'success'
-              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-              : 'bg-red-500/10 border-red-500/30 text-red-400'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            {toastMessage.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            ) : (
-              <AlertCircle className="w-4 h-4 text-red-400" />
-            )}
-            <span className="font-medium">{toastMessage.text}</span>
-          </div>
-          <button
-            onClick={() => setToastMessage(null)}
-            className="text-xs text-white/40 hover:text-white px-2 py-1"
-          >
-            ✕
-          </button>
-        </div>
-      )}
 
       {/* ── Stats Grid (or Skeleton while loading) ────────────────── */}
       {loading ? (
@@ -296,28 +197,9 @@ export default function DashboardPage() {
             <p className="text-caption mb-4">Common admin tasks</p>
 
             <div className="space-y-2">
-              {/* Highlighted Broadcast Action */}
-              <button
-                type="button"
-                onClick={() => setShowBroadcastModal(true)}
-                className="w-full flex items-center justify-between p-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/50 transition-all group text-left cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                    <PhoneCall className="w-4 h-4 text-amber-400" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-white group-hover:text-amber-300 transition-colors">
-                      📞 AI Call All Barbers
-                    </span>
-                    <p className="text-2xs text-white/50">Launch voice broadcast</p>
-                  </div>
-                </div>
-                <ArrowRight className="w-3.5 h-3.5 text-amber-400 group-hover:translate-x-0.5 transition-all" />
-              </button>
-
               {[
                 { label: 'Approve Shops', count: stats?.shops?.pending || 0, href: '/dashboard/shops/pending' },
+                { label: 'AI Feedback Calls', count: null, href: '/dashboard/calling' },
                 { label: 'Booking Calls', count: null, href: '/dashboard/booking-calling' },
                 { label: 'Send Notice', count: null, href: '/dashboard/notices' },
                 { label: 'View Bookings', count: stats?.bookings?.active || 0, href: '/dashboard/bookings' },
@@ -349,68 +231,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-
-      {/* ── Broadcast AI Voice Call Confirmation Modal ─────────────── */}
-      {showBroadcastModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="card max-w-md w-full p-6 space-y-5 border border-amber-500/30 animate-in shadow-2xl">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
-                <PhoneCall className="w-5 h-5 text-amber-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">Broadcast AI Voice Call</h3>
-                <p className="text-xs text-white/50">Calling campaign to all registered barbers</p>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-white/80 space-y-2.5">
-              <p className="font-bold text-amber-400 flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-amber-400" />
-                Campaign Specifications:
-              </p>
-              <p>• Riya will place outbound calls to all active barbers sequentially with a 2-second interval.</p>
-              <p>
-                • Official Caller ID: <span className="font-mono text-amber-300 font-bold bg-amber-400/10 px-2 py-0.5 rounded">+91 94294 92250</span>
-              </p>
-              <div className="p-2.5 rounded-lg bg-surface-300/60 border border-white/[0.04]">
-                <p className="italic text-white/70 text-2xs leading-relaxed">
-                  "Namaste! Main QUTTR ki AI assistant hoon. QUTTR ne naya AI booking system launch kiya hai. Ab aapko booking calls is naye number se aayengi: 94294 92250. Kripya is number ko save karein aur apna QUTTR Business App turant Play Store se update karein. Customers ko app se booking karne ke liye encourage karein. Dhanyawad!"
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowBroadcastModal(false)}
-                disabled={isBroadcasting}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-white/70 hover:text-white hover:bg-white/[0.05] transition-all cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleBroadcastAiCall}
-                disabled={isBroadcasting}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-extrabold bg-amber-400 hover:bg-amber-300 text-black shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
-              >
-                {isBroadcasting ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Initiating Campaign...
-                  </>
-                ) : (
-                  <>
-                    <PhoneCall className="w-3.5 h-3.5 stroke-[2.5]" />
-                    Confirm & Start Calls
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

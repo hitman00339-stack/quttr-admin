@@ -7,10 +7,27 @@ import {
   Send, Play, Pause, RefreshCw, CheckCircle2, AlertCircle, Layers,
   CheckSquare, Square, Clock, ShieldCheck, ChevronRight, Volume2,
   MessageSquare, Download, Filter, Search, X, Shuffle, ArrowRight,
-  SkipForward
+  SkipForward, Loader2
 } from 'lucide-react';
+import api from '../../../services/api';
 
 export default function CallingDashboard() {
+  // Broadcast AI Call Campaign Modal State
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
+
+  const handleBroadcastAiCall = async () => {
+    setIsBroadcasting(true);
+    try {
+      const res = await api.post('/admin/broadcast-ai-call');
+      setShowBroadcastModal(false);
+      toast.success(res.data?.message || 'Broadcast AI call campaign initiated successfully!', { duration: 6000 });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to trigger broadcast call', { duration: 6000 });
+    } finally {
+      setIsBroadcasting(false);
+    }
+  };
   const [activeTab, setActiveTab] = useState('launcher'); // launcher | call_barbers | call_users | bulk | logs | analytics | missing | inactive
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
@@ -681,7 +698,20 @@ export default function CallingDashboard() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setShowBroadcastModal(true)}
+            className="flex items-center gap-2 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-black font-extrabold text-xs px-4 py-2.5 rounded-xl shadow-lg shadow-amber-500/25 active:scale-95 transition-all cursor-pointer border border-amber-300/40"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-black opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-black"></span>
+            </span>
+            <PhoneCall className="w-4 h-4 text-black stroke-[2.5]" />
+            <span>📞 AI Call All Barbers</span>
+          </button>
+
           <button
             onClick={() => {
               fetchCallingData();
@@ -1745,6 +1775,68 @@ export default function CallingDashboard() {
             <div className="border-t border-white/10 pt-3 flex justify-end">
               <button onClick={() => setActiveTranscriptLog(null)} className="btn-primary text-xs px-4 py-2">
                 Close Transcript
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Broadcast AI Voice Call Confirmation Modal ─────────────── */}
+      {showBroadcastModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="card max-w-md w-full p-6 space-y-5 border border-amber-500/30 animate-in shadow-2xl bg-surface-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
+                <PhoneCall className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Broadcast AI Voice Call</h3>
+                <p className="text-xs text-white/50">Calling campaign to all registered barbers</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-white/80 space-y-2.5">
+              <p className="font-bold text-amber-400 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-amber-400" />
+                Campaign Specifications:
+              </p>
+              <p>• Riya will place outbound calls to all active barbers sequentially with a 3-second interval.</p>
+              <p>
+                • Official Caller ID: <span className="font-mono text-amber-300 font-bold bg-amber-400/10 px-2 py-0.5 rounded">+91 94294 92250</span>
+              </p>
+              <div className="p-2.5 rounded-lg bg-surface-300/60 border border-white/[0.04]">
+                <p className="italic text-white/70 text-2xs leading-relaxed">
+                  "Namaste! Main QUTTR ki AI assistant hoon. QUTTR ne naya AI booking system launch kiya hai. Ab aapko booking calls is naye number se aayengi: 94294 92250. Kripya is number ko save karein aur apna QUTTR Business App turant Play Store se update karein. Customers ko app se booking karne ke liye encourage karein. Dhanyawad!"
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowBroadcastModal(false)}
+                disabled={isBroadcasting}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-white/70 hover:text-white hover:bg-white/[0.05] transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBroadcastAiCall}
+                disabled={isBroadcasting}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-extrabold bg-amber-400 hover:bg-amber-300 text-black shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
+              >
+                {isBroadcasting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Initiating Campaign...
+                  </>
+                ) : (
+                  <>
+                    <PhoneCall className="w-3.5 h-3.5 stroke-[2.5]" />
+                    Confirm & Start Calls
+                  </>
+                )}
               </button>
             </div>
           </div>
