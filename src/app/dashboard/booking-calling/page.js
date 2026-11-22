@@ -38,9 +38,14 @@ export default function BookingCallingDashboard() {
     try {
       const res = await api.post('/admin/broadcast-ai-call');
       setShowBroadcastModal(false);
-      toast.success(res.data?.message || 'Broadcast AI call campaign initiated successfully!');
+      const barbers = res?.data?.barbers || [];
+      if (barbers.length === 0) {
+        toast('No active barbers found to call.', { icon: 'ℹ️' });
+        return;
+      }
+      toast.success(res?.data?.message || `Broadcast AI call campaign initiated for ${barbers.length} active barbers!`);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to trigger broadcast call');
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to start broadcast');
     } finally {
       setIsBroadcasting(false);
     }

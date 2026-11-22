@@ -21,9 +21,17 @@ export default function CallingDashboard() {
     try {
       const res = await api.post('/admin/broadcast-ai-call');
       setShowBroadcastModal(false);
-      toast.success(res.data?.message || 'Broadcast AI call campaign initiated successfully!', { duration: 6000 });
+      const barbers = res?.data?.barbers || [];
+      if (barbers.length === 0) {
+        toast('No active barbers found to call.', { icon: 'ℹ️' });
+        return;
+      }
+      toast.success(res?.data?.message || `Broadcast AI call campaign initiated for ${barbers.length} active barbers!`, { duration: 6000 });
+      if (typeof fetchCallingData === 'function') {
+        fetchCallingData();
+      }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to trigger broadcast call', { duration: 6000 });
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to start broadcast', { duration: 6000 });
     } finally {
       setIsBroadcasting(false);
     }
@@ -124,12 +132,14 @@ export default function CallingDashboard() {
     try {
       const res = await fetch('/api/admin/calling/contacts');
       const json = await res.json();
-      if (json.success) {
-        setRegisteredBarbers(json.barbers || []);
-        setRegisteredUsers(json.users || []);
+      if (json?.success) {
+        const barbers = json?.barbers || [];
+        const users = json?.users || [];
+        setRegisteredBarbers(barbers);
+        setRegisteredUsers(users);
         // Select all by default
-        setSelectedBarberIds(new Set((json.barbers || []).map((b) => b.id)));
-        setSelectedUserIds(new Set((json.users || []).map((u) => u.id)));
+        setSelectedBarberIds(new Set(barbers.map((b) => b?.id || b?._id)));
+        setSelectedUserIds(new Set(users.map((u) => u?.id || u?._id)));
       }
     } catch (e) {
       // Non-critical
@@ -313,7 +323,7 @@ export default function CallingDashboard() {
 
   // Start AI Announcement Broadcast Campaign
   const handleStartBarberCampaign = async () => {
-    const queue = registeredBarbers.filter((b) => selectedBarberIds.has(b.id));
+    const queue = (registeredBarbers || []).filter((b) => selectedBarberIds?.has(b?.id));
     if (queue.length === 0) {
       toast.error('Please select at least one barber to call');
       return;
@@ -333,25 +343,31 @@ export default function CallingDashboard() {
         callType: 'announcement',
       });
 
-      toast.success(res.data?.message || `Broadcast initiated for ${queue.length} barbers from +91 94294 92250!`, {
+      const barbers = res?.data?.barbers || queue || [];
+      if (barbers.length === 0) {
+        toast('No active barbers found to call.', { id: tId, icon: 'ℹ️' });
+        return;
+      }
+
+      toast.success(res?.data?.message || `Broadcast initiated for ${barbers.length} barbers from +91 94294 92250!`, {
         id: tId,
         duration: 6000,
       });
 
       setCampaignLogs((prev) => [
         {
-          target: `${queue.length} Selected Barbers`,
-          phone: `${queue.length} Recipient Numbers`,
+          target: `${barbers.length} Selected Barbers`,
+          phone: `${barbers.length} Recipient Numbers`,
           status: 'Broadcast Active',
           duration: '3s delay loop',
-          summary: `AI Announcement Broadcast (from +91 94294 92250) sent to backend dispatcher for ${queue.length} barbers`,
+          summary: `AI Announcement Broadcast (from +91 94294 92250) sent to backend dispatcher for ${barbers.length} barbers`,
           time: new Date().toLocaleTimeString(),
         },
         ...prev,
       ]);
       fetchCallingData();
     } catch (err) {
-      toast.error(err.response?.data?.message || err.message || 'Failed to dispatch broadcast', {
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to dispatch broadcast', {
         id: tId,
         duration: 6000,
       });
