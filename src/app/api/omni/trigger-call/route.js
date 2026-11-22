@@ -80,7 +80,8 @@ export async function POST(request) {
     }
 
     const apiKey = process.env.OMNI_API_KEY || 'Ft1IcqSd6FMLouwsAFaMYjirRL93mJrsMPspYq7M8RI';
-    const targetAgentId = agent_id || process.env.OMNI_AGENT_ID || '265888';
+    const targetAgentId = agent_id || process.env.OMNI_AGENT_ID || '282318';
+    const officialCallerId = process.env.OMNIDIM_CALLER_ID || '+919429492250';
 
     let apiSuccess = false;
     let callDispatchId = `call_${Date.now()}`;
@@ -91,6 +92,13 @@ export async function POST(request) {
       to_number: formattedPhone,
       phone_number: formattedPhone,
       to: formattedPhone,
+      from: officialCallerId,
+      from_number: officialCallerId,
+      caller_id: officialCallerId,
+      caller_number: officialCallerId,
+      outbound_phone_number: officialCallerId,
+      caller_phone_number: officialCallerId,
+      source_number: officialCallerId,
       call_context: {
         greeting,
         call_type,

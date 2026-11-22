@@ -77,7 +77,7 @@ export async function GET(request) {
     const searchQuery = (searchParams.get('q') || '').trim().toLowerCase();
 
     const apiKey = process.env.OMNI_API_KEY || 'Ft1IcqSd6FMLouwsAFaMYjirRL93mJrsMPspYq7M8RI';
-    const targetAgentId = process.env.OMNI_AGENT_ID || '265888';
+    const targetAgentId = process.env.OMNI_AGENT_ID || '282318';
 
     // 1. Fetch live registered shops & users to correlate caller identity
     let shopMap = new Map();
@@ -121,7 +121,7 @@ export async function GET(request) {
     // 2. Fetch recent calls directly from OmniDimension API
     let omniCalls = [];
     try {
-      const omniRes = await fetch(`https://backend.omnidim.io/api/v1/calls/logs?agent_id=${targetAgentId}&page_size=100`, {
+      const omniRes = await fetch(`https://backend.omnidim.io/api/v1/calls/logs?page_size=100`, {
         headers: { Authorization: `Bearer ${apiKey}`, 'x-api-key': apiKey },
         next: { revalidate: 0 },
       });

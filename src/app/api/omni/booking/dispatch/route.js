@@ -82,8 +82,9 @@ export async function POST(request) {
     }
 
     // 4. Construct OmniDimension AI Context (Hindi Pronunciation: कटर / Kutter)
-    const targetAgentId = agent_id || process.env.OMNI_AGENT_ID || '265888';
+    const targetAgentId = agent_id || process.env.OMNI_AGENT_ID || '282318';
     const apiKey = process.env.OMNI_API_KEY || 'Ft1IcqSd6FMLouwsAFaMYjirRL93mJrsMPspYq7M8RI';
+    const officialCallerId = process.env.OMNIDIM_CALLER_ID || '+919429492250';
 
     const greeting = `नमस्ते ${barber_name} जी! कटर ऐप से बुकिंग आई है। क्या मेरी आवाज़ आ रही है आपको?`;
     const callGoal = `Verify and accept/decline new appointment for ${customer_name} (${service_name}, ${slot_time}) at ${shop_name}`;
@@ -127,6 +128,13 @@ export async function POST(request) {
       to_number: formattedPhone,
       phone_number: formattedPhone,
       to: formattedPhone,
+      from: officialCallerId,
+      from_number: officialCallerId,
+      caller_id: officialCallerId,
+      caller_number: officialCallerId,
+      outbound_phone_number: officialCallerId,
+      caller_phone_number: officialCallerId,
+      source_number: officialCallerId,
       webhook_url: webhookUrl,
       callback_url: webhookUrl,
       call_context: {

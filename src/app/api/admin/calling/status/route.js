@@ -25,10 +25,10 @@ export async function GET(request) {
     const sinceMs = sinceParam ? Number(sinceParam) : Date.now() - 15 * 60 * 1000;
 
     const apiKey = process.env.OMNI_API_KEY || 'Ft1IcqSd6FMLouwsAFaMYjirRL93mJrsMPspYq7M8RI';
-    const targetAgentId = process.env.OMNI_AGENT_ID || '265888';
+    const targetAgentId = process.env.OMNI_AGENT_ID || '282318';
 
     // OmniDimension does not filter by to_number on the server; fetch last 30 logs and match client-side
-    const url = `https://backend.omnidim.io/api/v1/calls/logs?agent_id=${targetAgentId}&page_size=30`;
+    const url = `https://backend.omnidim.io/api/v1/calls/logs?page_size=30`;
     const res = await fetch(url, {
       headers: {
         Authorization: `Bearer ${apiKey}`,

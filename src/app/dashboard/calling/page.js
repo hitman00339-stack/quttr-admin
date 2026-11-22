@@ -686,12 +686,15 @@ export default function CallingDashboard() {
       {/* HEADER BAR */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
               <PhoneCall className="w-7 h-7 text-brand-500" />
               OmniDimension AI Calling Center
             </h1>
-            <span className="chip-primary text-xs font-mono font-bold">Agent 265888</span>
+            <span className="chip-primary text-xs font-mono font-bold">Agent 282318</span>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              Caller ID: +91 94294 92250
+            </span>
           </div>
           <p className="text-xs text-white/60 mt-1">
             Voice Agent Riya (रिया) · Natural Variations · Zero Call Skipping Queue · Day-Wise Recordings & AI Summaries
@@ -723,6 +726,42 @@ export default function CallingDashboard() {
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Sync OmniDimension
           </button>
         </div>
+      </div>
+
+      {/* ── BROADCAST TO ALL BARBERS BANNER ────────────────────────────────────────── */}
+      <div className="bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-surface-200 border-2 border-amber-400/40 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl shadow-amber-500/10">
+        <div className="flex items-start sm:items-center gap-3.5">
+          <div className="w-12 h-12 rounded-xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center shrink-0">
+            <PhoneCall className="w-6 h-6 text-amber-400 animate-pulse" />
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-extrabold text-white">AI Voice Broadcast Campaign</h2>
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                Agent 282318
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                +91 94294 92250
+              </span>
+            </div>
+            <p className="text-xs text-white/70 mt-1">
+              Call ALL active barbers across QUTTR sequentially (3s interval) to announce the new AI Booking System and caller ID (+91 94294 92250).
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowBroadcastModal(true)}
+          className="shrink-0 flex items-center justify-center gap-2 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-black font-extrabold text-sm px-6 py-3 rounded-xl shadow-lg shadow-amber-500/30 active:scale-95 transition-all cursor-pointer border border-amber-300/50"
+        >
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-black opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-black"></span>
+          </span>
+          <PhoneCall className="w-4 h-4 text-black stroke-[2.5]" />
+          <span>📞 AI Call All Barbers</span>
+        </button>
       </div>
 
       {/* NAVIGATION TABS */}
@@ -932,7 +971,10 @@ export default function CallingDashboard() {
                 <span>AI Voice Assistant:</span> <strong className="text-brand-400">Riya (रिया)</strong>
               </div>
               <div className="flex justify-between p-2.5 rounded bg-white/5">
-                <span>Active Agent ID:</span> <strong className="text-accent-500 font-mono">265888</strong>
+                <span>Active Agent ID:</span> <strong className="text-accent-500 font-mono">282318</strong>
+              </div>
+              <div className="flex justify-between p-2.5 rounded bg-white/5">
+                <span>Caller ID:</span> <strong className="text-emerald-400 font-mono">+91 94294 92250</strong>
               </div>
               <div className="flex justify-between p-2.5 rounded bg-white/5">
                 <span>Brand Pronunciation:</span> <strong className="text-brand-400">कटर (Katar / Cutter)</strong>
