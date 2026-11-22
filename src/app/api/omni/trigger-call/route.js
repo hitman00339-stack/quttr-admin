@@ -99,9 +99,13 @@ export async function POST(request) {
       outbound_phone_number: officialCallerId,
       caller_phone_number: officialCallerId,
       source_number: officialCallerId,
+      callType: body.callType || 'announcement',
+      call_type: body.callType || 'announcement',
       call_context: {
         greeting,
-        call_type,
+        call_type: body.callType || 'announcement',
+        callType: body.callType || 'announcement',
+        official_caller_id: officialCallerId,
         call_goal: call_type === 'barber'
           ? `Feedback & business check with salon owner ${owner_name || name} (${shop_name || 'Salon'}) on QUTTR ('कटर') app`
           : `Outbound pitch to customer ${name || ''}: Introduce QUTTR ('कटर') zero-waiting salon booking app. Think dynamically and answer any customer question practically.`,
@@ -123,7 +127,8 @@ export async function POST(request) {
         name: name || '',
         owner_name: owner_name || name || '',
         shop_name: shop_name || '',
-        call_type,
+        call_type: body.callType || 'announcement',
+        callType: body.callType || 'announcement',
         brand_name: 'कटर',
       },
       metadata: {

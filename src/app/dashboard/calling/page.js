@@ -311,7 +311,7 @@ export default function CallingDashboard() {
     };
   };
 
-  // Start Sequential Barber Feedback Campaign
+  // Start AI Announcement Broadcast Campaign
   const handleStartBarberCampaign = async () => {
     const queue = registeredBarbers.filter((b) => selectedBarberIds.has(b.id));
     if (queue.length === 0) {
@@ -320,102 +320,44 @@ export default function CallingDashboard() {
     }
 
     setIsCampaignRunning(true);
-    setIsCampaignPaused(false);
-    campaignStopRequestedRef.current = false;
-    campaignPauseRef.current = false;
-    campaignSkipCurrentRef.current = false;
-    setCampaignLogs([]);
+    const tId = toast.loading(`Initiating AI Announcement Broadcast to ${queue.length} selected barbers...`);
 
-    toast.success(`Starting campaign for ${queue.length} barbers (waiting for each call to end)...`);
-
-    for (let i = 0; i < queue.length; i++) {
-      if (campaignStopRequestedRef.current) {
-        toast.info('Campaign stopped by admin');
-        break;
-      }
-
-      while (campaignPauseRef.current && !campaignStopRequestedRef.current) {
-        await new Promise((r) => setTimeout(r, 1000));
-      }
-
-      const b = queue[i];
-      setCampaignProgress({
-        current: i + 1,
-        total: queue.length,
-        currentTarget: `${b.ownerName} (${b.shopName})`,
-        phone: b.phone,
-        status: `📞 Dialing ${b.ownerName}...`,
-        elapsedSec: 0,
+    try {
+      const res = await api.post('/admin/broadcast-ai-call', {
+        barbers: queue.map((b) => ({
+          id: b.id,
+          name: b.ownerName || b.name,
+          phone: b.phone,
+          shopName: b.shopName,
+        })),
+        callType: 'announcement',
       });
 
-      const tId = toast.loading(`[${i + 1}/${queue.length}] Dialing ${b.ownerName} (${b.shopName})...`);
+      toast.success(res.data?.message || `Broadcast initiated for ${queue.length} barbers from +91 94294 92250!`, {
+        id: tId,
+        duration: 6000,
+      });
 
-      try {
-        const res = await fetch('/api/omni/trigger-call', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone: b.phone,
-            call_type: 'barber',
-            owner_name: b.ownerName,
-            shop_name: b.shopName,
-            name: b.ownerName,
-            variation_index: i,
-          }),
-        });
-        const json = await res.json();
-
-        if (json.success) {
-          toast.loading(`[${i + 1}/${queue.length}] Call connected with ${b.ownerName}. Monitoring call...`, { id: tId });
-
-          // WAIT UNTIL CALL ACTUALLY FINISHES (USER HANGS UP OR NO ANSWER)!
-          const result = await waitForCallCompletion(b.phone, b.ownerName, 180);
-
-          const logEntry = {
-            target: `${b.ownerName} (${b.shopName})`,
-            phone: b.phone,
-            status: result.status === 'completed' ? 'Completed' : (result.status === 'no-answer' ? 'No Answer' : result.status),
-            duration: `${result.duration}s`,
-            summary: result.summary || json.summary || 'Call finished',
-            recordingUrl: result.recordingUrl,
-            time: new Date().toLocaleTimeString(),
-          };
-          setCampaignLogs((prev) => [logEntry, ...prev]);
-
-          toast.success(`[${i + 1}/${queue.length}] Call ended with ${b.ownerName} (${result.duration}s)`, { id: tId });
-        } else {
-          toast.error(`[${i + 1}/${queue.length}] Failed to dial ${b.ownerName}: ${json.error || 'Trunk error'}`, { id: tId });
-          setCampaignLogs((prev) => [
-            {
-              target: `${b.ownerName} (${b.shopName})`,
-              phone: b.phone,
-              status: 'Failed',
-              duration: '0s',
-              summary: json.error || 'Failed to place call',
-              time: new Date().toLocaleTimeString(),
-            },
-            ...prev,
-          ]);
-          await new Promise((r) => setTimeout(r, 1500));
-        }
-      } catch (e) {
-        toast.error(`[${i + 1}/${queue.length}] Network error: ${b.ownerName}`, { id: tId });
-      }
-
-      // Cool-down before dialing next barber so trunk line clears completely
-      if (i < queue.length - 1 && !campaignStopRequestedRef.current) {
-        setCampaignProgress((prev) => ({
-          ...prev,
-          status: `Trunk cool-down ${trunkCooldownSeconds}s before dialing next barber...`,
-        }));
-        await new Promise((r) => setTimeout(r, trunkCooldownSeconds * 1000));
-      }
+      setCampaignLogs((prev) => [
+        {
+          target: `${queue.length} Selected Barbers`,
+          phone: `${queue.length} Recipient Numbers`,
+          status: 'Broadcast Active',
+          duration: '3s delay loop',
+          summary: `AI Announcement Broadcast (from +91 94294 92250) sent to backend dispatcher for ${queue.length} barbers`,
+          time: new Date().toLocaleTimeString(),
+        },
+        ...prev,
+      ]);
+      fetchCallingData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to dispatch broadcast', {
+        id: tId,
+        duration: 6000,
+      });
+    } finally {
+      setIsCampaignRunning(false);
     }
-
-    setIsCampaignRunning(false);
-    setIsCampaignPaused(false);
-    toast.success('🎉 Barber campaign completed! Refreshing summaries...');
-    fetchCallingData();
   };
 
   // Start Sequential Customer Campaign
@@ -1009,96 +951,33 @@ export default function CallingDashboard() {
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Store className="w-5 h-5 text-accent-500" /> Sequential Barber Feedback Campaign
+                  <Store className="w-5 h-5 text-accent-500" /> AI Announcement Broadcast Campaign
                 </h2>
                 <p className="text-xs text-white/60 mt-1">
-                  Calls registered shop owners one by one. The system polls call status and <strong>waits until each call finishes</strong> before dialing the next, ensuring zero trunk clashes or skipped numbers.
+                  Dispatches AI announcement calls to notify barbers of the new AI booking system and caller ID (<strong>+91 94294 92250</strong>). Backend executes loop with 3-second spacing.
                 </p>
               </div>
 
               <div className="flex items-center gap-2.5 flex-wrap">
-                {/* Trunk Line Cool-down Selector */}
-                <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs">
-                  <Clock className="w-3.5 h-3.5 text-brand-400" />
-                  <span className="text-white/60">Trunk Cool-down:</span>
-                  <select
-                    value={trunkCooldownSeconds}
-                    onChange={(e) => setTrunkCooldownSeconds(Number(e.target.value))}
-                    disabled={isCampaignRunning}
-                    className="bg-transparent text-brand-300 font-semibold outline-none cursor-pointer"
-                  >
-                    <option value={3} className="bg-slate-900">3s (Fast)</option>
-                    <option value={4} className="bg-slate-900">4s (Normal)</option>
-                    <option value={6} className="bg-slate-900">6s (Safe Line Release)</option>
-                  </select>
-                </div>
-
-                {isCampaignRunning ? (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleSkipCurrentCall}
-                      className="btn-outline border-brand-500/40 text-brand-300 hover:bg-brand-500/10 flex items-center gap-1.5 px-3 py-2 text-xs font-semibold"
-                      title="Skip delay and dial next barber immediately"
-                    >
-                      <SkipForward className="w-3.5 h-3.5 text-brand-400" /> Dial Next Now
-                    </button>
-                    <button
-                      onClick={togglePauseCampaign}
-                      className="btn-outline flex items-center gap-1.5 px-3 py-2 text-xs"
-                    >
-                      {isCampaignPaused ? <Play className="w-3.5 h-3.5 text-emerald-400" /> : <Pause className="w-3.5 h-3.5 text-yellow-400" />}
-                      {isCampaignPaused ? 'Resume Campaign' : 'Pause Campaign'}
-                    </button>
-                    <button
-                      onClick={handleStopCampaign}
-                      className="btn-outline border-red-500/40 text-red-400 hover:bg-red-500/10 flex items-center gap-1.5 px-3 py-2 text-xs"
-                    >
-                      <X className="w-3.5 h-3.5" /> Stop Campaign
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    disabled={selectedBarberIds.size === 0}
-                    onClick={handleStartBarberCampaign}
-                    className="btn-primary flex items-center gap-2 px-5 py-2.5 text-sm"
-                  >
-                    <Play className="w-4 h-4" />
-                    Call Selected Barbers ({selectedBarberIds.size})
-                  </button>
-                )}
+                <button
+                  disabled={selectedBarberIds.size === 0 || isCampaignRunning}
+                  onClick={handleStartBarberCampaign}
+                  className="btn-primary flex items-center gap-2 px-5 py-2.5 text-sm"
+                >
+                  {isCampaignRunning ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Broadcasting...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4" />
+                      Call Selected Barbers ({selectedBarberIds.size})
+                    </>
+                  )}
+                </button>
               </div>
             </div>
-
-            {/* Campaign In-Progress Status Card */}
-            {isCampaignRunning && (
-              <div className="p-4 rounded-lg bg-brand-500/15 border border-brand-500/40 space-y-3">
-                <div className="flex justify-between items-center text-sm font-bold text-brand-300">
-                  <span className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping inline-block" />
-                    Calling Barber: {campaignProgress.currentTarget}
-                  </span>
-                  <span>{campaignProgress.current} of {campaignProgress.total}</span>
-                </div>
-                <div className="w-full bg-white/10 rounded-full h-2">
-                  <div
-                    className="bg-brand-500 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${(campaignProgress.current / campaignProgress.total) * 100}%` }}
-                  />
-                </div>
-                <div className="flex justify-between items-center text-xs text-white/80 flex-wrap gap-2">
-                  <span className="font-mono text-emerald-300">{campaignProgress.status}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xs text-white/60">Phone: {campaignProgress.phone}</span>
-                    <button
-                      onClick={handleSkipCurrentCall}
-                      className="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-2.5 py-1 rounded text-2xs flex items-center gap-1 shadow transition-all active:scale-95"
-                    >
-                      <SkipForward className="w-3 h-3" /> Dial Next Now
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Barbers Table */}
             <div className="border border-white/10 rounded-lg overflow-x-auto">
