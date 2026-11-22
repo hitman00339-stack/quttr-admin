@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import {
   TrendingUp, TrendingDown, Users, Store, Calendar,
   DollarSign, Activity, ArrowUpRight, Clock, CheckCircle2,
-  Sparkles, ArrowRight,
+  Sparkles, ArrowRight, PhoneCall, Loader2, AlertCircle,
 } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer, XAxis, Tooltip, CartesianGrid } from 'recharts';
 import api from '../../services/api';
@@ -12,6 +12,29 @@ import api from '../../services/api';
 export default function DashboardPage() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
+
+  const handleBroadcastAiCall = async () => {
+    setIsBroadcasting(true);
+    try {
+      const res = await api.post('/admin/broadcast-ai-call');
+      setShowBroadcastModal(false);
+      setToastMessage({
+        type: 'success',
+        text: res.data?.message || 'Broadcast AI call campaign initiated successfully!',
+      });
+    } catch (err) {
+      setToastMessage({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to trigger broadcast call',
+      });
+    } finally {
+      setIsBroadcasting(false);
+      setTimeout(() => setToastMessage(null), 6000);
+    }
+  };
 
   useEffect(() => {
     loadStats();
@@ -93,11 +116,46 @@ export default function DashboardPage() {
           <p className="text-body mt-2">Here's what's happening with QUTTR today.</p>
         </div>
 
-        <button className="btn-outline">
-          <Sparkles className="w-4 h-4" />
-          What's new
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowBroadcastModal(true)}
+            className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-bold text-xs px-4 py-2.5 rounded-xl shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
+          >
+            <PhoneCall className="w-4 h-4 text-black" />
+            📞 AI Call All Barbers
+          </button>
+          <button className="btn-outline">
+            <Sparkles className="w-4 h-4" />
+            What's new
+          </button>
+        </div>
       </div>
+
+      {/* Toast Alert */}
+      {toastMessage && (
+        <div
+          className={`p-4 rounded-xl text-sm flex items-center justify-between border ${
+            toastMessage.type === 'success'
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+              : 'bg-red-500/10 border-red-500/30 text-red-400'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {toastMessage.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-red-400" />
+            )}
+            <span>{toastMessage.text}</span>
+          </div>
+          <button
+            onClick={() => setToastMessage(null)}
+            className="text-xs text-white/40 hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -218,6 +276,57 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Broadcast AI Voice Call Confirmation Modal */}
+      {showBroadcastModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="card max-w-md w-full p-6 space-y-5 border border-amber-500/30 animate-in">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                <PhoneCall className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Broadcast AI Voice Call</h3>
+                <p className="text-xs text-white/50">Calling campaign to all registered barbers</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs text-white/80 space-y-2">
+              <p className="font-semibold text-amber-400">Campaign Details:</p>
+              <p>• Riya will call all active barbers sequentially with a 2-second interval.</p>
+              <p>• Caller ID: <span className="font-mono text-amber-300 font-bold">+91 94294 92250</span></p>
+              <p className="italic text-white/60">"Namaste! Main QUTTR se bol rahi hoon. Humne naya AI booking system launch kiya hai. Aage se aapko booking calls is number se aayengi: 94294 92250. Is number ko save kar lijiye. Dhanyawad!"</p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowBroadcastModal(false)}
+                disabled={isBroadcasting}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-white/70 hover:text-white hover:bg-white/[0.05] transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBroadcastAiCall}
+                disabled={isBroadcasting}
+                className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-black shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
+              >
+                {isBroadcasting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Initiating Campaign...
+                  </>
+                ) : (
+                  <>
+                    <PhoneCall className="w-3.5 h-3.5" />
+                    Confirm & Start Calls
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
