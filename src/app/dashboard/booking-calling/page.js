@@ -330,34 +330,35 @@ export default function BookingCallingDashboard() {
           </button>
 
           <div className="flex items-center gap-4 bg-surface-100/60 border border-white/[0.08] rounded-xl px-4 py-2.5">
-          <div className="text-right">
-            <div className="text-xs font-semibold text-white">Global Dispatch</div>
-            <div className="text-2xs text-gray-400">
-              {callingConfig.globalCallingEnabled ? 'Calls active' : 'Calls paused'}
+            <div className="text-right">
+              <div className="text-xs font-semibold text-white">Global Dispatch</div>
+              <div className="text-2xs text-gray-400">
+                {callingConfig.globalCallingEnabled ? 'Calls active' : 'Calls paused'}
+              </div>
             </div>
+            <button
+              onClick={handleToggleGlobal}
+              disabled={updatingConfig}
+              className={`p-1 rounded-lg transition-colors ${
+                callingConfig.globalCallingEnabled ? 'text-teal-400 hover:text-teal-300' : 'text-gray-500 hover:text-gray-400'
+              }`}
+              title="Toggle global calling"
+            >
+              {callingConfig.globalCallingEnabled ? (
+                <ToggleRight className="w-8 h-8" />
+              ) : (
+                <ToggleLeft className="w-8 h-8" />
+              )}
+            </button>
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              className="p-2 text-gray-400 hover:text-white border border-white/[0.08] rounded-lg transition-colors"
+              title="Refresh logs"
+            >
+              <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
           </div>
-          <button
-            onClick={handleToggleGlobal}
-            disabled={updatingConfig}
-            className={`p-1 rounded-lg transition-colors ${
-              callingConfig.globalCallingEnabled ? 'text-teal-400 hover:text-teal-300' : 'text-gray-500 hover:text-gray-400'
-            }`}
-            title="Toggle global calling"
-          >
-            {callingConfig.globalCallingEnabled ? (
-              <ToggleRight className="w-8 h-8" />
-            ) : (
-              <ToggleLeft className="w-8 h-8" />
-            )}
-          </button>
-          <button
-            onClick={fetchData}
-            disabled={loading}
-            className="p-2 text-gray-400 hover:text-white border border-white/[0.08] rounded-lg transition-colors"
-            title="Refresh logs"
-          >
-            <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
         </div>
       </div>
 
